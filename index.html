@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
-<style>
+ <style>
 :root {
   --bg-primary: #050b14;
   --bg-secondary: #132541;
@@ -1305,12 +1305,60 @@ function App() {
     const readySets     = completeSets.filter(sg=>!sg.items.some(i=>i.currentStage==='STORES'));
 
     // ── FEATURE 3: Avg Cycle Time per Stage ─────────────────────────────────
-    // Formula: for each item, cycle days = DATE(last timestamp) − DATE(PO received)
-    // Group by currentStage → avg of those days = "avg days to reach this stage"
-    // Stage Duration = avg_days_this_stage − avg_days_previous_stage (using STAGE_ORDER)
+    // Formula: for each item SC, calculate time from one stage timestamp to the next
+    // This measures actual time spent in each stage
     const STAGE_ORDER = ['RM','LATHE','M1','FB','HT','SZ','BLK','CG','SG','SD','HO','CA','WC','VA','QC','DCPLI','STORES','READY',
                          'FBV','BLV','SDV','HOV','HTV','HCV'];
-    const stageAccum = {}; // stage → [cycle days]
+    
+    // Build a map of SC → sorted array of records for that SC
+    const scRecordMap = {};
+    filtered.forEach(r => {
+      if(!r.sc) return;
+      if(!scRecordMap[r.sc]) scRecordMap[r.sc] = [];
+      scRecordMap[r.sc].push(r);
+    });
+    
+    // For each SC, sort records by timestamp and calculate stage durations
+    const stageDurations = {}; // stage → [duration days]
+    Object.values(scRecordMap).forEach(records => {
+      // Sort records by timestamp for this SC
+      const sorted = records.sort((a, b) => {
+        const tA = new Date(a.timestamp);
+        const tB = new Date(b.timestamp);
+        return tA - tB;
+      });
+      
+      // For each consecutive pair, calculate time spent in the earlier stage
+      for(let i = 0; i < sorted.length - 1; i++) {
+        const current = sorted[i];
+        const next = sorted[i + 1];
+        
+        if(!current.currentStage || !current.timestamp || !next.timestamp) continue;
+        
+        // Calculate days between consecutive timestamps
+        const d1 = new Date(current.timestamp.substring(0, 10));
+        const d2 = new Date(next.timestamp.substring(0, 10));
+        const daysDiff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+        
+        if(daysDiff >= 0) {
+          const stage = current.currentStage;
+          if(!stageDurations[stage]) stageDurations[stage] = [];
+          stageDurations[stage].push(daysDiff);
+        }
+      }
+    });
+    
+    // Calculate average duration per stage
+    const stageAvgDuration = {};
+    Object.entries(stageDurations).forEach(([stage, durations]) => {
+      const avg = durations.length > 0 
+        ? durations.reduce((a, b) => a + b, 0) / durations.length 
+        : 0;
+      stageAvgDuration[stage] = Math.round(avg * 10) / 10;
+    });
+    
+    // Also track cumulative days for "days to reach" metric
+    const stageAccum = {}; // stage → [cumulative days from PO]
     filtered.forEach(r => {
       if(!r.timestamp || !r.poDate || !r.currentStage) return;
       const days = dateDiff(r.poDate, r.timestamp);
@@ -1318,28 +1366,20 @@ function App() {
       if(!stageAccum[r.currentStage]) stageAccum[r.currentStage] = [];
       stageAccum[r.currentStage].push(days);
     });
-
-    // Avg days-to-reach per stage
+    
     const stageAvgToReach = {};
     Object.entries(stageAccum).forEach(([stage, vals]) => {
       stageAvgToReach[stage] = Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
     });
 
-    // Build cycle time rows
-    const stageCycleTimes = Object.entries(stageAvgToReach).map(([stage, avgToReach]) => {
-      const idx = STAGE_ORDER.indexOf(stage);
-      let prevAvg = 0;
-      if(idx > 0) {
-        for(let i=idx-1;i>=0;i--) {
-          if(stageAvgToReach[STAGE_ORDER[i]] !== undefined) {
-            prevAvg = stageAvgToReach[STAGE_ORDER[i]];
-            break;
-          }
-        }
-      }
-      const duration = Math.max(1, Math.round((avgToReach - prevAvg)*10)/10);
-      return { stage, avgToReach, duration, count: stageAccum[stage].length };
-    }).sort((a,b) => a.avgToReach - b.avgToReach);
+    // Build cycle time rows using actual stage durations from timestamp transitions
+    const stageCycleTimes = Object.entries(stageAvgDuration).map(([stage, duration]) => {
+      const avgToReach = stageAvgToReach[stage] || 0;
+      const count = stageDurations[stage] ? stageDurations[stage].length : 0;
+      return { stage, avgToReach, duration, count };
+    })
+    .filter(s => s.count > 0) // Only include stages with actual transition data
+    .sort((a, b) => a.avgToReach - b.avgToReach);
 
     // Overall avg cycle = avg of DATE(po received) → DATE(last timestamp) for each row
     // Time is intentionally ignored; only the calendar date is used for the diff.
@@ -2240,7 +2280,7 @@ function CycleTimePage({kpis, filtered}) {
     <div>
       <div className="section-title">⏱ Cycle Time <span>per Stage</span><div className="section-line"/></div>
       <div style={{background:'rgba(0,201,255,0.06)',border:'1px solid rgba(0,201,255,0.2)',borderRadius:8,padding:'10px 16px',marginBottom:16,fontSize:11,color:'var(--text-secondary)',fontFamily:'Share Tech Mono,monospace'}}>
-        ℹ FORMULA: Avg days = DATE(last_timestamp) − DATE(po_received). Time component ignored — date only. Overall avg = mean of (PO received date → last timestamp date) across all rows with both dates. Stage duration = diff between consecutive stage averages in flow order.
+        ℹ FORMULA: Avg days in stage = Mean of (Next Stage Timestamp − Current Stage Timestamp) for each item SC transition. Time component ignored — date only. This measures actual time spent in each stage from one timestamp to the next.
       </div>
 
       <div className="kpi-grid">
@@ -2268,7 +2308,7 @@ function CycleTimePage({kpis, filtered}) {
       <div className="table-card">
         <div className="table-header">
           <div className="chart-title">Stage Cycle Time — Full Detail</div>
-          <div style={{fontSize:10,fontFamily:'Share Tech Mono',color:'var(--text-muted)'}}>AVG DAYS = AVG( DATE(last_timestamp) − DATE(po_received) ) grouped by currentStage</div>
+          <div style={{fontSize:10,fontFamily:'Share Tech Mono',color:'var(--text-muted)'}}>AVG DURATION IN STAGE = Mean of (Next Timestamp − Current Timestamp) for each item transition from one stage to next</div>
         </div>
         <div className="table-wrap">
           <table>
