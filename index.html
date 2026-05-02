@@ -1193,14 +1193,17 @@ function App() {
   }, [data, filters]);
 
   // ── SC GROUPS ──────────────────────────────────────────────────────────────
+  // Built from full `data` (not filtered) so that completeness is evaluated
+  // against ALL products in the SC — a set is only COMPLETE when every single
+  // product across the entire SC is READY / STORES / STOCK.
   const scGroups = useMemo(() => {
     const g = {};
-    filtered.forEach(row => {
+    data.forEach(row => {
       if(!g[row.sc]) g[row.sc] = { sc:row.sc, po:row.po, poDate:row.poDate, items:[] };
       g[row.sc].items.push(row);
     });
     return Object.values(g);
-  }, [filtered]);
+  }, [data]);
 
   // ── PO GROUPS ──────────────────────────────────────────────────────────────
   const poGroups = useMemo(() => {
