@@ -721,6 +721,9 @@ function App() {
   const [dateRange, setDateRange] = useState({ from:'', to:'' });
   const [serverStatus, setServerStatus] = useState('loading');
   const [now] = useState(new Date());
+  const apiBase = window.location.hostname === 'localhost' && window.location.port === '3000'
+    ? 'http://localhost:4000'
+    : '';
 
   // ── PARSE UPLOADED EXCEL / JSON ──────────────────────────────────────────
   const [uploadStatus, setUploadStatus] = useState(null);
@@ -745,7 +748,7 @@ function App() {
   useEffect(() => {
     async function loadServerData() {
       try {
-        const res = await fetch('http://localhost:4000/api/data');
+        const res = await fetch(`${apiBase}/api/data`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = await res.json();
         if (Array.isArray(payload.rows) && payload.rows.length > 0) {
@@ -762,7 +765,7 @@ function App() {
 
   function saveRowsToServer(rows) {
     if (!rows || rows.length === 0) return;
-    fetch('http://localhost:4000/api/data', {
+    fetch(`${apiBase}/api/data`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),

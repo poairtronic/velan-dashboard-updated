@@ -9,6 +9,7 @@ const DB_PATH = path.join(__dirname, 'data', 'db.json');
 
 app.use(cors());
 app.use(express.json({ limit: '30mb' }));
+app.use(express.static(path.join(__dirname)));
 
 function ensureDataFolder() {
   const dir = path.dirname(DB_PATH);
@@ -135,6 +136,10 @@ app.post('/api/clear', (req, res) => {
   const db = { rows: [], lastSync: new Date().toISOString() };
   saveDb(db);
   res.json({ success: true, cleared: true });
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
