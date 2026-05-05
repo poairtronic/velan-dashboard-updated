@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
  <style>
 :root {
@@ -269,7 +271,22 @@ tr:hover td { background:rgba(0,201,255,0.04); }
 
 /* Responsive */
 @media (max-width:1100px) { .chart-grid { grid-template-columns:1fr; } .chart-grid-3 { grid-template-columns:repeat(2,1fr); } }
-@media (max-width:700px) { .sidebar { display:none; } .kpi-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:700px) {
+  .main-container { flex-direction: column; }
+  .sidebar {
+    display: block;
+    width: 100%;
+    position: relative;
+    top: 0;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .content { padding: 14px 10px 20px; }
+  .nav-item { font-size: 13px; }
+  .filter-bar { flex-wrap: wrap; gap: 10px; }
+  .kpi-grid { grid-template-columns:repeat(2,1fr); }
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width:6px; height:6px; }
@@ -701,15 +718,22 @@ function App() {
   const [data, setData] = useState(SAMPLE_DATA);
   const [activeNav, setActiveNav] = useState('overview');
   const [filters, setFilters] = useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
+  const [dateRange, setDateRange] = useState({ from:'', to:'' });
+  const [serverStatus, setServerStatus] = useState('loading');
   const [now] = useState(new Date());
 
   // ── PARSE UPLOADED EXCEL / JSON ──────────────────────────────────────────
   const [uploadStatus, setUploadStatus] = useState(null);
   const [liveConfig, setLiveConfig] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('velan_live_source_v1') || '{}');
+      const stored = JSON.parse(localStorage.getItem('velan_live_source_v1') || '{}');
+      return {
+        enabled: stored.enabled === true,
+        url: typeof stored.url === 'string' ? stored.url : '',
+        intervalSec: Number(stored.intervalSec) || 300,
+      };
     } catch {
-      return {};
+      return { enabled:false, url:'', intervalSec:300 };
     }
   });
   const [liveState, setLiveState] = useState({ active:false, lastSync:'', lastError:'' });
@@ -717,6 +741,43 @@ function App() {
   useEffect(() => {
     localStorage.setItem('velan_live_source_v1', JSON.stringify(liveConfig || {}));
   }, [liveConfig]);
+
+  useEffect(() => {
+    async function loadServerData() {
+      try {
+        const res = await fetch('http://localhost:4000/api/data');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        if (Array.isArray(payload.rows) && payload.rows.length > 0) {
+          setData(payload.rows);
+        }
+        setServerStatus('ready');
+      } catch (err) {
+        setServerStatus('offline');
+        console.warn('Backend unavailable:', err);
+      }
+    }
+    loadServerData();
+  }, []);
+
+  function saveRowsToServer(rows) {
+    if (!rows || rows.length === 0) return;
+    fetch('http://localhost:4000/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (result && result.success) {
+          setUploadStatus({ type:'success', msg:`✅ Saved ${rows.length} rows to backend`, detail:`Database now has ${result.total} rows.` });
+        }
+      })
+      .catch(err => {
+        console.warn('Backend save failed:', err);
+        setUploadStatus({ type:'warn', msg:'⚠ Backend save failed', detail:'Data is loaded locally, but backend storage is unavailable.' });
+      });
+  }
 
   // ── Auto-detect product TYPE from product name ────────────────────────────
   function inferType(productName) {
@@ -1062,6 +1123,7 @@ function App() {
       }).filter(r => r.sc || r.po);
       const missingStage = normalizedRows.filter(r=>!r.currentStage).length;
       setData(normalizedRows);
+      saveRowsToServer(normalizedRows);
       setUploadStatus({
         type:'success',
         msg:`✅ ${normalizedRows.length} rows loaded from "${sourceName}" — live latest status resolved`,
@@ -1183,10 +1245,13 @@ function App() {
   }
 
   useEffect(() => {
-    if(!liveConfig?.enabled || !liveConfig?.url) return;
+    const enabled = liveConfig?.enabled === true;
+    const url = String(liveConfig?.url || '').trim();
+    if(!enabled || !url) return;
+
     const sec = Math.max(30, Number(liveConfig.intervalSec) || 300);
-    syncLiveDataNow(liveConfig.url);
-    const timer = setInterval(() => { syncLiveDataNow(liveConfig.url); }, sec * 1000);
+    syncLiveDataNow(url);
+    const timer = setInterval(() => { syncLiveDataNow(url); }, sec * 1000);
     return () => clearInterval(timer);
   }, [liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec]);
 
@@ -1565,6 +1630,8 @@ function App() {
   // ── NAV ───────────────────────────────────────────────────────────────────
   const navItems = [
     {id:'overview',label:'Overview',icon:'⬡'},
+    {id:'monthday',label:'Month / Day View',icon:'📅'},
+    {id:'database',label:'Database',icon:'🗄'},
     {id:'production',label:'Production',icon:'⚙'},
     {id:'wip',label:'Stage / WIP',icon:'⟳'},
     {id:'cycletime',label:'Cycle Time',icon:'⏱'},
@@ -1643,6 +1710,8 @@ function App() {
           {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
           {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
           {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
+          {activeNav==='monthday' && <MonthDayPage data={data}/>}
+          {activeNav==='database' && <DatabasePage data={data} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
           {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
         </div>
       </div>
@@ -2861,15 +2930,6 @@ function VendorPage({kpis, data}) {
   useChart(vendorBarRef, {
     type:'bar',
     data:{
-      labels:vendors.map(v=>v.code),
-      datasets:[{label:'Items at Vendor',data:vendors.map(v=>v.count),backgroundColor:'#b24bff88',borderColor:'#b24bff',borderWidth:1,borderRadius:4}]
-    },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}},y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}}}}
-  }, [kpis]);
-
-  useChart(vendorTimeRef, {
-    type:'bar',
-    data:{
       labels: vendors.map(v=>v.code),
       datasets:[
         {label:'Avg Pending Days (Today - Last Update)',data:vendors.map(v=>v.avgDays||0),backgroundColor:vendors.map(v=>(v.avgDays||0)>21?'#ff3d5a99':'#ffd60a99'),borderColor:vendors.map(v=>(v.avgDays||0)>21?'#ff3d5a':'#ffd60a'),borderWidth:1,borderRadius:4},
@@ -3380,6 +3440,364 @@ function VendorPage({kpis, data}) {
     </div>
   );
 }
+
+function MonthDayPage({data}) {
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const months = useMemo(() => {
+    const map = {};
+    data.forEach(row => {
+      if (!row.poDate) return;
+      const monthKey = row.poDate.substring(0,7);
+      if (!map[monthKey]) {
+        map[monthKey] = { month: monthKey, poSet: new Set(), scSet: new Set(), items: [], daily: {} };
+      }
+      map[monthKey].poSet.add(row.po);
+      map[monthKey].scSet.add(row.sc);
+      map[monthKey].items.push(row);
+      const dayKey = row.poDate.substring(0,10);
+      if (!map[monthKey].daily[dayKey]) map[monthKey].daily[dayKey] = { date: dayKey, items: [], ready: 0, stores: 0, wip: 0 };
+      map[monthKey].daily[dayKey].items.push(row);
+      if (row.currentStage === 'READY') map[monthKey].daily[dayKey].ready++;
+      else if (row.currentStage === 'STORES') map[monthKey].daily[dayKey].stores++;
+      else map[monthKey].daily[dayKey].wip++;
+    });
+    return Object.values(map).sort((a,b) => b.month.localeCompare(a.month));
+  }, [data]);
+
+  const selected = selectedMonth ? months.find(m => m.month === selectedMonth) : null;
+  const monthTitle = (month) => {
+    const [year, mon] = month.split('-');
+    const date = new Date(`${month}-01`);
+    return date.toLocaleString('en-IN', { month:'long', year:'numeric' });
+  };
+
+  return (
+    <div>
+      <div className="section-title">Month / Day <span>View</span><div className="section-line"/></div>
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div className="chart-title">Monthly Summary</div>
+        <div className="chart-sub">Click a month to drill into daily PO / SC details.</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginTop:16}}>
+          {months.map(month => {
+            const ready = month.items.filter(r => r.currentStage === 'READY').length;
+            return (
+              <button key={month.month} onClick={() => setSelectedMonth(month.month)} style={{border:'1px solid var(--border)',borderRadius:12,padding:18,textAlign:'left',background:selectedMonth===month.month?'rgba(0,201,255,0.12)':'var(--bg-card)',color:'var(--text-primary)',cursor:'pointer'}}>
+                <div style={{fontSize:14,fontWeight:700,color:'var(--accent1)'}}>{monthTitle(month.month)}</div>
+                <div style={{fontSize:24,fontWeight:700,margin:'12px 0'}}>{month.items.length}</div>
+                <div style={{fontSize:11,color:'var(--text-muted)'}}>{month.poSet.size} POs · {month.scSet.size} SCs</div>
+                <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:8}}>{ready} ready items</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selected ? (
+        <div className="chart-card" style={{marginBottom:20}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+            <div>
+              <div className="chart-title">{monthTitle(selected.month)} — Daily Breakdown</div>
+              <div className="chart-sub">PO received date grouped by day</div>
+            </div>
+            <button className="filter-btn" onClick={()=>setSelectedMonth(null)}>Back to months</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
+            {Object.values(selected.daily).sort((a,b)=>a.date.localeCompare(b.date)).map(day => (
+              <div key={day.date} style={{border:'1px solid var(--border)',borderRadius:12,padding:14,background:'var(--bg-secondary)'}}>
+                <div style={{fontSize:10,fontFamily:'Share Tech Mono',color:'var(--text-muted)',marginBottom:8}}>{day.date}</div>
+                <div style={{fontSize:18,fontWeight:700,color:'var(--text-primary)'}}>{day.items.length} items</div>
+                <div style={{fontSize:10,color:'var(--accent1)',marginTop:10}}>{[...new Set(day.items.map(r=>r.po))].length} POs · {[...new Set(day.items.map(r=>r.sc))].length} SCs</div>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10,fontSize:10}}>
+                  <span className="status-pill badge-green">READY {day.ready}</span>
+                  <span className="status-pill badge-blue">STORES {day.stores}</span>
+                  <span className="status-pill badge-yellow">WIP {day.wip}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="chart-card" style={{marginBottom:20}}>
+          <div className="chart-title">Month / Day Explanation</div>
+          <div className="chart-sub">Select a month card to see per-day counts of POs, SCs, and item statuses.</div>
+          <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:12,lineHeight:1.7}}>
+            This view calculates month totals from the PO received date. If your Excel updates daily, the backend keeps a historical copy of all loaded rows so deleted rows remain stored for reporting.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DatabasePage({data, dateRange, setDateRange, serverStatus}) {
+  const [dateMode, setDateMode] = useState('poDate');
+  const [stageFilter, setStageFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [afterFilter, setAfterFilter] = useState('');
+
+  const availableStages = useMemo(() => [...new Set(data.map(r => r.currentStage).filter(Boolean))].sort(), [data]);
+  const availableTypes = useMemo(() => [...new Set(data.map(r => r.type).filter(Boolean))].sort(), [data]);
+  const availablePOs = useMemo(() => [...new Set(data.map(r => r.po).filter(Boolean))].sort(), [data]);
+
+  const filteredByDate = useMemo(() => {
+    return data.filter(row => {
+      const date = dateMode === 'timestamp' ? row.timestamp?.substring(0,10) : row.poDate || '';
+      if (!date) return false;
+      if (dateRange.from && date < dateRange.from) return false;
+      if (dateRange.to && date > dateRange.to) return false;
+      if (stageFilter && row.currentStage !== stageFilter) return false;
+      if (typeFilter && row.type !== typeFilter) return false;
+      if (locationFilter && row.inhouse !== locationFilter) return false;
+      if (afterFilter && row.po !== afterFilter) return false;
+      return true;
+    });
+  }, [data, dateMode, dateRange, stageFilter, typeFilter, locationFilter, afterFilter]);
+
+  const uniquePOs = useMemo(() => new Set(filteredByDate.map(r => r.po)).size, [filteredByDate]);
+  const uniqueSCs = useMemo(() => new Set(filteredByDate.map(r => r.sc)).size, [filteredByDate]);
+  const categories = useMemo(() => {
+    const counts = { AIRPLUG:0, MASTER:0, ACCESSORY:0 };
+    filteredByDate.forEach(r => {
+      const cat = getProductCategory(r.type);
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [filteredByDate]);
+
+  function handlePrint() {
+    window.print();
+  }
+
+  function handleDownloadPdf() {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      alert('PDF export library is not loaded.');
+      return;
+    }
+    const doc = new jsPDF('landscape', 'pt', 'a4');
+    const title = 'Velan Database Report';
+    const generatedAt = new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const rangeText = dateRange.from || dateRange.to ? `${dateRange.from || '...'} → ${dateRange.to || '...'}` : 'All dates';
+
+    doc.setFontSize(16);
+    doc.text(title, 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Date range: ${rangeText}`, 40, 60);
+    doc.text(`Rows: ${filteredByDate.length}`, 40, 74);
+    doc.text(`Exported: ${generatedAt}`, 40, 88);
+
+    const header = [['PO', 'PO DATE', 'SC', 'PRODUCT', 'TYPE', 'CATEGORY', 'STAGE', 'INHOUSE', 'TIMESTAMP']];
+    const rows = filteredByDate.slice(0, 250).map(row => [
+      row.po || '—',
+      row.poDate || '—',
+      row.sc || '—',
+      String(row.product || '—').substring(0, 48),
+      row.type || '—',
+      getProductCategory(row.type),
+      row.currentStage || '—',
+      row.inhouse || '—',
+      row.timestamp || '—',
+    ]);
+
+    doc.autoTable({
+      startY: 110,
+      head: header,
+      body: rows,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [0, 201, 255], textColor: 20 },
+      columnStyles: { 3: { cellWidth: 140 }, 8: { cellWidth: 100 } },
+      margin: { left: 40, right: 40 },
+      theme: 'striped',
+    });
+
+    if (filteredByDate.length > 250) {
+      doc.setFontSize(10);
+      doc.text(`Only the first 250 filtered rows are included in this export.`, 40, doc.lastAutoTable.finalY + 24);
+    }
+
+    const fileName = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.pdf`;
+    doc.save(fileName);
+  }
+
+  function handleDownloadXlsx() {
+    const ws = XLSX.utils.json_to_sheet(filteredByDate.map(row => ({
+      PO: row.po,
+      'PO DATE': row.poDate,
+      SC: row.sc,
+      PRODUCT: row.product,
+      TYPE: row.type,
+      CATEGORY: getProductCategory(row.type),
+      STAGE: row.currentStage,
+      INHOUSE: row.inhouse,
+      TIMESTAMP: row.timestamp,
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Database');
+    XLSX.writeFile(wb, `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.xlsx`);
+  }
+
+  function handleDownloadCsv() {
+    const ws = XLSX.utils.json_to_sheet(filteredByDate.map(row => ({
+      PO: row.po,
+      'PO DATE': row.poDate,
+      SC: row.sc,
+      PRODUCT: row.product,
+      TYPE: row.type,
+      CATEGORY: getProductCategory(row.type),
+      STAGE: row.currentStage,
+      INHOUSE: row.inhouse,
+      TIMESTAMP: row.timestamp,
+    })));
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleDownloadJson() {
+    const blob = new Blob([JSON.stringify(filteredByDate, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function setQuickRange(days) {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - days + 1);
+    setDateRange({ from: start.toISOString().substring(0,10), to: end.toISOString().substring(0,10) });
+  }
+
+  const filterSummary = `FILTER ACTIVE: ${dateRange.from || '...'} → ${dateRange.to || '...'} (${dateMode === 'timestamp' ? 'Timestamp' : 'PO Date'}) | Stage: ${stageFilter || 'All'} | Type: ${typeFilter || 'All'} | Location: ${locationFilter || 'All'} | PO: ${afterFilter || 'All'}`;
+
+  return (
+    <div>
+      <div className="section-title">Database <span>& Reports</span><div className="section-line"/></div>
+      {serverStatus === 'offline' && (
+        <div style={{marginBottom:20,padding:14,borderRadius:10,background:'rgba(0,201,255,0.08)',border:'1px solid rgba(0,201,255,0.25)',color:'var(--text-primary)'}}>
+          ✅ {data.length} rows restored from local database
+        </div>
+      )}
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div className="chart-title">Date Range & Filters</div>
+        <div className="chart-sub">PO Received Date / Last Update Timestamp</div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:16,alignItems:'center'}}>
+          <button className={`filter-btn ${dateMode==='poDate' ? 'active' : ''}`} onClick={()=>setDateMode('poDate')}>PO Received Date</button>
+          <button className={`filter-btn ${dateMode==='timestamp' ? 'active' : ''}`} onClick={()=>setDateMode('timestamp')}>Last Update Timestamp</button>
+        </div>
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:16,alignItems:'center'}}>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>From
+            <input type="date" value={dateRange.from} onChange={e => setDateRange(prev => ({...prev, from: e.target.value}))} className="filter-input" style={{width:160}} />
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>To
+            <input type="date" value={dateRange.to} onChange={e => setDateRange(prev => ({...prev, to: e.target.value}))} className="filter-input" style={{width:160}} />
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Stage
+            <select className="filter-select" value={stageFilter} onChange={e=>setStageFilter(e.target.value)} style={{width:160}}>
+              <option value="">All Stages</option>
+              {availableStages.map(stage => <option key={stage} value={stage}>{stage}</option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Type
+            <select className="filter-select" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:160}}>
+              <option value="">All Types</option>
+              {availableTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Location
+            <select className="filter-select" value={locationFilter} onChange={e=>setLocationFilter(e.target.value)} style={{width:160}}>
+              <option value="">All</option>
+              <option value="INHOUSE">Inhouse</option>
+              <option value="VENDOR">Vendor</option>
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>After
+            <select className="filter-select" value={afterFilter} onChange={e=>setAfterFilter(e.target.value)} style={{width:160}}>
+              <option value="">All POs</option>
+              {availablePOs.map(po => <option key={po} value={po}>{po}</option>)}
+            </select>
+          </label>
+          <button className="filter-btn" onClick={() => { setDateRange({ from:'', to:'' }); setStageFilter(''); setTypeFilter(''); setLocationFilter(''); setAfterFilter(''); }}>✕ Reset</button>
+        </div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
+          {[7,14,30,60,90].map(days => (
+            <button key={days} className="filter-btn" onClick={()=>setQuickRange(days)}>{days} Days</button>
+          ))}
+          <button className="filter-btn" onClick={()=>setQuickRange(180)}>6 Months</button>
+        </div>
+        <div style={{marginTop:14,padding:14,background:'rgba(0,201,255,0.06)',border:'1px solid rgba(0,201,255,0.16)',borderRadius:10,fontSize:11,color:'var(--text-secondary)'}}>
+          {filterSummary}
+        </div>
+      </div>
+
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div>
+            <div className="chart-title">Download Report</div>
+            <div className="chart-sub">Export the current filtered dataset in any format.</div>
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+            <button className="filter-btn" onClick={handlePrint}>Print</button>
+            <button className="filter-btn" onClick={handleDownloadPdf}>PDF</button>
+            <button className="filter-btn" onClick={handleDownloadXlsx}>Excel</button>
+            <button className="filter-btn" onClick={handleDownloadCsv}>CSV</button>
+            <button className="filter-btn" onClick={handleDownloadJson}>JSON</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="kpi-grid">
+        <KPICard label="FILTERED ROWS" value={filteredByDate.length} sub="records in selected range" color1="#00c9ff" color2="#0fa8e0" />
+        <KPICard label="UNIQUE POs" value={uniquePOs} sub="purchase orders" color1="#00ff9d" color2="#00c9ff" />
+        <KPICard label="UNIQUE SCs" value={uniqueSCs} sub="job sets" color1="#ffd60a" color2="#ff6b35" />
+        <KPICard label="AIRPLUGS" value={categories.AIRPLUG} sub="APG / ARG" color1="#00c9ff" color2="#00e676" />
+        <KPICard label="MASTERS" value={categories.MASTER} sub="SRG / SP / SPG" color1="#b24bff" color2="#ff6b35" />
+        <KPICard label="ACCESSORIES" value={categories.ACCESSORY} sub="other products" color1="#ffd60a" color2="#0fa8e0" />
+      </div>
+
+      <div className="table-card">
+        <div className="table-header"><div className="chart-title">Database Records</div></div>
+        <div className="table-wrap" style={{maxHeight:460}}>
+          <table>
+            <thead>
+              <tr>
+                <th>PO</th><th>PO DATE</th><th>SC</th><th>PRODUCT</th><th>TYPE</th><th>CATEGORY</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredByDate.slice(0,250).map((row,i)=>(
+                <tr key={i}>
+                  <td className="mono text-accent">{row.po}</td>
+                  <td className="mono" style={{fontSize:11}}>{row.poDate}</td>
+                  <td className="mono text-accent">{row.sc}</td>
+                  <td style={{fontSize:11,maxWidth:300,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.product}</td>
+                  <td><span className="status-pill badge-blue">{row.type || '—'}</span></td>
+                  <td><span className="status-pill badge-green">{getProductCategory(row.type)}</span></td>
+                  <td><span className="status-pill" style={{background:getStageColor(row.currentStage)+'22',color:getStageColor(row.currentStage)}}>{row.currentStage||'—'}</span></td>
+                  <td><span className={`status-pill ${row.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{row.inhouse}</span></td>
+                  <td className="mono" style={{fontSize:10}}>{row.timestamp}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState}) {
   const [drag, setDrag] = useState(false);
   const fileRef = useRef();
@@ -3494,7 +3912,7 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               <input
                 type="number"
                 min="30"
-                value={liveConfig?.intervalSec || 300}
+                value={liveConfig.intervalSec || 300}
                 onChange={e=>setLiveConfig(prev=>({...prev,intervalSec:Number(e.target.value)||300}))}
                 style={{width:100,background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'6px 8px',fontSize:11}}
               />
@@ -3502,14 +3920,14 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-secondary)',marginLeft:'auto'}}>
                 <input
                   type="checkbox"
-                  checked={!!liveConfig?.enabled}
+                  checked={liveConfig.enabled === true}
                   onChange={e=>setLiveConfig(prev=>({...prev,enabled:e.target.checked}))}
                 />
                 Auto-sync
               </label>
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>onSyncNow(liveConfig?.url)}>🔄 Sync Now</button>
+              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>onSyncNow(String(liveConfig.url || '').trim())}>🔄 Sync Now</button>
               <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
             </div>
             <div style={{marginTop:8,fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
