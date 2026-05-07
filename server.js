@@ -22,7 +22,7 @@ function loadDb() {
     const content = fs.readFileSync(DB_PATH, 'utf8');
     return JSON.parse(content || '{"rows":[],"lastSync":null}');
   } catch (err) {
-    console.error('Failed to load DB:', err);
+    console.error('DB load error — return empty state:', err);
     return { rows: [], lastSync: null };
   }
 }
@@ -32,7 +32,7 @@ function saveDb(db) {
     ensureDataFolder();
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8');
   } catch (err) {
-    console.error('Failed to save DB:', err);
+    console.error('DB save error — silent fail:', err);
   }
 }
 
@@ -82,7 +82,9 @@ function normalizeRow(raw) {
 
   return row;
 }
-
+function makeId(row) {
+  return [row.sc, row.po, row.product].map(v => String(v || '').trim()).join('_');
+}
 function rowKey(row) {
   return [row.sc, row.po, row.product, row.timestamp].map(v => String(v || '')).join('||');
 }
@@ -91,32 +93,92 @@ function mergeRows(existingRows, incomingRows) {
   const normalizedIncoming = incomingRows.map(normalizeRow).filter(r => r.sc || r.po);
   const incomingKeys = new Set(normalizedIncoming.map(rowKey));
 
-  const existingMap = new Map(existingRows.map(row => [row._key || rowKey(row), { ...row, _key: row._key || rowKey(row) }]));
+  // Build map from existing rows — preserve id if already set
+  const existingMap = new Map(existingRows.map(row => [
+    row._key || rowKey(row),
+    { ...row, _key: row._key || rowKey(row), id: row.id || makeId(row) }
+  ]));
 
   normalizedIncoming.forEach(row => {
     const key = rowKey(row);
+    const id = makeId(row);
     if (existingMap.has(key)) {
+      // Update existing row — keep original id
       const prev = existingMap.get(key);
-      existingMap.set(key, { ...prev, ...row, archived: false, active: true, lastSeen: new Date().toISOString(), _key: key });
+      existingMap.set(key, {
+        ...prev, ...row,
+        id: prev.id || id,
+        active: true,
+        archived: false,
+        lastSeen: new Date().toISOString(),
+        _key: key,
+      });
     } else {
-      existingMap.set(key, { ...row, archived: false, active: true, insertedAt: new Date().toISOString(), lastSeen: new Date().toISOString(), _key: key });
+      // New row — insert with id
+      existingMap.set(key, {
+        ...row,
+        id,
+        active: true,
+        archived: false,
+        insertedAt: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+        _key: key,
+      });
     }
   });
 
-  existingMap.forEach((row, key) => {
-    if (!incomingKeys.has(key)) {
-      row.active = row.active === false ? false : row.active || false;
-      if (!row.insertedAt) row.insertedAt = row.insertedAt || new Date().toISOString();
-      row.archived = row.archived || false;
-    }
+  // Rows absent from incoming are KEPT PERMANENTLY — never deleted, never set inactive
+  existingMap.forEach((row) => {
+    if (!row.id) row.id = makeId(row);
+    if (!row.insertedAt) row.insertedAt = new Date().toISOString();
+    // Do NOT touch row.active — preserve whatever status it had
   });
 
   return Array.from(existingMap.values());
 }
-
 app.get('/api/data', (req, res) => {
   const db = loadDb();
   res.json(db);
+});
+// Add AFTER line 120:
+
+// GET /api/stats — lightweight count endpoint
+app.get('/api/stats', (req, res) => {
+  const db = loadDb();
+  res.json({ total: db.rows.length, lastSync: db.lastSync });
+});
+
+// GET /api/sync — Google Sheet sync (configure URL via env var SHEET_CSV_URL)
+app.get('/api/sync', async (req, res) => {
+  const sheetUrl = process.env.SHEET_CSV_URL || '';
+  if (!sheetUrl) {
+    return res.json({
+      success: false,
+      message: 'No SHEET_CSV_URL env var set. Upload data via POST /api/data or the UI upload feature.',
+    });
+  }
+  try {
+    const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+    const response = await fetch(sheetUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    // Parse CSV rows (simple split — frontend parsers handle full XLSX)
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+    const rows = lines.slice(1).map(line => {
+      const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g,''));
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
+      return obj;
+    });
+    const db = loadDb();
+    db.rows = mergeRows(db.rows, rows);
+    db.lastSync = new Date().toISOString();
+    saveDb(db);
+    res.json({ success: true, synced: rows.length, total: db.rows.length, lastSync: db.lastSync });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
 });
 
 app.post('/api/data', (req, res) => {
@@ -143,5 +205,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Velan dashboard backend running on http://localhost:${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });

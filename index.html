@@ -308,268 +308,6 @@ tr:hover td { background:rgba(0,201,255,0.04); }
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ─── SAMPLE DATA (from PDF) ───────────────────────────────────────────────────
-const SAMPLE_DATA = [
-  // PO 1: AGIPLPO2326 (25/03/2026) – SC 1170,1166-1..3,1167,1168,1169,1171
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 15.2 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:20:04"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 15.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:04"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:33"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:08"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:10"},
-
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 17.2 +0.03",type:"ARG",status1:"LATHE COMPLETED,MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:20"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 17.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:23"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:40"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:27"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:32"},
-
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 17.2 +0.03",type:"ARG",status1:"LATHE COMPLETED,MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:36"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 17.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:47"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:47"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:53"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:55"},
-
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 17.2 +0.03",type:"ARG",status1:"LATHE COMPLETED,MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:14"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 17.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:17"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:50"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:04"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:48:48"},
-
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 16.65 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:18"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 16.65 +0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:23"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"BUTTING STOPPER",type:"ACCESSORY",status1:"MOVE TO LATHE M1 COMPLETED",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-15 19:18:21"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:19"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:08"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:49:10"},
-
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 15.95 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:25"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 15.95 +0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:26"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:33"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:09"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:49:27"},
-
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 25.0 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:28"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 25.0 +0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:31"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:38"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:11"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:49:49"},
-
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 22.0+0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:34"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 22.0+0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:36"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:46"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:17"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:50:09"},
-
-  // PO 2: AGIPLPO14 (25/03/2026)
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"APG DIA 24.0 -0.007/-0.028",type:"APG",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:14:43"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"SRG DIA 24.0 -0.007/-0.028",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:23:27"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"VERTICAL BENCH MOUNT PLATE",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:45"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"JIG FEET",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:35"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"DEPTH COLLAR",type:"ACCESSORY",status1:"BLK COMPLETED, MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-03 15:16:12"},
-
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"APG DIA 26.0-0.024/-0.011",type:"APG",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:23:39"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"SRG DIA 26.0-0.024/-0.011",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO BLK",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:23:38"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"VERTICAL BENCH MOUNT PLATE",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:48"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"JIG FEET",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:38"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"DEPTH COLLAR",type:"ACCESSORY",status1:"BLK COMPLETED, MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-03 15:16:22"},
-
-  {sc:"1192",po:"AGIPLPO14",poDate:"2026-03-25",product:"APG DIA 42.0-0.02",type:"APG",status1:"MOVE TO FB",status2:"HT REJECTED,REWORK WITH VENDOR",inhouse:"VENDOR",currentStage:"HTV",timestamp:"2026-04-13 16:54:01"},
-  {sc:"1192",po:"AGIPLPO14",poDate:"2026-03-25",product:"SRG DIA 42.0-0.02",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO BLK",status2:"CA COMPLETED, MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-07 18:59:51"},
-  {sc:"1192",po:"AGIPLPO14",poDate:"2026-03-25",product:"EXTENSION 25 MM",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:36:02"},
-
-  {sc:"1195",po:"AGIPLPO14",poDate:"2026-03-25",product:"ARG DIA 25.0-0.02/-0.01",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:24:30"},
-  {sc:"1195",po:"AGIPLPO14",poDate:"2026-03-25",product:"SP DIA 25.0-0.02/-0.01",type:"SP",status1:"RM AVAILABLE, MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:24:37"},
-  {sc:"1195",po:"AGIPLPO14",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"FB,BLK COMPLETED,MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 12:51:54"},
-
-  // PO 3: AGIPLPO2333
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 14.620+0.030",type:"APG",status1:"HT,SZ,CG COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-09 13:47:39"},
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 14.620+0.030",type:"SRG",status1:"SG COMPLETED, MOVE TO DCPL",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 18:26:10"},
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"EXTENSION 100 MM",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:14:47"},
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"HALF CIRCLE DEPTH COLLAR",type:"ACCESSORY",status1:"FB COMPLETED, MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-13 17:45:27"},
-
-  {sc:"1173",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 18.100 +/-0.035",type:"APG",status1:"JET AS,CG COMPLETED, MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:16:05"},
-  {sc:"1173",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 18.100 +/-0.035",type:"SRG",status1:"SG COMPLETED, MOVE TO DCPL",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:16:09"},
-  {sc:"1174",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 8.006+/-0.01",type:"APG",status1:"SZ,JC COMPLETED,MOVE TO SD",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:25:22"},
-  {sc:"1174",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 8.006+/-0.01",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:25:24"},
-  {sc:"1175",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 9.00 H7+0.015",type:"APG",status1:"HT,SZ,CG,SG COMPLETED",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-09 18:46:03"},
-  {sc:"1175",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 9.00 H7+0.015",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:16:28"},
-
-  // PO 4: AGIPLPO2338
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"APG DIA 10.002 +/-0.004",type:"APG",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 19:33:54"},
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SRG DIA 10.002 +/-0.004",type:"SRG",status1:"HARDENED JOB AVAILABLE, MOVE TO CA",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:26:18"},
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SEATING BLOCK IN BENCH",type:"ACCESSORY",status1:"HT,SZ COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-10 11:37:50"},
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"VERTICAL BENCH MOUNT PLATE",type:"ACCESSORY",status1:"BLK COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-13 13:22:40"},
-
-  {sc:"1185-1",po:"AGIPLPO2338",poDate:"2026-03-25",product:"APG DIA 5.456+/-0.006",type:"APG",status1:"SD COMPLETED, MOVE TO VA",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:22:54"},
-  {sc:"1185-1",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SRG DIA 5.456+/-0.006",type:"SRG",status1:"SG COMPLETED,MOVE TO DCPL",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:02"},
-  {sc:"1185-2",po:"AGIPLPO2338",poDate:"2026-03-25",product:"APG DIA 5.456+/-0.006",type:"APG",status1:"HSS BIT AVAILABLE, MOVE TO STORES",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 19:34:13"},
-  {sc:"1185-2",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SRG DIA 5.456+/-0.006",type:"SRG",status1:"SG COMPLETED,MOVE TO DCPL",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-11 15:59:53"},
-
-  // PO 5
-  {sc:"1177",po:"AGIPLPO2341",poDate:"2026-03-26",product:"APG DIA 15.993 +/-0.008",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 11:39:44"},
-  {sc:"1177",po:"AGIPLPO2341",poDate:"2026-03-26",product:"SRG DIA 15.993 +/-0.008",type:"SRG",status1:"BLK COMPLETED, MOVE TO CG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-09 13:45:05"},
-
-  // PO 6
-  {sc:"1182",po:"AGIPLPO2343",poDate:"2026-03-26",product:"APG DIA 17.032/17.059",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:27"},
-  {sc:"1182",po:"AGIPLPO2343",poDate:"2026-03-26",product:"SRG DIA 17.032/17.059",type:"SRG",status1:"BLK,CG COMPLETED,MOVE TO HO",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:36"},
-  {sc:"1183",po:"AGIPLPO2343",poDate:"2026-03-26",product:"APG DIA 17.016/17.043",type:"APG",status1:"JET AS,CG COMPLETED, MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:49"},
-  {sc:"1183",po:"AGIPLPO2343",poDate:"2026-03-26",product:"SRG DIA 17.016/17.043",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:52"},
-
-  // PO 8: AGIPLPO2339
-  {sc:"1181-1",po:"AGIPLPO2339",poDate:"2026-03-26",product:"APG DIA 7.90 +/-0.035",type:"APG",status1:"MOVE TO HC",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:25:49"},
-  {sc:"1181-1",po:"AGIPLPO2339",poDate:"2026-03-26",product:"SRG DIA 7.90 +/-0.035",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:26:02"},
-  {sc:"1181-2",po:"AGIPLPO2339",poDate:"2026-03-26",product:"APG DIA 7.90 +/-0.035",type:"APG",status1:"MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:26:07"},
-  {sc:"1181-2",po:"AGIPLPO2339",poDate:"2026-03-26",product:"SRG DIA 7.90 +/-0.035",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:26:09"},
-
-  // PO 9: AGIPLPO2349
-  {sc:"1186-1",po:"AGIPLPO2349",poDate:"2026-03-27",product:"APG DIA 6.420 +/-0.01",type:"APG",status1:"HT,SZ,JC COMPLETED,MOVE TO SD",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-10 11:49:14"},
-  {sc:"1186-1",po:"AGIPLPO2349",poDate:"2026-03-27",product:"SRG DIA 6.420 +/-0.01",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"HO COMPLETED, MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-11 13:59:00"},
-  {sc:"1186-2",po:"AGIPLPO2349",poDate:"2026-03-27",product:"APG DIA 6.420 +/-0.01",type:"APG",status1:"HT,SZ,JC COMPLETED,MOVE TO SD",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-10 11:49:22"},
-  {sc:"1186-2",po:"AGIPLPO2349",poDate:"2026-03-27",product:"SRG DIA 6.420 +/-0.01",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"HO COMPLETED, MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-11 13:59:03"},
-
-  // PO 10: AGIPLPO2359
-  {sc:"1196-1",po:"AGIPLPO2359",poDate:"2026-03-28",product:"APG DIA 68 R6 -0.037/-0.056",type:"APG",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-07 18:38:31"},
-  {sc:"1196-1",po:"AGIPLPO2359",poDate:"2026-03-28",product:"SRG DIA 68 R6 -0.037/-0.056",type:"SRG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-08 18:25:42"},
-  {sc:"1196-2",po:"AGIPLPO2359",poDate:"2026-03-28",product:"APG DIA 68 R6 -0.037/-0.056",type:"APG",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:24:12"},
-  {sc:"1196-2",po:"AGIPLPO2359",poDate:"2026-03-28",product:"SRG DIA 68 R6 -0.037/-0.056",type:"SRG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:24:09"},
-
-  // PO 12: AGIPLPO2367
-  {sc:"1198",po:"AGIPLPO2367",poDate:"2026-03-30",product:"APG DIA 5.0 +0.012",type:"APG",status1:"RM AVAILABLE, MOVE TO FB",status2:"SZ COMPLETED, MOVE TO BLK",inhouse:"VENDOR",currentStage:"BLV",timestamp:"2026-04-15 18:23:57"},
-  {sc:"1198",po:"AGIPLPO2367",poDate:"2026-03-30",product:"SRG DIA 5.0 +0.012",type:"SRG",status1:"MOVE TO HT",status2:"WC COMPLETED, MOVE TO CA",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 18:30:48"},
-  {sc:"1198",po:"AGIPLPO2367",poDate:"2026-03-30",product:"12 DIA ADAPTOR HANDLE",type:"ACCESSORY",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"FB,BLK COMPLETED,MOVE TO STORES",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-15 12:35:04"},
-
-  // PO 14: AGIPLPO2370
-  {sc:"1203",po:"AGIPLPO2370",poDate:"2026-03-31",product:"APG DIA 15.850/15.830",type:"APG",status1:"RM AVAILABLE, MOVE TO FB",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 19:35:14"},
-  {sc:"1203",po:"AGIPLPO2370",poDate:"2026-03-31",product:"SRG DIA 15.850/15.830",type:"SRG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-09 13:45:14"},
-
-  // PO 15: AGIPLPO2374
-  {sc:"1208",po:"AGIPLPO2374",poDate:"2026-04-01",product:"APG DIA 58.8 +/-0.035",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:03"},
-  {sc:"1208",po:"AGIPLPO2374",poDate:"2026-04-01",product:"SRG DIA 58.8 +/-0.035",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:09"},
-  {sc:"1209",po:"AGIPLPO2374",poDate:"2026-04-01",product:"APG DIA 45.3-0.03",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 12:25:01"},
-  {sc:"1209",po:"AGIPLPO2374",poDate:"2026-04-01",product:"SRG DIA 45.3-0.03",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:27:44"},
-
-  // PO 16: AGIPLPO2390
-  {sc:"1205-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 10.1+0.018",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:58"},
-  {sc:"1205-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 10.1+0.018",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:27:47"},
-  {sc:"1205-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 10.1+0.018",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:59"},
-  {sc:"1205-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 10.1+0.018",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:28:08"},
-  {sc:"1206-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 8.0+0.018",type:"APG",status1:"JC,SD COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 12:38:17"},
-  {sc:"1206-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 8.0+0.018",type:"SRG",status1:"HO COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-16 12:24:08"},
-  {sc:"1206-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 8.0+0.018",type:"APG",status1:"JC,SD COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 12:38:33"},
-  {sc:"1206-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 8.0+0.018",type:"SRG",status1:"HO COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 15:41:49"},
-
-  // PO 17: AGIPLPO2389
-  {sc:"1207-1",po:"AGIPLPO2389",poDate:"2026-04-01",product:"APG DIA 30.0 +/-0.02",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:52"},
-  {sc:"1207-1",po:"AGIPLPO2389",poDate:"2026-04-01",product:"SRG DIA 30.0 +/-0.02",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:58"},
-  {sc:"1207-2",po:"AGIPLPO2389",poDate:"2026-04-01",product:"APG DIA 30.0 +/-0.02",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:04"},
-  {sc:"1207-2",po:"AGIPLPO2389",poDate:"2026-04-01",product:"SRG DIA 30.0 +/-0.02",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:01"},
-  {sc:"1207-3",po:"AGIPLPO2389",poDate:"2026-04-01",product:"APG DIA 30.0 +/-0.02",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:04"},
-  {sc:"1207-3",po:"AGIPLPO2389",poDate:"2026-04-01",product:"SRG DIA 30.0 +/-0.02",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:10"},
-
-  // PO 21: AGIPLPO15 (VERY URGENT GNUTTI CARLO)
-  {sc:"1212-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 21.548+/-0.013",type:"APG",status1:"HT,SZ,BLK,JET ASS COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-11 18:18:22"},
-  {sc:"1212-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 21.548+/-0.013",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:29:36"},
-  {sc:"1212-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 21.548+/-0.013",type:"APG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:29:41"},
-  {sc:"1212-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 21.548+/-0.013",type:"SRG",status1:"HT,SZ,BLK,SG COMPLETED,MOVE TO CG",status2:"",inhouse:"VENDOR",currentStage:"STOCK",timestamp:"2026-04-11 17:56:00"},
-  {sc:"1213-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 5.502+/-0.013",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 12:25:10"},
-  {sc:"1213-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 5.502+/-0.013",type:"SRG",status1:"WC COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 18:31:22"},
-  {sc:"1213-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 5.502+/-0.013",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 14:45:16"},
-  {sc:"1213-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 5.502+/-0.013",type:"SRG",status1:"WC COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 18:31:25"},
-
-  // PO 22: AGIPLPO16 (VERY URGENT GNUTTI CARLO)
-  {sc:"1214-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 15.075+/-0.013",type:"APG",status1:"HT,SZ,BLK,CG COMPLETED,MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-13 15:02:53"},
-  {sc:"1214-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"SRG DIA 15.075+/-0.013",type:"SRG",status1:"CG COMPLETED, MOVE TO HO",status2:"",inhouse:"VENDOR",currentStage:"HOV",timestamp:"2026-04-15 15:38:34"},
-  {sc:"1214-4",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 15.075+/-0.013",type:"APG",status1:"CG OVALITY ISSUE, NEED TO SEND HC",status2:"",inhouse:"VENDOR",currentStage:"HCV",timestamp:"2026-04-13 16:54:54"},
-  {sc:"1215-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 12.668+/-0.006",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:02:44"},
-  {sc:"1215-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"SRG DIA 12.668+/-0.006",type:"SRG",status1:"CG COMPLETED, MOVE TO HO",status2:"",inhouse:"VENDOR",currentStage:"HOV",timestamp:"2026-04-15 15:39:28"},
-  {sc:"1216-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 12.802 +/-0.025",type:"APG",status1:"JC COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:35"},
-  {sc:"1216-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"SRG DIA 12.802 +/-0.025",type:"SRG",status1:"CG COMPLETED, MOVE TO HO",status2:"",inhouse:"VENDOR",currentStage:"HOV",timestamp:"2026-04-15 15:41:19"},
-
-  // PO 23: AGIPLPO2384
-  {sc:"1219",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 42H7 +0.025",type:"APG",status1:"SZ COMPLETED, MOVE TO BLK",status2:"",inhouse:"VENDOR",currentStage:"BLV",timestamp:"2026-04-15 18:24:42"},
-  {sc:"1219",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 42H7 +0.025",type:"SRG",status1:"BLK COMPLETED, MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-13 13:39:28"},
-  {sc:"1220",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 62.0 M7-0.03",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:20:17"},
-  {sc:"1220",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 62.0 M7-0.03",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:28:56"},
-  {sc:"1221",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 65 H8 +0.046",type:"APG",status1:"HT,SZ,BLK COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 12:44:45"},
-  {sc:"1221",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 65 H8 +0.046",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:26:38"},
-  {sc:"1222",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 55H7 +0.030",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 14:45:44"},
-  {sc:"1222",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 55H7 +0.030",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:28:58"},
-
-  // PO 25: AGIPLPO46
-  {sc:"1225-1",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:00:59"},
-  {sc:"1225-2",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:00:59"},
-  {sc:"1225-3",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:02"},
-  {sc:"1225-5",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:03"},
-
-  // PO 26: AGIPLPO29
-  {sc:"1226-1",po:"AGIPLPO29",poDate:"2026-04-07",product:"APG DIA 11.42 +/-0.020",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:03:03"},
-  {sc:"1226-1",po:"AGIPLPO29",poDate:"2026-04-07",product:"SRG DIA 11.42 +/-0.020",type:"SRG",status1:"CG,SG COMPLETED, MOVE TO DCPL",status2:"",inhouse:"INHOUSE",currentStage:"DCPLI",timestamp:"2026-04-15 19:10:01"},
-  {sc:"1226-2",po:"AGIPLPO29",poDate:"2026-04-07",product:"APG DIA 11.42 +/-0.020",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:03:12"},
-  {sc:"1226-2",po:"AGIPLPO29",poDate:"2026-04-07",product:"SRG DIA 11.42 +/-0.020",type:"SRG",status1:"CG,SG COMPLETED, MOVE TO DCPL",status2:"",inhouse:"INHOUSE",currentStage:"DCPLI",timestamp:"2026-04-13 13:35:27"},
-
-  // PO 27: AGIPLPO26
-  {sc:"1227",po:"AGIPLPO26",poDate:"2026-04-07",product:"APG DIA 27.10 +0.06",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:42"},
-  {sc:"1227",po:"AGIPLPO26",poDate:"2026-04-07",product:"SRG DIA 27.10 +0.06",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:29:04"},
-  {sc:"1228",po:"AGIPLPO26",poDate:"2026-04-07",product:"APG DIA 12.02 +/-0.035",type:"APG",status1:"BLK COMPLETED, MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-11 15:18:08"},
-  {sc:"1229",po:"AGIPLPO26",poDate:"2026-04-07",product:"APG DIA 8.32 +/-0.035",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-13 09:45:26"},
-  {sc:"1229",po:"AGIPLPO26",poDate:"2026-04-07",product:"SRG DIA 8.32 +/-0.035",type:"SRG",status1:"SZ COMPLETED, MOVE TO BLK",status2:"",inhouse:"VENDOR",currentStage:"BLV",timestamp:"2026-04-15 18:24:46"},
-
-  // PO 30: AGIPLPO71 JAYAM ENGG URGENT
-  {sc:"1237",po:"AGIPLPO71",poDate:"2026-04-10",product:"APG DIA 98.0+0.02",type:"APG",status1:"LATHE,JC,M1 COMPLETED,MOVE TO QC",status2:"",inhouse:"INHOUSE",currentStage:"QC",timestamp:"2026-04-16 10:43:51"},
-  {sc:"1237",po:"AGIPLPO71",poDate:"2026-04-10",product:"SRG DIA 98.0+0.02",type:"SRG",status1:"FB COMPLETED, MOVE TO HT",status2:"",inhouse:"INHOUSE",currentStage:"HT",timestamp:"2026-04-16 12:26:48"},
-  {sc:"1236",po:"AGIPLPO71",poDate:"2026-04-10",product:"APG DIA 36.450/36.489",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:43"},
-  {sc:"1235",po:"AGIPLPO71",poDate:"2026-04-10",product:"APG DIA 54.950/54.930",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-15 19:08:07"},
-
-  // PO 31: AGIPLPO64
-  {sc:"1233",po:"AGIPLPO64",poDate:"2026-04-10",product:"APG DIA 4-0.015/-0.027",type:"APG",status1:"BRZ COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 18:25:44"},
-  {sc:"1234",po:"AGIPLPO64",poDate:"2026-04-10",product:"APG DIA 4-0.015/-0.027",type:"APG",status1:"BRZ COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 18:25:49"},
-
-  // PO 32: SR CRAFT
-  {sc:"1238",po:"SR CRAFT",poDate:"2026-04-10",product:"APG DIA 27.000/27.051",type:"APG",status1:"LATHE,JC,M1 COMPLETED,MOVE TO QC",status2:"",inhouse:"INHOUSE",currentStage:"QC",timestamp:"2026-04-16 10:44:18"},
-  {sc:"1238",po:"SR CRAFT",poDate:"2026-04-10",product:"SRG DIA 27.000/27.051",type:"SRG",status1:"HT,SZ,BLK,SG COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 15:46:03"},
-  {sc:"1239",po:"SR CRAFT",poDate:"2026-04-10",product:"APG DIA 36.499/36.550",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-16 12:22:54"},
-
-  // PO 33: AGIPLPO48 SCL USA
-  {sc:"1240",po:"AGIPLPO48",poDate:"2026-04-11",product:"APG DIA 18.750 +0.015/-0.010",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 18:32:22"},
-  {sc:"1240",po:"AGIPLPO48",poDate:"2026-04-11",product:"SRG DIA 18.750 +0.015/-0.010",type:"SRG",status1:"LATHE,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-15 19:04:16"},
-  {sc:"1241",po:"AGIPLPO48",poDate:"2026-04-11",product:"APG DIA 22.00 +0.052",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 19:02:31"},
-  {sc:"1241",po:"AGIPLPO48",poDate:"2026-04-11",product:"SRG DIA 22.00 +0.052",type:"SRG",status1:"LATHE,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:43"},
-  {sc:"1243",po:"AGIPLPO48",poDate:"2026-04-11",product:"APG DIA 13.980 +/-0.010",type:"APG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"",inhouse:"INHOUSE",currentStage:"HT",timestamp:"2026-04-16 10:46:23"},
-
-  // PO 34: AGIPLPO62 MM FORGINGS
-  {sc:"1245-1",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 93.14 +/-0.015",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:46:58"},
-  {sc:"1245-1",po:"AGIPLPO62",poDate:"2026-04-11",product:"SRG DIA 93.14 +/-0.015",type:"SRG",status1:"RM AVAILABLE,MOVE TO FB",status2:"",inhouse:"VENDOR",currentStage:"FBV",timestamp:"2026-04-16 15:17:59"},
-  {sc:"1245-2",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 93.14 +/-0.015",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:47:53"},
-  {sc:"1246",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 24.012 +/-0.012",type:"APG",status1:"INHOUSE RM",status2:"",inhouse:"INHOUSE",currentStage:"RM",timestamp:""},
-  {sc:"1247-1",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 51.71 +/-0.012",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:48:00"},
-  {sc:"1248",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 37.0 +0.008/-0.038",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:48:10"},
-
-  // PO 35: AGIPLPO66 SAHANA ENGG
-  {sc:"1244-1",po:"AGIPLPO66",poDate:"2026-04-11",product:"APG DIA 52.245 +/-0.025",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-16 10:44:51"},
-  {sc:"1244-2",po:"AGIPLPO66",poDate:"2026-04-11",product:"APG DIA 52.245 +/-0.025",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-16 10:45:06"},
-  {sc:"1244",po:"AGIPLPO66",poDate:"2026-04-11",product:"SRG DIA 52.245 +/-0.025",type:"SRG",status1:"LATHE,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:48"},
-
-  // PO 36: AGIPLPO76 RANE STEERING
-  {sc:"1249",po:"AGIPLPO76",poDate:"2026-04-13",product:"APG DIA 36.0 -0.035/-0.065",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 14:44:34"},
-  {sc:"1249",po:"AGIPLPO76",poDate:"2026-04-13",product:"SRG DIA 36.0 -0.035/-0.065",type:"SRG",status1:"LATHE COMPLETED, MOVE TO HT",status2:"",inhouse:"INHOUSE",currentStage:"HT",timestamp:"2026-04-16 14:44:31"},
-
-  // PO 37: SONA COMSTAR
-  {sc:"1251",po:"SONA COMSTAR 1",poDate:"2026-04-13",product:"APG DIA 69.96 +/-0.025",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:16:33"},
-  {sc:"1251",po:"SONA COMSTAR 1",poDate:"2026-04-13",product:"SRG DIA 69.96 +/-0.025",type:"SRG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:16:35"},
-
-  // PO 38: NEXTEER URGENT
-  {sc:"1250",po:"NEXTEER",poDate:"2026-04-15",product:"APG DIA 46.975/46.990",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:13:30"},
-
-  // PO 39: AGIPLPO84 MERIND
-  {sc:"1254",po:"AGIPLPO84",poDate:"2026-04-15",product:"APG DIA 14 -0.04/-0.058",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 08:25:18"},
-  {sc:"1252",po:"AGIPLPO84",poDate:"2026-04-15",product:"APG DIA 14.0 -0.016/-0.031",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:53"},
-  {sc:"1253",po:"AGIPLPO84",poDate:"2026-04-15",product:"APG DIA 40P7 -0.042/-0.017",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:54"},
-
-  // PO 40: AGIPLPO81 SONA COMSTAR
-  {sc:"1255",po:"AGIPLPO81",poDate:"2026-04-15",product:"APG DIA 52.0 +0.034/+0.009",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:57"},
-  {sc:"1256",po:"AGIPLPO81",poDate:"2026-04-15",product:"APG DIA 40.0+0.039",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:45"},
-  {sc:"1257",po:"AGIPLPO81",poDate:"2026-04-15",product:"APG DIA 10.0+0.015",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:15:57"},
-];
-
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const AIRPLUG_TYPES = ['APG','ARG'];
 const MASTER_TYPES  = ['SPG','SRG','SP','SRG'];
@@ -715,13 +453,15 @@ function useChart(ref, config, deps) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
-  const [data, setData] = useState(SAMPLE_DATA);
+  const [data, setData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastSync, setLastSync] = useState('');
   const [activeNav, setActiveNav] = useState('overview');
   const [filters, setFilters] = useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
   const [dateRange, setDateRange] = useState({ from:'', to:'' });
   const [serverStatus, setServerStatus] = useState('loading');
   const [now] = useState(new Date());
-  const apiBase = window.location.hostname === 'localhost' && window.location.port === '3000'
+  const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:4000'
     : '';
 
@@ -747,22 +487,24 @@ function App() {
 
   useEffect(() => {
     async function loadServerData() {
+      setIsLoading(true);
       try {
         const res = await fetch(`${apiBase}/api/data`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = await res.json();
-        if (Array.isArray(payload.rows) && payload.rows.length > 0) {
-          setData(payload.rows);
-        }
+        // Always set from backend — even if empty []
+        setData(Array.isArray(payload.rows) ? payload.rows : []);
+        if (payload.lastSync) setLastSync(payload.lastSync);
         setServerStatus('ready');
       } catch (err) {
         setServerStatus('offline');
-        console.warn('Backend unavailable:', err);
+        setData([]);
+      } finally {
+        setIsLoading(false);
       }
     }
     loadServerData();
   }, []);
-
   function saveRowsToServer(rows) {
     if (!rows || rows.length === 0) return;
     fetch(`${apiBase}/api/data`, {
@@ -773,12 +515,26 @@ function App() {
       .then(res => res.json())
       .then(result => {
         if (result && result.success) {
-          setUploadStatus({ type:'success', msg:`✅ Saved ${rows.length} rows to backend`, detail:`Database now has ${result.total} rows.` });
+          if (result.lastSync) setLastSync(result.lastSync);
+          // Re-fetch full DB so UI shows ALL historical rows, not just uploaded slice
+          return fetch(`${apiBase}/api/data`)
+            .then(r => r.json())
+            .then(payload => {
+              setData(Array.isArray(payload.rows) ? payload.rows : []);
+              setUploadStatus({
+                type: 'success',
+                msg: `✅ Saved ${rows.length} rows to backend`,
+                detail: `Database now has ${result.total} rows.`,
+              });
+            });
         }
       })
-      .catch(err => {
-        console.warn('Backend save failed:', err);
-        setUploadStatus({ type:'warn', msg:'⚠ Backend save failed', detail:'Data is loaded locally, but backend storage is unavailable.' });
+      .catch(() => {
+        setUploadStatus({
+          type: 'warn',
+          msg: '⚠ Backend save failed',
+          detail: 'Data is loaded locally, but backend storage is unavailable.',
+        });
       });
   }
 
@@ -1259,8 +1015,33 @@ function App() {
   }, [liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec]);
 
   // ── FILTERED DATA ──────────────────────────────────────────────────────────
+  // ── REQ 11: CENTRALIZED processedData — pendingDays & cycleTime on every row ──
+const processedData = useMemo(() => {
+  const now = new Date();
+
+  return data.map(row => ({
+    ...row,
+
+    pendingDays: row.timestamp
+      ? Math.floor(
+          (now - new Date(row.timestamp.replace(' ', 'T')))
+          / (1000 * 60 * 60 * 24)
+        )
+      : null,
+
+    cycleTime:
+      (row.timestamp && row.poDate)
+        ? Math.floor(
+            (
+              new Date(row.timestamp.replace(' ', 'T')) -
+              new Date(row.poDate)
+            ) / (1000 * 60 * 60 * 24)
+          )
+        : null,
+  }));
+}, [data]);
   const filtered = useMemo(() => {
-    return data.filter(row => {
+    return processedData.filter(row => {
       if(filters.po && row.po !== filters.po) return false;
       if(filters.stage && row.currentStage !== filters.stage) return false;
       if(filters.type && row.type !== filters.type) return false;
@@ -1272,7 +1053,7 @@ function App() {
       }
       return true;
     });
-  }, [data, filters]);
+  }, [processedData, filters]);
 
   // ── SC GROUPS ──────────────────────────────────────────────────────────────
   // Built from full `data` (not filtered) so that completeness is evaluated
@@ -1280,22 +1061,22 @@ function App() {
   // product across the entire SC is READY / STORES / STOCK.
   const scGroups = useMemo(() => {
     const g = {};
-    data.forEach(row => {
+    processedData.forEach(row => {
       if(!g[row.sc]) g[row.sc] = { sc:row.sc, po:row.po, poDate:row.poDate, items:[] };
       g[row.sc].items.push(row);
     });
     return Object.values(g);
-  }, [data]);
+  }, [processedData]);
 
   // ── PO GROUPS ──────────────────────────────────────────────────────────────
   const poGroups = useMemo(() => {
     const g = {};
-    data.forEach(row => {
+    processedData.forEach(row => {
       if(!g[row.po]) g[row.po] = { po:row.po, poDate:row.poDate, items:[] };
       g[row.po].items.push(row);
     });
     return Object.values(g);
-  }, [data]);
+  }, [processedData]);
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -1655,6 +1436,16 @@ function App() {
           <div className="logo-sub">PRODUCTION COMMAND CENTER</div>
         </div>
         <div className="header-right">
+          {lastSync && (
+            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-muted)'}}>
+              LAST SYNC: {new Date(lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+            </div>
+          )}
+          {data.length > 0 && (
+            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--accent3)'}}>
+              {data.length} RECORDS
+            </div>
+          )}
           <div className="live-badge"><div className="live-dot"/><span>LIVE</span></div>
           <div className="timestamp">{now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} &nbsp;{now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
         </div>
@@ -1705,18 +1496,48 @@ function App() {
           </div>
 
           {/* PAGES */}
-          {activeNav==='overview' && <OverviewPage kpis={kpis} data={data} filtered={filtered}/>}
-          {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
-          {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
-          {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
-          {activeNav==='bottleneck' && <BottleneckPage kpis={kpis} filtered={filtered}/>}
-          {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
-          {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
-          {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
-          {activeNav==='monthday' && <MonthDayPage data={data}/>}
-          {activeNav==='database' && <DatabasePage data={data} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
-          {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
-        </div>
+          {/* PAGES */}
+          {isLoading ? (
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
+              <div style={{fontSize:36,animation:'pulse 1.5s infinite'}}>⏳</div>
+              <div style={{fontFamily:'Share Tech Mono',fontSize:14,color:'var(--accent1)',letterSpacing:2}}>
+                LOADING DATABASE…
+              </div>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>Fetching records from backend</div>
+            </div>
+          ) : data.length === 0 && activeNav !== 'upload' ? (
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
+              <div style={{fontSize:48}}>📭</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:22,fontWeight:700,color:'var(--text-secondary)',letterSpacing:2}}>
+                No Data Available
+              </div>
+              <div style={{fontSize:13,color:'var(--text-muted)',textAlign:'center',maxWidth:400,lineHeight:1.7}}>
+                Upload file to begin<br/>
+                <span style={{fontSize:11}}>Use the Upload Data tab to load your Excel / CSV / JSON file</span>
+              </div>
+              <button
+                onClick={() => setActiveNav('upload')}
+                style={{marginTop:8,padding:'10px 24px',background:'linear-gradient(135deg,var(--accent1),var(--accent2))',border:'none',borderRadius:8,color:'#000',fontWeight:700,fontSize:13,cursor:'pointer',letterSpacing:1}}
+              >
+                ⬆ Go to Upload
+              </button>
+            </div>
+          ) : (
+            <>
+              {activeNav==='overview' && <OverviewPage kpis={kpis} data={data} filtered={filtered}/>}
+              {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
+              {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
+              {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
+              {activeNav==='bottleneck' && <BottleneckPage kpis={kpis} filtered={filtered}/>}
+              {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
+              {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
+              {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
+              {activeNav==='monthday' && <MonthDayPage data={data}/>}
+              {activeNav==='database' && <DatabasePage data={data} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
+              {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
+            </>
+          )}
+          </div>
       </div>
     </div>
   );
