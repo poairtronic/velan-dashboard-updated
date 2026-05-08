@@ -454,6 +454,7 @@ function useChart(ref, config, deps) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
   const [data, setData] = useState([]);
+  const [liveRows, setLiveRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastSync, setLastSync] = useState('');
   const [activeNav, setActiveNav] = useState('overview');
@@ -492,13 +493,16 @@ function App() {
         const res = await fetch(`${apiBase}/api/data`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = await res.json();
-        // Always set from backend — even if empty []
+        // Historical warehouse
         setData(Array.isArray(payload.rows) ? payload.rows : []);
+        // Current live operational rows
+        setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
         if (payload.lastSync) setLastSync(payload.lastSync);
         setServerStatus('ready');
       } catch (err) {
         setServerStatus('offline');
         setData([]);
+        setLiveRows([]);
       } finally {
         setIsLoading(false);
       }
@@ -521,10 +525,11 @@ function App() {
             .then(r => r.json())
             .then(payload => {
               setData(Array.isArray(payload.rows) ? payload.rows : []);
+              setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
               setUploadStatus({
                 type: 'success',
-                msg: `✅ Saved ${rows.length} rows to backend`,
-                detail: `Database now has ${result.total} rows.`,
+                msg: `✅ Saved ${rows.length} rows to live dashboard`,
+                detail: `Live: ${result.liveTotal} rows | Historical DB: ${result.total} rows.`,
               });
             });
         }
@@ -1016,7 +1021,7 @@ function App() {
 
   // ── FILTERED DATA ──────────────────────────────────────────────────────────
   // ── REQ 11: CENTRALIZED processedData — pendingDays & cycleTime on every row ──
-const processedData = useMemo(() => {
+  const processedData = useMemo(() => {
   const now = new Date();
 
   return data.map(row => ({
@@ -1038,10 +1043,26 @@ const processedData = useMemo(() => {
             ) / (1000 * 60 * 60 * 24)
           )
         : null,
-  }));
-}, [data]);
+      }));
+    }, [data]);
+    // ── LIVE OPERATIONAL DATA — active WIP only (last 30 days, not completed) ──
+  const liveData = useMemo(() => {
+    const now = new Date();
+    // Use liveRows directly — this is the current uploaded/synced operational snapshot
+    // NOT filtered from historical processedData
+    return liveRows.map(row => ({
+      ...row,
+      pendingDays: row.timestamp
+        ? Math.floor((now - new Date(row.timestamp.replace(' ', 'T'))) / (1000 * 60 * 60 * 24))
+        : null,
+      cycleTime: (row.timestamp && row.poDate)
+        ? Math.floor((new Date(row.timestamp.replace(' ', 'T')) - new Date(row.poDate)) / (1000 * 60 * 60 * 24))
+        : null,
+    }));
+  }, [liveRows]);
+  // filtered uses liveData — operational pages only show active production
   const filtered = useMemo(() => {
-    return processedData.filter(row => {
+    return liveData.filter(row => {
       if(filters.po && row.po !== filters.po) return false;
       if(filters.stage && row.currentStage !== filters.stage) return false;
       if(filters.type && row.type !== filters.type) return false;
@@ -1053,7 +1074,7 @@ const processedData = useMemo(() => {
       }
       return true;
     });
-  }, [processedData, filters]);
+  }, [liveData, filters]);
 
   // ── SC GROUPS ──────────────────────────────────────────────────────────────
   // Built from full `data` (not filtered) so that completeness is evaluated
@@ -1061,22 +1082,22 @@ const processedData = useMemo(() => {
   // product across the entire SC is READY / STORES / STOCK.
   const scGroups = useMemo(() => {
     const g = {};
-    processedData.forEach(row => {
+    liveData.forEach(row => {
       if(!g[row.sc]) g[row.sc] = { sc:row.sc, po:row.po, poDate:row.poDate, items:[] };
       g[row.sc].items.push(row);
     });
     return Object.values(g);
-  }, [processedData]);
+  }, [liveData]);
 
   // ── PO GROUPS ──────────────────────────────────────────────────────────────
   const poGroups = useMemo(() => {
     const g = {};
-    processedData.forEach(row => {
+    liveData.forEach(row => {
       if(!g[row.po]) g[row.po] = { po:row.po, poDate:row.poDate, items:[] };
       g[row.po].items.push(row);
     });
     return Object.values(g);
-  }, [processedData]);
+  }, [liveData]);
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -1109,7 +1130,7 @@ const processedData = useMemo(() => {
     // ── MODULE 2: Stage-wise WIP (Lathe / FB / Stores) ──
     // Count items per stage
     const stageWIP = {};
-    data.forEach(row => {
+    liveData.forEach(row => {
       const stage = row.currentStage;
       if(!stageWIP[stage]) stageWIP[stage] = 0;
       stageWIP[stage]++;
@@ -1140,7 +1161,7 @@ const processedData = useMemo(() => {
     // ── MODULE 1: Total Production Output (Daily – Ready / Moved to Stores) ──
     // Grouped by date: count items by stage (READY vs STORES)
     const dailyOutput = {};
-    data.forEach(row => {
+    liveData.forEach(row => {
       if(!row.timestamp) return;
       const date = row.timestamp.substring(0,10);
       if(!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0 };
@@ -1404,13 +1425,12 @@ const processedData = useMemo(() => {
       delayedPOs, onTimePOs,
       dailyOutput, dailyOutputArray,
     };
-  }, [filtered, scGroups, poGroups, data]);
+  }, [filtered, scGroups, poGroups, liveData]);
 
   // ── UNIQUE OPTIONS ─────────────────────────────────────────────────────────
-  const uniquePOs     = useMemo(()=>[...new Set(data.map(r=>r.po))].sort(),[data]);
-  const uniqueStages  = useMemo(()=>[...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort(),[data]);
-  const uniqueTypes   = useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
-
+  const uniquePOs     = useMemo(()=>[...new Set(liveData.map(r=>r.po))].sort(),[liveData]);
+  const uniqueStages  = useMemo(()=>[...new Set(liveData.map(r=>r.currentStage))].filter(Boolean).sort(),[liveData]);
+  const uniqueTypes   = useMemo(()=>[...new Set(liveData.map(r=>r.type))].filter(Boolean).sort(),[liveData]);
   // ── NAV ───────────────────────────────────────────────────────────────────
   const navItems = [
     {id:'overview',label:'Overview',icon:'⬡'},
@@ -1441,9 +1461,9 @@ const processedData = useMemo(() => {
               LAST SYNC: {new Date(lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
             </div>
           )}
-          {data.length > 0 && (
+          {liveData.length > 0 && (
             <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--accent3)'}}>
-              {data.length} RECORDS
+              {liveData.length} LIVE · {data.length} TOTAL
             </div>
           )}
           <div className="live-badge"><div className="live-dot"/><span>LIVE</span></div>
@@ -1492,7 +1512,7 @@ const processedData = useMemo(() => {
             </select>
             <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
             <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
-            <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {data.length} total</span>
+            <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {liveData.length} live · {data.length} db</span>
           </div>
 
           {/* PAGES */}
@@ -1505,7 +1525,7 @@ const processedData = useMemo(() => {
               </div>
               <div style={{fontSize:11,color:'var(--text-muted)'}}>Fetching records from backend</div>
             </div>
-          ) : data.length === 0 && activeNav !== 'upload' ? (
+          ) : liveData.length === 0 && !['upload','database'].includes(activeNav) ? (
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
               <div style={{fontSize:48}}>📭</div>
               <div style={{fontFamily:'Rajdhani',fontSize:22,fontWeight:700,color:'var(--text-secondary)',letterSpacing:2}}>
@@ -1524,7 +1544,7 @@ const processedData = useMemo(() => {
             </div>
           ) : (
             <>
-              {activeNav==='overview' && <OverviewPage kpis={kpis} data={data} filtered={filtered}/>}
+              {activeNav==='overview' && <OverviewPage kpis={kpis} data={liveData} filtered={filtered}/>}
               {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
               {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
               {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
@@ -1532,8 +1552,8 @@ const processedData = useMemo(() => {
               {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
               {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
               {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
-              {activeNav==='monthday' && <MonthDayPage data={data}/>}
-              {activeNav==='database' && <DatabasePage data={data} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
+              {activeNav==='monthday' && <MonthDayPage data={liveData}/>}
+              {activeNav==='database' && <DatabasePage data={processedData} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
               {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
             </>
           )}

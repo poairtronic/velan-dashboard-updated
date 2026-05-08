@@ -83,7 +83,9 @@ function normalizeRow(raw) {
   return row;
 }
 function makeId(row) {
-  return [row.sc, row.po, row.product].map(v => String(v || '').trim()).join('_');
+  return [row.sc, row.po, row.product, row.currentStage]
+    .map(v => String(v || '').trim().toUpperCase())
+    .join('_');
 }
 function rowKey(row) {
   return [row.sc, row.po, row.product, row.timestamp].map(v => String(v || '')).join('||');
@@ -126,7 +128,7 @@ function mergeRows(existingRows, incomingRows) {
       });
     }
   });
-
+  
   // Rows absent from incoming are KEPT PERMANENTLY — never deleted, never set inactive
   existingMap.forEach((row) => {
     if (!row.id) row.id = makeId(row);
@@ -138,7 +140,11 @@ function mergeRows(existingRows, incomingRows) {
 }
 app.get('/api/data', (req, res) => {
   const db = loadDb();
-  res.json(db);
+  res.json({
+    rows: db.rows || [],
+    liveRows: db.liveRows || [],
+    lastSync: db.lastSync,
+  });
 });
 // Add AFTER line 120:
 
@@ -172,10 +178,13 @@ app.get('/api/sync', async (req, res) => {
       return obj;
     });
     const db = loadDb();
-    db.rows = mergeRows(db.rows, rows);
+    // Google Sheet sync updates liveRows only — history is preserved in db.rows
+    db.liveRows = rows
+      .map(r => { const n = normalizeRow(r); return { ...n, id: makeId(n), source: 'LIVE', insertedAt: new Date().toISOString() }; })
+      .filter(r => r.sc || r.po);
     db.lastSync = new Date().toISOString();
     saveDb(db);
-    res.json({ success: true, synced: rows.length, total: db.rows.length, lastSync: db.lastSync });
+    res.json({ success: true, synced: rows.length, total: db.rows.length, liveTotal: db.liveRows.length, lastSync: db.lastSync });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
@@ -186,12 +195,49 @@ app.post('/api/data', (req, res) => {
   if (!payload || !Array.isArray(payload.rows)) {
     return res.status(400).json({ error: 'Payload must contain rows array.' });
   }
-
   const db = loadDb();
-  db.rows = mergeRows(db.rows, payload.rows);
+  // Live upload REPLACES liveRows — it's the current operational snapshot
+  // Historical db.rows is NEVER touched here
+  db.liveRows = payload.rows
+    .map(r => { const n = normalizeRow(r); return { ...n, id: makeId(n), source: 'LIVE', insertedAt: new Date().toISOString() }; })
+    .filter(r => r.sc || r.po);
   db.lastSync = new Date().toISOString();
   saveDb(db);
-  res.json({ success: true, saved: payload.rows.length, total: db.rows.length, lastSync: db.lastSync });
+  res.json({
+    success: true,
+    saved: db.liveRows.length,
+    total: db.rows.length,
+    liveTotal: db.liveRows.length,
+    lastSync: db.lastSync,
+  });
+});
+// POST /api/import — one-time historical bulk import (append-only, duplicate-safe)
+app.post('/api/import', (req, res) => {
+  const payload = req.body;
+  if (!payload || !Array.isArray(payload.rows)) {
+    return res.status(400).json({ error: 'Payload must contain rows array.' });
+  }
+  const db = loadDb();
+  const before = db.rows.length;
+  const existingIds = new Set(db.rows.map(r => r.id || makeId(r)));
+  const incoming = payload.rows
+    .map(r => ({
+      ...r,
+      id: makeId(r),
+      insertedAt: r.insertedAt || new Date().toISOString(),
+      source: r.source || 'IMPORT'
+    }))
+    .filter(r => !existingIds.has(r.id));
+  db.rows.push(...incoming);
+  db.lastSync = db.lastSync || new Date().toISOString();
+  saveDb(db);
+  res.json({
+    success: true,
+    imported: incoming.length,
+    skipped: payload.rows.length - incoming.length,
+    total: db.rows.length,
+    before,
+  });
 });
 
 app.post('/api/clear', (req, res) => {
@@ -205,5 +251,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
