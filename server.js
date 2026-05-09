@@ -39,30 +39,57 @@ function saveDb(db) {
 function normalizeString(value) {
   return value === undefined || value === null ? '' : String(value).trim();
 }
-
 function toIsoDate(value) {
   if (!value) return '';
+
   const text = String(value).trim();
-  const parts = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (parts) return `${parts[1]}-${parts[2].padStart(2, '0')}-${parts[3].padStart(2, '0')}`;
-  const dmY = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if (dmY) return `${dmY[3]}-${dmY[2].padStart(2, '0')}-${dmY[1].padStart(2, '0')}`;
+
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmy = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+
+  if (dmy) {
+    const day = dmy[1].padStart(2, '0');
+    const month = dmy[2].padStart(2, '0');
+    const year = dmy[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
+  // DD/MM/YY
+  const dmyShort = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2})$/);
+
+  if (dmyShort) {
+    const day = dmyShort[1].padStart(2, '0');
+    const month = dmyShort[2].padStart(2, '0');
+
+    const year =
+      parseInt(dmyShort[3]) >= 50
+        ? '19' + dmyShort[3]
+        : '20' + dmyShort[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
   return text;
 }
-
 function normalizeRow(raw) {
   const row = {
-    sc: normalizeString(raw.sc),
-    po: normalizeString(raw.po),
-    poDate: toIsoDate(normalizeString(raw.poDate)),
-    product: normalizeString(raw.product),
-    type: normalizeString(raw.type),
-    status1: normalizeString(raw.status1),
-    status2: normalizeString(raw.status2),
-    inhouse: normalizeString(raw.inhouse),
-    currentStage: normalizeString(raw.currentStage),
-    timestamp: normalizeString(raw.timestamp),
-    source: normalizeString(raw.source || ''),
+    sc:           normalizeString(raw.sc           || raw['SC']           || raw['SC NO']    || raw['SC No']),
+    po:           normalizeString(raw.po           || raw['PO NO']        || raw['PO No']    || raw['PO']),
+    poDate:       toIsoDate(normalizeString(raw.poDate || raw['PO RECD DATE'] || raw['PO Recd Date'] || raw['PO DATE'] || raw['PO Date'])),
+    product:      normalizeString(raw.product      || raw['Product Name'] || raw['PRODUCT NAME'] || raw['Product']),
+    type:         normalizeString(raw.type         || raw['TYPE']         || raw['Type']),
+    status1:      normalizeString(raw.status1      || raw['STATUS 1']     || raw['Status 1'] || raw['STATUS1']),
+    status2:      normalizeString(raw.status2      || raw['STATUS 2']     || raw['Status 2'] || raw['STATUS2']),
+    inhouse:      normalizeString(raw.inhouse      || raw['INHOUSE/ VENDOR'] || raw['INHOUSE/VENDOR'] || raw['Inhouse/ Vendor']),
+    currentStage: normalizeString(raw.currentStage || raw['currentStage'] || raw['CURRENT STAGE'] || raw['Current Stage']),
+    timestamp:    toIsoDate(normalizeString(raw.timestamp ||raw['timestamp'] ||raw['TIMESTAMP'])),
+    source:       normalizeString(raw.source || ''),
   };
 
   if (row.inhouse) {

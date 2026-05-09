@@ -404,7 +404,34 @@ function calculateProcessEfficiency(activeTime, totalTime) {
   if(!totalTime || totalTime === 0) return 0;
   return Math.round((activeTime / totalTime) * 100);
 }
+// ── STAGE SPELL-CORRECTION MAP ───────────────────────────────────────────────
+// Add or edit entries here whenever a new misspelling appears in the sheet
+const STAGE_CORRECTIONS = {
+  // Confirmed misspelling visible in screenshot
+  'BLACKENEING'  : 'BLACKENING',
+  'BLACKNING'    : 'BLACKENING',
+  'BLACKENNING'  : 'BLACKENING',
+  // Common typos for vendor stages
+  'BLACING'      : 'PLACING',
+  'BRASING'      : 'BRAZING',
+  'PLATING '     : 'PLATING',   // trailing space
+  // Ready/Stores variants
+  'READDY'       : 'READY',
+  'REAADY'       : 'READY',
+  'STORE'        : 'STORES',
+  'STORRES'      : 'STORES',
+  'STOERS'       : 'STORES',
+  // Calibration
+  'CALIBARTION'  : 'CALIBRATION',
+  'CALLIBRATION' : 'CALIBRATION',
+  // Add your own misspellings below this line
+};
 
+function correctStageName(stage) {
+  if (!stage) return stage;
+  const up = stage.trim().toUpperCase();
+  return STAGE_CORRECTIONS[up] || up;
+}
 function getStageColor(stage) {
   if(!stage) return '#3d6080';
   const s = stage.toUpperCase();
@@ -452,6 +479,29 @@ function useChart(ref, config, deps) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function toIsoDateString(value) {
+  if(value === undefined || value === null || value === '') return '';
+  if(value instanceof Date && !isNaN(value)) {
+    const y = value.getFullYear();
+    const mo = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  }
+  const s = String(value).trim();
+  if(!s) return '';
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  m = s.match(/^(\d{1,2})([-\/\.])(\d{1,2})\2(\d{4})/);
+  if(m) return `${m[4]}-${String(m[3]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  const num = Number(s);
+  if(!isNaN(num) && num > 20000 && num < 80000 && window.XLSX?.SSF?.parse_date_code) {
+    const dc = window.XLSX.SSF.parse_date_code(num);
+    if(dc?.y && dc?.m && dc?.d) {
+      return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
+    }
+  }
+  return '';
+}
 function App() {
   const [data, setData] = useState([]);
   const [liveRows, setLiveRows] = useState([]);
@@ -481,10 +531,20 @@ function App() {
     }
   });
   const [liveState, setLiveState] = useState({ active:false, lastSync:'', lastError:'' });
+  const [historyConfig, setHistoryConfig] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('velan_history_source_v1') || '{}');
+      return { url: typeof stored.url === 'string' ? stored.url : '' };
+    } catch { return { url:'' }; }
+  });
+  const [importState, setImportState] = useState({ loading:false, lastMsg:'' });
 
   useEffect(() => {
     localStorage.setItem('velan_live_source_v1', JSON.stringify(liveConfig || {}));
   }, [liveConfig]);
+  useEffect(() => {
+    localStorage.setItem('velan_history_source_v1', JSON.stringify(historyConfig || {}));
+  }, [historyConfig]);
 
   useEffect(() => {
     async function loadServerData() {
@@ -541,6 +601,91 @@ function App() {
           detail: 'Data is loaded locally, but backend storage is unavailable.',
         });
       });
+  }
+
+
+  // ── Import rows into the permanent historical DB (append-only) ─────────────
+  function importRowsToDb(rows) {
+    if (!rows || rows.length === 0) return;
+    setImportState({ loading:true, lastMsg:'Importing…' });
+    fetch(apiBase + '/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    })
+      .then(r => r.json())
+      .then(result => {
+        const msg = result.success
+          ? '✅ Imported ' + result.imported + ' new rows to DB (' + result.skipped + ' duplicates skipped). Total DB: ' + result.total
+          : '❌ Import failed';
+        setImportState({ loading:false, lastMsg: msg });
+        return fetch(apiBase + '/api/data').then(r => r.json()).then(payload => {
+          setData(Array.isArray(payload.rows) ? payload.rows : []);
+        });
+      })
+      .catch(err => setImportState({ loading:false, lastMsg:'❌ ' + String(err) }));
+  }
+
+  // ── Fetch rows from a URL (CSV / XLSX / JSON) ─────────────────────────────
+  async function fetchRowsFromUrl(sourceUrl) {
+    const cleanPath = sourceUrl.split('?')[0].toLowerCase();
+    const queryText = sourceUrl.toLowerCase();
+    const isCsv  = cleanPath.endsWith('.csv')  || /[?&]output=csv([&#]|$)/.test(queryText);
+    const isXlsx = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
+    if (isCsv) {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const wb = XLSX.read(text, {type:'string'});
+      return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+    } else if (isXlsx) {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
+      return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+    } else {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const parsed = await res.json();
+      return Array.isArray(parsed) ? parsed : [parsed];
+    }
+  }
+
+  // ── Sync the backup Google Sheet → import into DB ─────────────────────────
+  async function syncHistorySheet() {
+    const url = String(historyConfig.url || '').trim();
+    if (!url) { setImportState({ loading:false, lastMsg:'❌ No backup sheet URL set.' }); return; }
+    setImportState({ loading:true, lastMsg:'Fetching backup data from Google Sheet…' });
+    try {
+      const rawRows = await fetchRowsFromUrl(url);
+      if (!rawRows || rawRows.length === 0) {
+        setImportState({ loading:false, lastMsg:'❌ No rows found in backup sheet.' });
+        return;
+      }
+      const normalized = rawRows.map(raw => {
+        const product = String(raw.product || raw['Product Name'] || '').trim();
+        const status1 = String(raw.status1 || '').trim();
+        const status2 = String(raw.status2 || '').trim();
+        const opStage = String(raw.currentStage || '').trim();
+        const poRaw   = String(raw.po || '').trim();
+        const poDate  = toIsoDateString(raw.poDate);
+        const po      = toIsoDateString(poRaw) ? '' : poRaw;
+        return {
+          ...raw,
+          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
+          po, poDate, product,
+          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
+          status1, status2,
+          inhouse: normalizeInhouse(raw.inhouse),
+          currentStage: resolveLatestStage({ opStage, status1, status2 }),
+          timestamp: normalizeTimestamp(raw.timestamp),
+        };
+      }).filter(r => r.sc || r.po);
+      importRowsToDb(normalized);
+    } catch(err) {
+      setImportState({ loading:false, lastMsg:'❌ Fetch error: ' + String(err) });
+    }
   }
 
   // ── Auto-detect product TYPE from product name ────────────────────────────
@@ -606,29 +751,23 @@ function App() {
     if(value === undefined || value === null || value === '') return '';
     if(value instanceof Date && !isNaN(value)) {
       const y = value.getFullYear();
-      const m = String(value.getMonth() + 1).padStart(2, '0');
+      const mo = String(value.getMonth() + 1).padStart(2, '0');
       const d = String(value.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      return `${y}-${mo}-${d}`;
     }
-
     const s = String(value).trim();
     if(!s) return '';
-
-    // yyyy-mm-dd or yyyy/mm/dd
     let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
     if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
-
-    // dd-mm-yyyy or dd/mm/yyyy (common in uploaded Velan sheets)
-    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
-    if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-
-    // Excel serial date value
+    m = s.match(/^(\d{1,2})([-\/\.])(\d{1,2})\2(\d{4})/);
+    if(m) return `${m[4]}-${String(m[3]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
     const num = Number(s);
-    if(!isNaN(num) && num > 20000 && num < 80000 && window.XLSX?.SSF?.parse_date_code) {
-      const dc = window.XLSX.SSF.parse_date_code(num);
-      if(dc?.y && dc?.m && dc?.d) {
-        return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
-      }
+    if(!isNaN(num) && num > 20000 && num < 80000) {
+      const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
+      const y2 = epoch.getUTCFullYear();
+      const mo2 = String(epoch.getUTCMonth() + 1).padStart(2,'0');
+      const d2 = String(epoch.getUTCDate()).padStart(2,'0');
+      return `${y2}-${mo2}-${d2}`;
     }
     return '';
   }
@@ -886,7 +1025,7 @@ function App() {
         };
       }).filter(r => r.sc || r.po);
       const missingStage = normalizedRows.filter(r=>!r.currentStage).length;
-      setData(normalizedRows);
+      setLiveRows(normalizedRows);
       saveRowsToServer(normalizedRows);
       setUploadStatus({
         type:'success',
@@ -897,7 +1036,7 @@ function App() {
   }
 
   function parseWorksheet(ws) {
-    const rawAoA = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+    const rawAoA = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
     const headerMapped = parseRowsFromHeaderAoA(rawAoA);
     if(headerMapped.length > 0) return headerMapped;
     const isVelanFormat = rawAoA.slice(0,5).some(row =>
@@ -906,7 +1045,7 @@ function App() {
       row && row.some(cell => String(cell||'').trim() === 'SNO')
     );
     if(isVelanFormat) return parseVelanExcel(rawAoA);
-    const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false});
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
     return parseGenericRows(rows);
   }
 
@@ -931,7 +1070,7 @@ function App() {
     } else if(['xlsx','xls'].includes(ext)) {
       reader.onload = e => {
         try {
-          const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, raw:false});
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:false, raw:false});
           const ws = wb.Sheets[wb.SheetNames[0]];
           const parsedRows = parseWorksheet(ws);
           finalizeRows(parsedRows, file.name);
@@ -987,7 +1126,7 @@ function App() {
         const res = await fetch(sourceUrl, {cache:'no-store'});
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();
-        const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
+        const wb = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
         const ws = wb.Sheets[wb.SheetNames[0]];
         rows = parseWorksheet(ws);
       } else {
@@ -1045,6 +1184,20 @@ function App() {
         : null,
       }));
     }, [data]);
+    // ── ALL DB DATA: historical + live combined (for Database page only) ───────
+  const allDbData = useMemo(() => {
+    const seen = new Set();
+    return [...processedData, ...liveRows.map(row => ({
+      ...row,
+      pendingDays: row.timestamp ? Math.floor((new Date() - new Date(row.timestamp.replace(' ','T'))) / 86400000) : null,
+      cycleTime: (row.timestamp && row.poDate) ? Math.floor((new Date(row.timestamp.replace(' ','T')) - new Date(row.poDate)) / 86400000) : null,
+    }))].filter(r => {
+      const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [processedData, liveRows]);
     // ── LIVE OPERATIONAL DATA — active WIP only (last 30 days, not completed) ──
   const liveData = useMemo(() => {
     const now = new Date();
@@ -1553,15 +1706,15 @@ function App() {
               {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
               {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
               {activeNav==='monthday' && <MonthDayPage data={liveData}/>}
-              {activeNav==='database' && <DatabasePage data={processedData} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
-              {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
+              {activeNav==='database' && <DatabasePage data={allDbData} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
+              {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
             </>
           )}
           </div>
       </div>
     </div>
   );
-}
+  }
 
 // ─── OVERVIEW PAGE ─────────────────────────────────────────────────────────────
 function OverviewPage({kpis, data, filtered}) {
@@ -3379,34 +3532,104 @@ function DatabasePage({data, dateRange, setDateRange, serverStatus}) {
   const [typeFilter, setTypeFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [afterFilter, setAfterFilter] = useState('');
+  const [autoCorrect, setAutoCorrect] = useState(false);   // ← NEW
 
-  const availableStages = useMemo(() => [...new Set(data.map(r => r.currentStage).filter(Boolean))].sort(), [data]);
-  const availableTypes = useMemo(() => [...new Set(data.map(r => r.type).filter(Boolean))].sort(), [data]);
-  const availablePOs = useMemo(() => [...new Set(data.map(r => r.po).filter(Boolean))].sort(), [data]);
-
+  // Apply spell-corrections when checkbox is ON
+  const correctedData = React.useMemo(() => {
+    if (!autoCorrect) return data;
+    return data.map(row => ({
+      ...row,
+      currentStage: correctStageName(row.currentStage),
+    }));
+  }, [data, autoCorrect]);
+  const availableStages = useMemo(() => [...new Set(correctedData.map(r => r.currentStage).filter(Boolean))].sort(), [correctedData]);
+  const availableTypes  = useMemo(() => [...new Set(correctedData.map(r => r.type).filter(Boolean))].sort(), [correctedData]);
+  const availablePOs    = useMemo(() => [...new Set(correctedData.map(r => r.po).filter(Boolean))].sort(), [correctedData]);
   const filteredByDate = useMemo(() => {
-    return data.filter(row => {
+    return correctedData.filter(row => {
       const date = dateMode === 'timestamp' ? row.timestamp?.substring(0,10) : row.poDate || '';
-      if (!date) return false;
-      if (dateRange.from && date < dateRange.from) return false;
-      if (dateRange.to && date > dateRange.to) return false;
+      if (!date && (dateRange.from || dateRange.to)) return false;
+      if (dateRange.from && date && date < dateRange.from) return false;
+      if (dateRange.to && date && date > dateRange.to) return false;
       if (stageFilter && row.currentStage !== stageFilter) return false;
       if (typeFilter && row.type !== typeFilter) return false;
       if (locationFilter && row.inhouse !== locationFilter) return false;
       if (afterFilter && row.po !== afterFilter) return false;
       return true;
     });
-  }, [data, dateMode, dateRange, stageFilter, typeFilter, locationFilter, afterFilter]);
+    }, [correctedData, dateMode, dateRange, stageFilter, typeFilter, locationFilter, afterFilter]);
 
-  const uniquePOs = useMemo(() => new Set(filteredByDate.map(r => r.po)).size, [filteredByDate]);
-  const uniqueSCs = useMemo(() => new Set(filteredByDate.map(r => r.sc)).size, [filteredByDate]);
-  const categories = useMemo(() => {
-    const counts = { AIRPLUG:0, MASTER:0, ACCESSORY:0 };
+  // ── KPI TOTALS — reflects active filters (filteredByDate) ──
+  const fullDbKpis = useMemo(() => {
+    const totalPOs = new Set(filteredByDate.map(r => r.po).filter(Boolean)).size;
+    const totalSCs = new Set(filteredByDate.map(r => r.sc).filter(Boolean)).size;
+    let airplugs = 0, masters = 0, accessories = 0;
     filteredByDate.forEach(r => {
-      const cat = getProductCategory(r.type);
-      counts[cat] = (counts[cat] || 0) + 1;
+      const t = (r.type || '').toUpperCase();
+      if (t === 'APG' || t === 'ARG') airplugs++;
+      else if (t === 'SPG' || t === 'SRG' || t === 'SP') masters++;
+      else accessories++;
     });
-    return counts;
+    return { totalPOs, totalSCs, airplugs, masters, accessories };
+  }, [filteredByDate]);
+
+  // ── DATABASE VISIBLE ROWS: filters applied + only READY / STORES / STOCK ──
+  // Uses filteredByDate so all active filters (date, stage, type, location, PO) are respected
+  const databaseVisibleRows = useMemo(() => {
+    return filteredByDate.filter(row => {
+      const stage = String(row.currentStage || '').toUpperCase();
+      return ['READY', 'STORES', 'STOCK'].includes(stage);
+    });
+  }, [filteredByDate]);
+  // ── PO-BASED OPERATIONAL ANALYTICS ────────────────────────────────────────
+  const databasePOAnalytics = React.useMemo(() => {
+    const FINAL = ['STOCK','STORES','READY'];
+    const poStateMap = {};
+
+    filteredByDate.forEach(row => {
+      const po = row.po;
+      if (!po) return;
+      if (!poStateMap[po]) {
+        poStateMap[po] = { po, stage: 'INPROCESS', type: row.type, items: [], scs: new Set() };
+      }
+      poStateMap[po].items.push(row);
+      if (row.sc) poStateMap[po].scs.add(row.sc);
+      // Priority: STOCK > STORES > READY > INPROCESS
+      const cur = poStateMap[po].stage;
+      const cs  = (row.currentStage || '').toUpperCase();
+      if (cs === 'STOCK')  poStateMap[po].stage = 'STOCK';
+      else if (cs === 'STORES' && cur !== 'STOCK')  poStateMap[po].stage = 'STORES';
+      else if (cs === 'READY'  && !['STOCK','STORES'].includes(cur)) poStateMap[po].stage = 'READY';
+    });
+
+    const poList = Object.values(poStateMap).map(p => ({
+      ...p,
+      scCount: p.scs.size,
+      itemCount: p.items.length,
+      category: getProductCategory(p.type),
+    }));
+
+    const byState = { READY:[], STORES:[], STOCK:[], INPROCESS:[] };
+    poList.forEach(p => { (byState[p.stage] || byState.INPROCESS).push(p); });
+
+    function stateStats(poArr) {
+      const cats = { AIRPLUG:0, MASTER:0, ACCESSORY:0 };
+      let totalSCs = 0;
+      poArr.forEach(p => {
+        cats[getProductCategory(p.type)] = (cats[getProductCategory(p.type)] || 0) + 1;
+        totalSCs += p.scCount;
+      });
+      return { count: poArr.length, ...cats, totalSCs };
+    }
+
+    return {
+      totalPOs: poList.length,
+      byState,
+      ready:     stateStats(byState.READY),
+      stores:    stateStats(byState.STORES),
+      stock:     stateStats(byState.STOCK),
+      inprocess: stateStats(byState.INPROCESS),
+    };
   }, [filteredByDate]);
 
   function handlePrint() {
@@ -3574,6 +3797,20 @@ function DatabasePage({data, dateRange, setDateRange, serverStatus}) {
             </select>
           </label>
           <button className="filter-btn" onClick={() => { setDateRange({ from:'', to:'' }); setStageFilter(''); setTypeFilter(''); setLocationFilter(''); setAfterFilter(''); }}>✕ Reset</button>
+          <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:12,color: autoCorrect ? 'var(--accent3)' : 'var(--text-secondary)',border:`1px solid ${autoCorrect ? 'var(--accent3)' : 'var(--border)'}`,borderRadius:6,padding:'6px 12px',background: autoCorrect ? 'rgba(0,255,157,0.08)' : 'transparent',transition:'all 0.2s'}}>
+            <input
+              type="checkbox"
+              checked={autoCorrect}
+              onChange={e => { setAutoCorrect(e.target.checked); setStageFilter(''); }}
+              style={{accentColor:'var(--accent3)',width:14,height:14,cursor:'pointer'}}
+            />
+            <span style={{fontFamily:'Share Tech Mono,monospace',letterSpacing:1}}>✓ AUTO-CORRECT STAGES</span>
+          </label>
+          {autoCorrect && (
+            <div style={{width:'100%',marginTop:6,padding:'8px 12px',borderRadius:6,background:'rgba(0,255,157,0.06)',border:'1px solid rgba(0,255,157,0.2)',fontSize:11,color:'var(--accent3)',fontFamily:'Share Tech Mono,monospace'}}>
+              ⚡ ACTIVE — misspelled stage names in your sheet are being auto-corrected. Corrections: {Object.keys(STAGE_CORRECTIONS).filter(k => [...new Set(data.map(r=>r.currentStage))].map(s=>(s||'').toUpperCase()).includes(k)).join(', ') || 'none detected yet'}
+            </div>
+          )}
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
           {[7,14,30,60,90].map(days => (
@@ -3602,47 +3839,102 @@ function DatabasePage({data, dateRange, setDateRange, serverStatus}) {
         </div>
       </div>
 
-      <div className="kpi-grid">
-        <KPICard label="FILTERED ROWS" value={filteredByDate.length} sub="records in selected range" color1="#00c9ff" color2="#0fa8e0" />
-        <KPICard label="UNIQUE POs" value={uniquePOs} sub="purchase orders" color1="#00ff9d" color2="#00c9ff" />
-        <KPICard label="UNIQUE SCs" value={uniqueSCs} sub="job sets" color1="#ffd60a" color2="#ff6b35" />
-        <KPICard label="AIRPLUGS" value={categories.AIRPLUG} sub="APG / ARG" color1="#00c9ff" color2="#00e676" />
-        <KPICard label="MASTERS" value={categories.MASTER} sub="SRG / SP / SPG" color1="#b24bff" color2="#ff6b35" />
-        <KPICard label="ACCESSORIES" value={categories.ACCESSORY} sub="other products" color1="#ffd60a" color2="#0fa8e0" />
+      {/* ── FULL-DB KPI CARDS ── */}
+      <div className="kpi-grid" style={{marginBottom:20}}>
+        <KPICard label="TOTAL POs"         value={fullDbKpis.totalPOs}    sub="unique purchase orders · full DB"  color1="#00c9ff" color2="#0fa8e0" />
+        <KPICard label="TOTAL SCs"         value={fullDbKpis.totalSCs}    sub="unique job sets · full DB"         color1="#00e676" color2="#00c9ff" />
+        <KPICard label="TOTAL AIRPLUGS"    value={fullDbKpis.airplugs}    sub="rows · type APG + ARG"             color1="#b24bff" color2="#00c9ff" />
+        <KPICard label="TOTAL MASTERS"     value={fullDbKpis.masters}     sub="rows · type SPG + SRG + SP"        color1="#ffd60a" color2="#ff6b35" />
+        <KPICard label="TOTAL ACCESSORIES" value={fullDbKpis.accessories}  sub="rows · all remaining types"       color1="#00e676" color2="#b24bff" />
       </div>
 
-      <div className="table-card">
-        <div className="table-header"><div className="chart-title">Database Records</div></div>
-        <div className="table-wrap" style={{maxHeight:460}}>
-          <table>
+      {/* ── DATABASE RECORDS TABLE (READY / STORES / STOCK only) ── */}
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div>
+            <div className="chart-title">Database Records</div>
+            <div className="chart-sub">
+              Showing only completed stages: READY · STORES · STOCK &nbsp;·&nbsp;
+              <span style={{color:'var(--accent3)',fontFamily:'Share Tech Mono,monospace',fontSize:11}}>
+                {databaseVisibleRows.length} rows
+              </span>
+            </div>
+          </div>
+        </div>
+        <div style={{overflowX:'auto',maxHeight:520,overflowY:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
               <tr>
-                <th>PO</th><th>PO DATE</th><th>SC</th><th>PRODUCT</th><th>TYPE</th><th>CATEGORY</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th>
+                {['PO','PO DATE','SC','PRODUCT','TYPE','CATEGORY','STAGE','INHOUSE','TIMESTAMP'].map(h => (
+                  <th key={h} style={{
+                    padding:'8px 10px',
+                    background:'var(--bg-secondary)',
+                    color:'var(--text-muted)',
+                    fontFamily:'Share Tech Mono,monospace',
+                    fontSize:10,
+                    letterSpacing:1,
+                    borderBottom:'1px solid var(--border)',
+                    position:'sticky',
+                    top:0,
+                    whiteSpace:'nowrap',
+                    textAlign:'left',
+                  }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {filteredByDate.slice(0,250).map((row,i)=>(
-                <tr key={i}>
-                  <td className="mono text-accent">{row.po}</td>
-                  <td className="mono" style={{fontSize:11}}>{row.poDate}</td>
-                  <td className="mono text-accent">{row.sc}</td>
-                  <td style={{fontSize:11,maxWidth:300,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.product}</td>
-                  <td><span className="status-pill badge-blue">{row.type || '—'}</span></td>
-                  <td><span className="status-pill badge-green">{getProductCategory(row.type)}</span></td>
-                  <td><span className="status-pill" style={{background:getStageColor(row.currentStage)+'22',color:getStageColor(row.currentStage)}}>{row.currentStage||'—'}</span></td>
-                  <td><span className={`status-pill ${row.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{row.inhouse}</span></td>
-                  <td className="mono" style={{fontSize:10}}>{row.timestamp}</td>
-                </tr>
-              ))}
+              {databaseVisibleRows.slice(0, 500).map((row, i) => {
+                const stage = (row.currentStage || '').toUpperCase();
+                const stageColor = stage === 'READY' ? '#00e676' : stage === 'STORES' ? '#00c9ff' : '#ffd60a';
+                const cat = getProductCategory(row.type);
+                const catColor = cat === 'AIRPLUG' ? '#00c9ff' : cat === 'MASTER' ? '#b24bff' : '#ffd60a';
+                return (
+                  <tr key={i} style={{borderBottom:'1px solid rgba(26,58,92,0.4)',background: i%2===0 ? 'transparent' : 'rgba(13,31,53,0.4)'}}>
+                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',color:'var(--accent1)',whiteSpace:'nowrap'}}>{row.po || '—'}</td>
+                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.poDate || '—'}</td>
+                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',color:'var(--accent3)',whiteSpace:'nowrap'}}>{row.sc || '—'}</td>
+                    <td style={{padding:'7px 10px',color:'var(--text-primary)',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={row.product}>{row.product || '—'}</td>
+                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.type || '—'}</td>
+                    <td style={{padding:'7px 10px',whiteSpace:'nowrap'}}>
+                      <span style={{
+                        padding:'2px 8px',borderRadius:4,fontSize:10,
+                        fontFamily:'Share Tech Mono,monospace',
+                        background:`${catColor}18`,color:catColor,
+                        border:`1px solid ${catColor}44`,
+                      }}>{cat}</span>
+                    </td>
+                    <td style={{padding:'7px 10px',whiteSpace:'nowrap'}}>
+                      <span style={{
+                        padding:'2px 8px',borderRadius:4,fontSize:10,
+                        fontFamily:'Share Tech Mono,monospace',
+                        background:`${stageColor}18`,color:stageColor,
+                        border:`1px solid ${stageColor}44`,
+                      }}>{row.currentStage || '—'}</span>
+                    </td>
+                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.inhouse || '—'}</td>
+                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>{row.timestamp || '—'}</td>
+                  </tr>
+                );
+              })}
+              {databaseVisibleRows.length === 0 && (
+                <tr><td colSpan={9} style={{padding:32,textAlign:'center',color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',fontSize:12}}>
+                  NO RECORDS FOUND — no items at READY / STORES / STOCK stage
+                </td></tr>
+              )}
             </tbody>
           </table>
+          {databaseVisibleRows.length > 500 && (
+            <div style={{padding:'10px 14px',fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',borderTop:'1px solid var(--border)'}}>
+              ⚡ Showing first 500 of {databaseVisibleRows.length} rows. Export to view all records.
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState}) {
+function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState, historyConfig, setHistoryConfig, onSyncHistory, importState}) {
   const [drag, setDrag] = useState(false);
   const fileRef = useRef();
 
@@ -3743,8 +4035,34 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             />
           </div>
 
+          {/* ── HISTORICAL BACKUP IMPORT ─────────────────────────────────── */}
+          <div style={{marginTop:14,padding:'12px 14px',background:'rgba(0,255,157,0.06)',border:'1px solid rgba(0,255,157,0.3)',borderRadius:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--accent3)',marginBottom:4}}>📚 HISTORICAL BACKUP IMPORT</div>
+            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8,fontFamily:'Share Tech Mono,monospace'}}>
+              Paste your Nov 2025 – May 7 2026 backup Google Sheet CSV URL. Rows are appended to DB once — duplicates auto-skipped.
+            </div>
+            <input
+              type="text"
+              value={historyConfig?.url || ''}
+              onChange={e=>setHistoryConfig(prev=>({...prev,url:e.target.value}))}
+              placeholder="Google Sheet → File → Share → Publish to web → CSV → paste link here"
+              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'8px 10px',fontSize:11,marginBottom:8}}
+            />
+            <button className="filter-btn" style={{width:'100%',padding:'9px'}} onClick={onSyncHistory} disabled={importState?.loading}>
+              {importState?.loading ? '⏳ Importing…' : '⬇ Import Backup to Database'}
+            </button>
+            {importState?.lastMsg && (
+              <div style={{marginTop:6,fontSize:10,color:importState.lastMsg.startsWith('✅') ? 'var(--success)' : 'var(--danger)',fontFamily:'Share Tech Mono,monospace',whiteSpace:'pre-wrap'}}>
+                {importState.lastMsg}
+              </div>
+            )}
+            <div style={{marginTop:6,fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',lineHeight:1.7}}>
+              ℹ How to get the URL: Google Sheets → File → Share → Publish to web → choose your sheet → CSV → Publish → copy the link
+            </div>
+          </div>
+
           <div style={{marginTop:14,padding:'12px 14px',background:'rgba(178,75,255,0.08)',border:'1px solid rgba(178,75,255,0.35)',borderRadius:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:'var(--accent6)',marginBottom:8}}>LIVE SOURCE SYNC</div>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--accent6)',marginBottom:8}}>⚡ LIVE SOURCE SYNC (May 8 onwards)</div>
             <input
               type="text"
               value={liveConfig?.url || ''}
