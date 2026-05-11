@@ -39,42 +39,29 @@ function saveDb(db) {
 function normalizeString(value) {
   return value === undefined || value === null ? '' : String(value).trim();
 }
+// Canonical date parser — DD/MM/YYYY is the Velan standard (matches frontend)
 function toIsoDate(value) {
   if (!value) return '';
-
   const text = String(value).trim();
-
+  if (!text) return '';
   // Already ISO
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text;
-  }
-
-  // DD/MM/YYYY or DD-MM-YYYY
-  const dmy = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
-
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  // DD/MM/YYYY or DD-MM-YYYY  (match[1]=day, match[2]=month, match[3]=year)
+  const dmy = text.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
   if (dmy) {
-    const day = dmy[1].padStart(2, '0');
+    const day   = dmy[1].padStart(2, '0');
     const month = dmy[2].padStart(2, '0');
-    const year = dmy[3];
-
+    const year  = dmy[3];
     return `${year}-${month}-${day}`;
   }
-
-  // DD/MM/YY
-  const dmyShort = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2})$/);
-
+  // DD/MM/YY short year
+  const dmyShort = text.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
   if (dmyShort) {
-    const day = dmyShort[1].padStart(2, '0');
+    const day   = dmyShort[1].padStart(2, '0');
     const month = dmyShort[2].padStart(2, '0');
-
-    const year =
-      parseInt(dmyShort[3]) >= 50
-        ? '19' + dmyShort[3]
-        : '20' + dmyShort[3];
-
+    const year  = parseInt(dmyShort[3]) >= 50 ? '19' + dmyShort[3] : '20' + dmyShort[3];
     return `${year}-${month}-${day}`;
   }
-
   return text;
 }
 function normalizeRow(raw) {

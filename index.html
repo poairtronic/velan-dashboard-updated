@@ -479,26 +479,61 @@ function useChart(ref, config, deps) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── SINGLE CANONICAL DATE PARSER — DD/MM/YYYY is the Velan Excel standard ───
+// ALL date parsing in the entire app MUST go through this one function.
+// Supports: Date objects | ISO YYYY-MM-DD | DD/MM/YYYY | DD-MM-YYYY | Excel serial numbers
 function toIsoDateString(value) {
-  if(value === undefined || value === null || value === '') return '';
-  if(value instanceof Date && !isNaN(value)) {
-    const y = value.getFullYear();
-    const mo = String(value.getMonth() + 1).padStart(2, '0');
-    const d = String(value.getDate()).padStart(2, '0');
-    return `${y}-${mo}-${d}`;
+  if (value === undefined || value === null || value === '') return '';
+  // Native Date object
+  if (value instanceof Date && !isNaN(value)) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
-  const s = String(value).trim();
-  if(!s) return '';
-  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
-  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
-  m = s.match(/^(\d{1,2})([-\/\.])(\d{1,2})\2(\d{4})/);
-  if(m) return `${m[4]}-${String(m[3]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-  const num = Number(s);
-  if(!isNaN(num) && num > 20000 && num < 80000 && window.XLSX?.SSF?.parse_date_code) {
-    const dc = window.XLSX.SSF.parse_date_code(num);
-    if(dc?.y && dc?.m && dc?.d) {
-      return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
+  const text = String(value).trim();
+  if (!text) return '';
+  // Already ISO YYYY-MM-DD — pass through unchanged
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  // YYYY-MM-DD with time suffix — e.g. "2026-05-09 13:40:43" or "2026-05-09T13:40:43"
+  const isoTime = text.match(/^(\d{4}-\d{2}-\d{2})[T ]/);
+  if (isoTime) return isoTime[1];
+  // YYYY/MM/DD or YYYY/MM/DD HH:MM:SS — e.g. "2026/05/09 13:40"
+  const ySlash = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (ySlash) return `${ySlash[1]}-${ySlash[2].padStart(2,'0')}-${ySlash[3].padStart(2,'0')}`;
+  // YYYY MM DD ... (space-separated, year first) — e.g. "2026 05 09 13:40:43"
+  const ySpace = text.match(/^(\d{4})\s+(\d{1,2})\s+(\d{1,2})(?:\s|$)/);
+  if (ySpace) return `${ySpace[1]}-${ySpace[2].padStart(2,'0')}-${ySpace[3].padStart(2,'0')}`;
+  // DD/MM/YYYY or DD-MM-YYYY (Velan Excel standard)
+  // match[1]=day  match[2]=month  match[3]=year
+  let match = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (match) {
+    const day   = match[1].padStart(2, '0');
+    const month = match[2].padStart(2, '0');
+    const year  = match[3];
+    return `${year}-${month}-${day}`;
+  }
+  // DD/MM/YYYY or DD-MM-YYYY with time suffix — e.g. "09-05-2026 13:40:43"
+  const dmyTime = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T ]/);
+  if (dmyTime) return `${dmyTime[3]}-${dmyTime[2].padStart(2,'0')}-${dmyTime[1].padStart(2,'0')}`;
+  // DD MM YYYY (space-separated) — e.g. "07 05 2026"
+  const dSpace = text.match(/^(\d{1,2})\s+(\d{1,2})\s+(\d{4})(?:\s|$)/);
+  if (dSpace) return `${dSpace[3]}-${dSpace[2].padStart(2,'0')}-${dSpace[1].padStart(2,'0')}`;
+  // Excel serial number (e.g. 46148)
+  const num = Number(text);
+  if (!isNaN(num) && num > 20000 && num < 80000) {
+    if (window.XLSX?.SSF?.parse_date_code) {
+      const dc = window.XLSX.SSF.parse_date_code(num);
+      if (dc && dc.y && dc.m && dc.d) {
+        return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
+      }
     }
+    // Fallback epoch math if SSF unavailable
+    const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
+    const y2  = epoch.getUTCFullYear();
+    const mo2 = String(epoch.getUTCMonth() + 1).padStart(2, '0');
+    const d2  = String(epoch.getUTCDate()).padStart(2, '0');
+    return `${y2}-${mo2}-${d2}`;
   }
   return '';
 }
@@ -642,7 +677,7 @@ function App() {
       const res = await fetch(sourceUrl, {cache:'no-store'});
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const buf = await res.arrayBuffer();
-      const wb = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
+      const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
       return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
     } else {
       const res = await fetch(sourceUrl, {cache:'no-store'});
@@ -747,30 +782,7 @@ function App() {
     );
   }
 
-  function toIsoDateString(value) {
-    if(value === undefined || value === null || value === '') return '';
-    if(value instanceof Date && !isNaN(value)) {
-      const y = value.getFullYear();
-      const mo = String(value.getMonth() + 1).padStart(2, '0');
-      const d = String(value.getDate()).padStart(2, '0');
-      return `${y}-${mo}-${d}`;
-    }
-    const s = String(value).trim();
-    if(!s) return '';
-    let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
-    if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
-    m = s.match(/^(\d{1,2})([-\/\.])(\d{1,2})\2(\d{4})/);
-    if(m) return `${m[4]}-${String(m[3]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-    const num = Number(s);
-    if(!isNaN(num) && num > 20000 && num < 80000) {
-      const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
-      const y2 = epoch.getUTCFullYear();
-      const mo2 = String(epoch.getUTCMonth() + 1).padStart(2,'0');
-      const d2 = String(epoch.getUTCDate()).padStart(2,'0');
-      return `${y2}-${mo2}-${d2}`;
-    }
-    return '';
-  }
+  
 
   function normalizeTimestamp(value) {
     if(value === undefined || value === null || value === '') return '';
@@ -801,7 +813,13 @@ function App() {
     let currentPO = '', currentPODate = '', currentSC = '', currentStage = '';
 
     for(const row of rows) {
-      const v = (i) => (row[i] !== undefined && row[i] !== null && String(row[i]).trim() !== '' && String(row[i]).trim() !== 'nan') ? String(row[i]).trim() : null;
+      const v = (i) => {
+        const val = row[i];
+        if (val === undefined || val === null) return null;
+        if (val instanceof Date) return val;
+        const s = String(val).trim();
+        return (s === '' || s === 'nan') ? null : s;
+      };
 
       // Skip header rows and title rows
       const col1 = v(1); const col5 = v(5);
@@ -886,7 +904,7 @@ function App() {
         sc:           pickField(r, ['sc','sc no','sc#','scno']).replace(/\s+/g,''),
         // Avoid generic "po" token because it can incorrectly match "PO RECD DATE"
         po:           pickField(r, ['po no','pono','purchase order','purchaseorder']),
-        poDate:       pickField(r, ['po recd date','porecddate','po date','podate','date received','date']).substring(0,10),
+        poDate:       toIsoDateString(pickField(r, ['po recd date','porecddate','po date','podate','date received','date'])),
         product,
         type,
         status1,
@@ -958,7 +976,13 @@ function App() {
     let currentSC = '', currentPO = '', currentPODate = '';
     for(let i=headerRowIdx + 1; i<rawAoA.length; i++) {
       const row = rawAoA[i] || [];
-      const getVal = (idx) => (idx === undefined ? '' : String(row[idx] ?? '').trim());
+      const getVal = (idx) => {
+        if (idx === undefined) return '';
+        const v = row[idx];
+        if (v === null || v === undefined) return '';
+        if (v instanceof Date) return v;
+        return String(v).trim();
+      };
 
       const scRaw = getVal(headerMap.sc);
       if(scRaw) currentSC = scRaw.replace(/\s+/g,'');
@@ -1036,7 +1060,7 @@ function App() {
   }
 
   function parseWorksheet(ws) {
-    const rawAoA = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+    const rawAoA = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
     const headerMapped = parseRowsFromHeaderAoA(rawAoA);
     if(headerMapped.length > 0) return headerMapped;
     const isVelanFormat = rawAoA.slice(0,5).some(row =>
@@ -1045,7 +1069,7 @@ function App() {
       row && row.some(cell => String(cell||'').trim() === 'SNO')
     );
     if(isVelanFormat) return parseVelanExcel(rawAoA);
-    const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false});
     return parseGenericRows(rows);
   }
 
@@ -1070,7 +1094,7 @@ function App() {
     } else if(['xlsx','xls'].includes(ext)) {
       reader.onload = e => {
         try {
-          const wb = XLSX.read(e.target.result, {type:'array', cellDates:false, raw:false});
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, raw:false});
           const ws = wb.Sheets[wb.SheetNames[0]];
           const parsedRows = parseWorksheet(ws);
           finalizeRows(parsedRows, file.name);
@@ -1126,7 +1150,7 @@ function App() {
         const res = await fetch(sourceUrl, {cache:'no-store'});
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();
-        const wb = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
+        const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
         const ws = wb.Sheets[wb.SheetNames[0]];
         rows = parseWorksheet(ws);
       } else {
@@ -3440,18 +3464,22 @@ function VendorPage({kpis, data}) {
 
 function MonthDayPage({data}) {
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [dateMode, setDateMode] = useState('timestamp');
   const months = useMemo(() => {
     const map = {};
     data.forEach(row => {
-      if (!row.poDate) return;
-      const monthKey = row.poDate.substring(0,7);
+      const dateStr = dateMode === 'timestamp'
+        ? (row.timestamp ? row.timestamp.substring(0,10) : null)
+        : (row.poDate ? row.poDate.substring(0,10) : null);
+      if (!dateStr) return;
+      const monthKey = dateStr.substring(0,7);
       if (!map[monthKey]) {
         map[monthKey] = { month: monthKey, poSet: new Set(), scSet: new Set(), items: [], daily: {} };
       }
       map[monthKey].poSet.add(row.po);
       map[monthKey].scSet.add(row.sc);
       map[monthKey].items.push(row);
-      const dayKey = row.poDate.substring(0,10);
+      const dayKey = dateStr.substring(0,10);
       if (!map[monthKey].daily[dayKey]) map[monthKey].daily[dayKey] = { date: dayKey, items: [], ready: 0, stores: 0, wip: 0 };
       map[monthKey].daily[dayKey].items.push(row);
       if (row.currentStage === 'READY') map[monthKey].daily[dayKey].ready++;
@@ -3459,7 +3487,7 @@ function MonthDayPage({data}) {
       else map[monthKey].daily[dayKey].wip++;
     });
     return Object.values(map).sort((a,b) => b.month.localeCompare(a.month));
-  }, [data]);
+  }, [data, dateMode]);
 
   const selected = selectedMonth ? months.find(m => m.month === selectedMonth) : null;
   const monthTitle = (month) => {
@@ -3471,6 +3499,17 @@ function MonthDayPage({data}) {
   return (
     <div>
       <div className="section-title">Month / Day <span>View</span><div className="section-line"/></div>
+      <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
+        <button className={`filter-btn ${dateMode==='timestamp' ? 'active' : ''}`} onClick={()=>{setDateMode('timestamp');setSelectedMonth(null);}}>
+          📅 Activity Date (Timestamp)
+        </button>
+        <button className={`filter-btn ${dateMode==='poDate' ? 'active' : ''}`} onClick={()=>{setDateMode('poDate');setSelectedMonth(null);}}>
+          📋 PO Received Date
+        </button>
+        <span style={{fontSize:11,color:'var(--text-muted)',alignSelf:'center',marginLeft:4}}>
+          {dateMode==='timestamp' ? 'Grouped by last update / activity date' : 'Grouped by PO received date'}
+        </span>
+      </div>
       <div className="chart-card" style={{marginBottom:20}}>
         <div className="chart-title">Monthly Summary</div>
         <div className="chart-sub">Click a month to drill into daily PO / SC details.</div>
@@ -3494,7 +3533,7 @@ function MonthDayPage({data}) {
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
             <div>
               <div className="chart-title">{monthTitle(selected.month)} — Daily Breakdown</div>
-              <div className="chart-sub">PO received date grouped by day</div>
+              <div className="chart-sub">{dateMode==='timestamp' ? 'Activity/timestamp date grouped by day' : 'PO received date grouped by day'}</div>
             </div>
             <button className="filter-btn" onClick={()=>setSelectedMonth(null)}>Back to months</button>
           </div>
@@ -3518,7 +3557,8 @@ function MonthDayPage({data}) {
           <div className="chart-title">Month / Day Explanation</div>
           <div className="chart-sub">Select a month card to see per-day counts of POs, SCs, and item statuses.</div>
           <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:12,lineHeight:1.7}}>
-            This view calculates month totals from the PO received date. If your Excel updates daily, the backend keeps a historical copy of all loaded rows so deleted rows remain stored for reporting.
+            <b>Activity Date (Timestamp)</b> — groups items by their last update/timestamp. Use this to see May 2026 activity even when POs were received in April.<br/>
+            <b>PO Received Date</b> — groups items by the date the PO was received. Use this for order intake analysis.
           </div>
         </div>
       )}
