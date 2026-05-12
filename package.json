@@ -1,15 +1,22 @@
 {
   "name": "velan-metrology-dashboard",
-  "version": "1.0.0",
-  "description": "Velan Metrology Production Command Center Dashboard",
+  "version": "2.0.0",
+  "description": "Velan Metrology Production Command Center — Google Sheets live backend + React frontend",
+  "main": "server.js",
   "scripts": {
-    "start": "npx live-server --port=3000 --open=index.html",
-    "dev": "npx live-server --port=3000 --open=index.html --watch=index.html"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "preview": "npx live-server --port=5500 --open=index.html"
   },
-  "keywords": ["dashboard", "production", "metrology"],
+  "keywords": [
+    "dashboard",
+    "production",
+    "metrology",
+    "google-sheets"
+  ],
   "author": "Velan Metrology",
   "license": "ISC",
-  "devDependencies": {
-    "live-server": "^1.2.2"
+  "engines": {
+    "node": ">=14.0.0"
   }
 }

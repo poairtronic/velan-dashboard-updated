@@ -1129,46 +1129,85 @@ function App() {
     }
   }
 
+  // ── Google Sheets URL detection & normalization ──────────────────────────────
+  function normalizeGoogleSheetsUrl(rawUrl) {
+    // Convert any Google Sheets share/edit URL → CSV export URL
+    // Handles: /edit, /view, /pub, already-CSV, already-export URLs
+    try {
+      const u = rawUrl.trim();
+      // Already a CSV export: leave alone
+      if (/docs\.google\.com\/spreadsheets\/d\/.+\/export/.test(u) && /format=csv/.test(u)) return u;
+      // Published CSV: leave alone
+      if (/docs\.google\.com\/spreadsheets\/d\/.+\/pub/.test(u) && /output=csv/.test(u)) return u;
+      // Extract spreadsheet ID from any Google Sheets URL
+      const idMatch = u.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+      if (!idMatch) return u; // not a Sheets URL — return as-is
+      const sheetId = idMatch[1];
+      // Extract gid if present (specific sheet tab)
+      const gidMatch = u.match(/[?&]gid=(\d+)/);
+      const gid = gidMatch ? gidMatch[1] : '0';
+      return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+    } catch { return rawUrl; }
+  }
+
+  // ── Fetch via backend proxy (/api/sheets) or direct, with Sheets normalization
+  async function fetchDataUrl(sourceUrl) {
+    const normalized = normalizeGoogleSheetsUrl(sourceUrl);
+    const isGoogleSheets = normalized.includes('docs.google.com/spreadsheets');
+
+    // Try backend proxy first (avoids CORS for Google Sheets)
+    const proxyBase = window.location.origin;
+    const useProxy  = isGoogleSheets && proxyBase.startsWith('http://localhost');
+
+    let fetchUrl = normalized;
+    if (useProxy) {
+      fetchUrl = `${proxyBase}/api/sheets?url=${encodeURIComponent(normalized)}`;
+    }
+
+    const cleanPath = normalized.split('?')[0].toLowerCase();
+    const queryText = normalized.toLowerCase();
+    const isCsvUrl  = cleanPath.endsWith('.csv') || /[?&](output|format)=csv([&#]|$)/.test(queryText) || isGoogleSheets;
+    const isJsonUrl = cleanPath.endsWith('.json') || /[?&](output|format)=json([&#]|$)/.test(queryText);
+    const isExcelUrl = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
+
+    if (isJsonUrl) {
+      const res = await fetch(fetchUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status} from server`);
+      const parsed = await res.json();
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } else if (isCsvUrl) {
+      const res = await fetch(fetchUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status} — make sure the sheet is shared "Anyone with the link"`);
+      const text = await res.text();
+      const wb = XLSX.read(text, {type:'string'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return parseWorksheet(ws);
+    } else if (isExcelUrl) {
+      const res = await fetch(fetchUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return parseWorksheet(ws);
+    } else {
+      throw new Error('Paste a Google Sheets URL, or a direct .xlsx/.csv/.json link.');
+    }
+  }
+
   async function syncLiveDataNow(urlOverride) {
     const sourceUrl = String(urlOverride || liveConfig.url || '').trim();
     if(!sourceUrl) {
-      setUploadStatus({type:'error', msg:'Live source URL is empty.', detail:'Paste a direct .xlsx / .xls / .csv / .json URL first.'});
+      setUploadStatus({type:'error', msg:'Live source URL is empty.', detail:'Paste your Google Sheets URL (share link, edit link, or CSV export link).'});
       return;
     }
 
-    setUploadStatus({type:'loading', msg:'🔄 Syncing live source…', detail:sourceUrl});
+    const normalized = normalizeGoogleSheetsUrl(sourceUrl);
+    const isGSheets  = normalized.includes('docs.google.com/spreadsheets');
+    setUploadStatus({type:'loading', msg:'🔄 Syncing live source…', detail: isGSheets ? `Google Sheets → CSV export → ${normalized.substring(0,60)}…` : sourceUrl});
+
     try {
-      const cleanPath = sourceUrl.split('?')[0].toLowerCase();
-      const queryText = sourceUrl.toLowerCase();
-      const isJsonUrl = cleanPath.endsWith('.json') || /[?&]output=json([&#]|$)/.test(queryText) || /[?&]format=json([&#]|$)/.test(queryText);
-      const isCsvUrl = cleanPath.endsWith('.csv') || /[?&]output=csv([&#]|$)/.test(queryText) || /[?&]format=csv([&#]|$)/.test(queryText);
-      const isExcelUrl = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
-      let rows = [];
-
-      if(isJsonUrl) {
-        const res = await fetch(sourceUrl, {cache:'no-store'});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const parsed = await res.json();
-        rows = Array.isArray(parsed) ? parsed : [parsed];
-      } else if(isCsvUrl) {
-        const res = await fetch(sourceUrl, {cache:'no-store'});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        const wb = XLSX.read(text, {type:'string'});
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rows = parseWorksheet(ws);
-      } else if(isExcelUrl) {
-        const res = await fetch(sourceUrl, {cache:'no-store'});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const buf = await res.arrayBuffer();
-        const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rows = parseWorksheet(ws);
-      } else {
-        throw new Error('URL must be a direct data URL: .xlsx/.xls/.csv/.json or query format like ?output=csv');
-      }
-
-      const ok = finalizeRows(rows, `LIVE SOURCE`);
+      const rows = await fetchDataUrl(sourceUrl);
+      const ok = finalizeRows(rows, isGSheets ? 'GOOGLE SHEETS (LIVE)' : 'LIVE SOURCE');
       if(ok) {
         setLiveState({ active:true, lastSync:new Date().toLocaleString('en-IN'), lastError:'' });
       }
@@ -1177,7 +1216,7 @@ function App() {
       setUploadStatus({
         type:'error',
         msg:'Live sync failed.',
-        detail:`${String(err)}\nIf this is a browser CORS/auth URL, publish as a direct downloadable link.`,
+        detail:`${String(err)}\n\n💡 For Google Sheets: File → Share → "Anyone with the link can view"\n   Then paste the sheet URL here — any format works (edit, view, or CSV export link).`,
       });
     }
   }
@@ -1585,8 +1624,20 @@ function App() {
           <div className="logo-sub">PRODUCTION COMMAND CENTER</div>
         </div>
         <div className="header-right">
+          {liveState?.active && (
+            <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',padding:'4px 12px',borderRadius:20,fontSize:10,fontFamily:'Share Tech Mono,monospace',color:'var(--success)'}}>
+              <span style={{width:6,height:6,background:'var(--success)',borderRadius:'50%',animation:'pulse 1.5s infinite',display:'inline-block'}}/>
+              SHEETS LIVE
+            </div>
+          )}
           <div className="live-badge"><div className="live-dot"/><span>LIVE</span></div>
           <div className="timestamp">{now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} &nbsp;{now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+          <button
+            onClick={() => setActiveNav('upload')}
+            style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',color:'var(--accent1)',borderRadius:8,padding:'5px 12px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}
+          >
+            📊 CONNECT SHEETS
+          </button>
         </div>
       </div>
 
@@ -1642,7 +1693,7 @@ function App() {
           {activeNav==='bottleneck' && <BottleneckPage kpis={kpis} filtered={filtered}/>}
           {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
           {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
-          {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
+          {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
           {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
         </div>
       </div>
@@ -2849,7 +2900,7 @@ function SCPage({kpis, scGroups}) {
 }
 
 // ─── VENDOR PAGE ───────────────────────────────────────────────────────────────
-function VendorPage({kpis, data}) {
+function VendorPage({kpis, data, setActiveNav}) {
   const [selectedSC, setSelectedSC] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const vendorBarRef  = useRef();
@@ -3366,6 +3417,22 @@ function VendorPage({kpis, data}) {
                 >
                   View SC {selectedItem.sc} Details
                 </button>
+                {setActiveNav && (
+                  <button 
+                    onClick={() => { setSelectedItem(null); setActiveNav('po'); }}
+                    style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',color:'var(--accent1)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10,fontWeight:600}}
+                  >
+                    View in PO Analysis
+                  </button>
+                )}
+                {setActiveNav && (
+                  <button 
+                    onClick={() => { setSelectedItem(null); setActiveNav('wip'); }}
+                    style={{background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.3)',color:'var(--accent5)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10,fontWeight:600}}
+                  >
+                    View in Stage / WIP
+                  </button>
+                )}
                 <button 
                   onClick={() => setSelectedItem(null)}
                   style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10}}
@@ -3481,25 +3548,47 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             />
           </div>
 
-          <div style={{marginTop:14,padding:'12px 14px',background:'rgba(178,75,255,0.08)',border:'1px solid rgba(178,75,255,0.35)',borderRadius:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:'var(--accent6)',marginBottom:8}}>LIVE SOURCE SYNC</div>
+          {/* ── GOOGLE SHEETS LIVE SYNC ── */}
+          <div style={{marginTop:14,padding:'14px 16px',background:'rgba(15,110,86,0.08)',border:'1px solid rgba(15,110,86,0.4)',borderRadius:8}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+              <span style={{fontSize:18}}>📊</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:'#00e676',letterSpacing:1}}>GOOGLE SHEETS LIVE SYNC</div>
+                <div style={{fontSize:10,color:'var(--text-muted)'}}>Paste any Google Sheets URL — share link, edit link, or CSV export</div>
+              </div>
+              {liveState?.active && (
+                <span style={{marginLeft:'auto',background:'rgba(0,230,118,0.15)',border:'1px solid rgba(0,230,118,0.4)',color:'var(--success)',borderRadius:20,padding:'3px 10px',fontSize:10,fontFamily:'Share Tech Mono',display:'flex',alignItems:'center',gap:5}}>
+                  <span style={{width:6,height:6,background:'var(--success)',borderRadius:'50%',animation:'pulse 1.5s infinite',display:'inline-block'}}/>LIVE
+                </span>
+              )}
+            </div>
+
             <input
               type="text"
               value={liveConfig?.url || ''}
               onChange={e=>setLiveConfig(prev=>({...prev,url:e.target.value}))}
-              placeholder="Paste direct .xlsx/.xls/.csv/.json URL"
-              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'8px 10px',fontSize:11,marginBottom:8}}
+              placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit  ← paste any Google Sheets URL"
+              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'9px 12px',fontSize:11,marginBottom:10,fontFamily:'Share Tech Mono,monospace'}}
             />
-            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+
+            <div style={{background:'rgba(0,0,0,0.2)',borderRadius:6,padding:'8px 12px',marginBottom:10,fontSize:10,color:'var(--text-muted)',lineHeight:1.8}}>
+              <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to connect Google Sheets:</div>
+              <div>1. In Google Sheets → <strong style={{color:'var(--accent1)'}}>File → Share → Share with others</strong></div>
+              <div>2. Set to <strong style={{color:'var(--success)'}}>"Anyone with the link can view"</strong></div>
+              <div>3. Copy the URL from the browser address bar and paste above</div>
+              <div style={{marginTop:4,color:'var(--accent3)'}}>✓ Edit links, View links, and CSV export links all work automatically</div>
+            </div>
+
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
               <input
                 type="number"
                 min="30"
                 value={liveConfig?.intervalSec || 300}
                 onChange={e=>setLiveConfig(prev=>({...prev,intervalSec:Number(e.target.value)||300}))}
-                style={{width:100,background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'6px 8px',fontSize:11}}
+                style={{width:80,background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'6px 8px',fontSize:11,textAlign:'center'}}
               />
               <span style={{fontSize:11,color:'var(--text-muted)'}}>sec refresh</span>
-              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-secondary)',marginLeft:'auto'}}>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-secondary)',marginLeft:'auto',cursor:'pointer'}}>
                 <input
                   type="checkbox"
                   checked={!!liveConfig?.enabled}
@@ -3508,30 +3597,38 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
                 Auto-sync
               </label>
             </div>
+
             <div style={{display:'flex',gap:8}}>
-              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>onSyncNow(liveConfig?.url)}>🔄 Sync Now</button>
-              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
+              <button
+                className="filter-btn"
+                style={{flex:2,padding:'10px',background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.4)',color:'var(--success)',fontWeight:700}}
+                onClick={()=>onSyncNow(liveConfig?.url)}
+              >
+                🔄 Sync from Google Sheets Now
+              </button>
+              <button className="filter-btn" style={{flex:1,padding:'10px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
             </div>
-            <div style={{marginTop:8,fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
-              LAST SYNC: {liveState?.lastSync || '—'} {liveState?.active ? '· ACTIVE' : ''}
+
+            <div style={{marginTop:8,display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
+              <span>LAST SYNC: {liveState?.lastSync || '—'}</span>
+              <span style={{color: liveState?.active ? 'var(--success)' : 'var(--text-muted)'}}>{liveState?.active ? '● CONNECTED' : '○ NOT SYNCED'}</span>
             </div>
             {liveState?.lastError && (
-              <div style={{marginTop:4,fontSize:10,color:'var(--danger)',fontFamily:'Share Tech Mono,monospace',whiteSpace:'pre-line'}}>
-                {liveState.lastError}
+              <div style={{marginTop:6,fontSize:10,color:'var(--danger)',fontFamily:'Share Tech Mono,monospace',whiteSpace:'pre-line',background:'rgba(255,61,90,0.05)',border:'1px solid rgba(255,61,90,0.2)',borderRadius:6,padding:'8px 10px'}}>
+                ⚠ {liveState.lastError}
               </div>
             )}
           </div>
 
           {/* Tips */}
           <div style={{marginTop:12,padding:'10px 14px',background:'rgba(0,201,255,0.05)',border:'1px solid rgba(0,201,255,0.15)',borderRadius:8}}>
-            <div style={{fontSize:10,letterSpacing:2,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>TIPS — WHAT YOUR EXCEL NEEDS</div>
+            <div style={{fontSize:10,letterSpacing:2,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>SUPPORTED DATA SOURCES</div>
             <ul style={{color:'var(--text-secondary)',fontSize:11,paddingLeft:16,lineHeight:1.9}}>
-              <li><span className="mono text-accent">No "type" column needed</span> — product type is auto-detected from the product name (APG, SRG, ARG, SP, etc.)</li>
-              <li>Your Velan Excel format is <span className="mono text-accent">natively supported</span> — merged cells, PO fill-down, and the SNO/SC structure all parse correctly</li>
+              <li><span className="mono text-accent">Google Sheets</span> — Paste any share/edit/view URL. Set sheet to "Anyone with link can view". Backend proxy handles CORS automatically.</li>
+              <li><span className="mono text-accent">Excel (.xlsx/.xls)</span> — Drag & drop your Velan production workbook. Merged cells, PO fill-down, SNO/SC structure all parse correctly.</li>
+              <li><span className="mono text-accent">CSV / JSON</span> — Direct file upload or URL. Flexible column name detection.</li>
+              <li><span className="mono text-accent">No "type" column needed</span> — product type auto-detected from name prefix (APG, SRG, ARG, SP, etc.)</li>
               <li>Required columns: <span className="mono text-accent">SC, PO NO, PO RECD DATE, Product Name, STATUS 1, INHOUSE/VENDOR, OP, TIMESTAMP</span></li>
-              <li>The <span className="mono text-accent">OP</span> column (currentStage) drives all charts — make sure it has values like READY, LATHE, VA, CG etc.</li>
-              <li>You can re-upload the same file — it reloads fresh each time</li>
-              <li>For live sync, use a <span className="mono text-accent">direct downloadable URL</span> (public CSV/XLSX). Share links that need login may fail.</li>
             </ul>
           </div>
 
