@@ -1672,21 +1672,10 @@ function App() {
           <div className="logo-sub">PRODUCTION COMMAND CENTER</div>
         </div>
         <div className="header-right">
-<<<<<<< HEAD
           {liveState?.active && (
             <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',padding:'4px 12px',borderRadius:20,fontSize:10,fontFamily:'Share Tech Mono,monospace',color:'var(--success)'}}>
               <span style={{width:6,height:6,background:'var(--success)',borderRadius:'50%',animation:'pulse 1.5s infinite',display:'inline-block'}}/>
               SHEETS LIVE
-=======
-          {lastSync && (
-            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-muted)'}}>
-              LAST SYNC: {new Date(lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
-            </div>
-          )}
-          {liveData.length > 0 && (
-            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--accent3)'}}>
-              {liveData.length} LIVE · {data.length} TOTAL
->>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
             </div>
           )}
           <div className="live-badge"><div className="live-dot"/><span>LIVE</span></div>
@@ -1745,7 +1734,6 @@ function App() {
           </div>
 
           {/* PAGES */}
-<<<<<<< HEAD
           {activeNav==='overview' && <OverviewPage kpis={kpis} data={data} filtered={filtered}/>}
           {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
           {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
@@ -1756,50 +1744,6 @@ function App() {
           {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
           {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
         </div>
-=======
-          {/* PAGES */}
-          {isLoading ? (
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
-              <div style={{fontSize:36,animation:'pulse 1.5s infinite'}}>⏳</div>
-              <div style={{fontFamily:'Share Tech Mono',fontSize:14,color:'var(--accent1)',letterSpacing:2}}>
-                LOADING DATABASE…
-              </div>
-              <div style={{fontSize:11,color:'var(--text-muted)'}}>Fetching records from backend</div>
-            </div>
-          ) : liveData.length === 0 && !['upload','database'].includes(activeNav) ? (
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
-              <div style={{fontSize:48}}>📭</div>
-              <div style={{fontFamily:'Rajdhani',fontSize:22,fontWeight:700,color:'var(--text-secondary)',letterSpacing:2}}>
-                No Data Available
-              </div>
-              <div style={{fontSize:13,color:'var(--text-muted)',textAlign:'center',maxWidth:400,lineHeight:1.7}}>
-                Upload file to begin<br/>
-                <span style={{fontSize:11}}>Use the Upload Data tab to load your Excel / CSV / JSON file</span>
-              </div>
-              <button
-                onClick={() => setActiveNav('upload')}
-                style={{marginTop:8,padding:'10px 24px',background:'linear-gradient(135deg,var(--accent1),var(--accent2))',border:'none',borderRadius:8,color:'#000',fontWeight:700,fontSize:13,cursor:'pointer',letterSpacing:1}}
-              >
-                ⬆ Go to Upload
-              </button>
-            </div>
-          ) : (
-            <>
-              {activeNav==='overview' && <OverviewPage kpis={kpis} data={liveData} filtered={filtered}/>}
-              {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
-              {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
-              {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
-              {activeNav==='bottleneck' && <BottleneckPage kpis={kpis} filtered={filtered}/>}
-              {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
-              {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
-              {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
-              {activeNav==='monthday' && <MonthDayPage data={liveData}/>}
-              {activeNav==='database' && <DatabasePage data={allDbData} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
-              {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
-            </>
-          )}
-          </div>
->>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
       </div>
     </div>
   );
@@ -4156,7 +4100,6 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             />
           </div>
 
-<<<<<<< HEAD
           {/* ── GOOGLE SHEETS LIVE SYNC ── */}
           <div style={{marginTop:14,padding:'14px 16px',background:'rgba(15,110,86,0.08)',border:'1px solid rgba(15,110,86,0.4)',borderRadius:8}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
@@ -4172,36 +4115,6 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               )}
             </div>
 
-=======
-          {/* ── HISTORICAL BACKUP IMPORT ─────────────────────────────────── */}
-          <div style={{marginTop:14,padding:'12px 14px',background:'rgba(0,255,157,0.06)',border:'1px solid rgba(0,255,157,0.3)',borderRadius:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:'var(--accent3)',marginBottom:4}}>📚 HISTORICAL BACKUP IMPORT</div>
-            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8,fontFamily:'Share Tech Mono,monospace'}}>
-              Paste your Nov 2025 – May 7 2026 backup Google Sheet CSV URL. Rows are appended to DB once — duplicates auto-skipped.
-            </div>
-            <input
-              type="text"
-              value={historyConfig?.url || ''}
-              onChange={e=>setHistoryConfig(prev=>({...prev,url:e.target.value}))}
-              placeholder="Google Sheet → File → Share → Publish to web → CSV → paste link here"
-              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'8px 10px',fontSize:11,marginBottom:8}}
-            />
-            <button className="filter-btn" style={{width:'100%',padding:'9px'}} onClick={onSyncHistory} disabled={importState?.loading}>
-              {importState?.loading ? '⏳ Importing…' : '⬇ Import Backup to Database'}
-            </button>
-            {importState?.lastMsg && (
-              <div style={{marginTop:6,fontSize:10,color:importState.lastMsg.startsWith('✅') ? 'var(--success)' : 'var(--danger)',fontFamily:'Share Tech Mono,monospace',whiteSpace:'pre-wrap'}}>
-                {importState.lastMsg}
-              </div>
-            )}
-            <div style={{marginTop:6,fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',lineHeight:1.7}}>
-              ℹ How to get the URL: Google Sheets → File → Share → Publish to web → choose your sheet → CSV → Publish → copy the link
-            </div>
-          </div>
-
-          <div style={{marginTop:14,padding:'12px 14px',background:'rgba(178,75,255,0.08)',border:'1px solid rgba(178,75,255,0.35)',borderRadius:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:'var(--accent6)',marginBottom:8}}>⚡ LIVE SOURCE SYNC (May 8 onwards)</div>
->>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
             <input
               type="text"
               value={liveConfig?.url || ''}
@@ -4238,7 +4151,6 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             </div>
 
             <div style={{display:'flex',gap:8}}>
-<<<<<<< HEAD
               <button
                 className="filter-btn"
                 style={{flex:2,padding:'10px',background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.4)',color:'var(--success)',fontWeight:700}}
@@ -4247,10 +4159,6 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
                 🔄 Sync from Google Sheets Now
               </button>
               <button className="filter-btn" style={{flex:1,padding:'10px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
-=======
-              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>onSyncNow(String(liveConfig.url || '').trim())}>🔄 Sync Now</button>
-              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
->>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
             </div>
 
             <div style={{marginTop:8,display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
