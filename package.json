@@ -4,19 +4,13 @@
   "description": "Velan Metrology Production Command Center — Google Sheets live backend + React frontend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "preview": "npx live-server --port=5500 --open=index.html"
+    "start": "npx live-server --port=3000 --open=index.html",
+    "dev": "npx live-server --port=3000 --open=index.html --watch=index.html"
   },
-  "keywords": [
-    "dashboard",
-    "production",
-    "metrology",
-    "google-sheets"
-  ],
+  "keywords": ["dashboard", "production", "metrology"],
   "author": "Velan Metrology",
   "license": "ISC",
-  "engines": {
-    "node": ">=14.0.0"
+  "devDependencies": {
+    "live-server": "^1.2.2"
   }
 }

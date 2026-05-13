@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
  <style>
 :root {
@@ -269,7 +271,22 @@ tr:hover td { background:rgba(0,201,255,0.04); }
 
 /* Responsive */
 @media (max-width:1100px) { .chart-grid { grid-template-columns:1fr; } .chart-grid-3 { grid-template-columns:repeat(2,1fr); } }
-@media (max-width:700px) { .sidebar { display:none; } .kpi-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:700px) {
+  .main-container { flex-direction: column; }
+  .sidebar {
+    display: block;
+    width: 100%;
+    position: relative;
+    top: 0;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .content { padding: 14px 10px 20px; }
+  .nav-item { font-size: 13px; }
+  .filter-bar { flex-wrap: wrap; gap: 10px; }
+  .kpi-grid { grid-template-columns:repeat(2,1fr); }
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width:6px; height:6px; }
@@ -291,268 +308,6 @@ tr:hover td { background:rgba(0,201,255,0.04); }
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ─── SAMPLE DATA (from PDF) ───────────────────────────────────────────────────
-const SAMPLE_DATA = [
-  // PO 1: AGIPLPO2326 (25/03/2026) – SC 1170,1166-1..3,1167,1168,1169,1171
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 15.2 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:20:04"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 15.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:04"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:33"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:08"},
-  {sc:"1170",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:10"},
-
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 17.2 +0.03",type:"ARG",status1:"LATHE COMPLETED,MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:20"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 17.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:23"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:40"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:27"},
-  {sc:"1166-1",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:32"},
-
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 17.2 +0.03",type:"ARG",status1:"LATHE COMPLETED,MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:36"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 17.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:47"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:47"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:53"},
-  {sc:"1166-2",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:24:55"},
-
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 17.2 +0.03",type:"ARG",status1:"LATHE COMPLETED,MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:14"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 17.2 +0.03",type:"SP",status1:"SET MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:17"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:03:50"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:04"},
-  {sc:"1166-3",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:48:48"},
-
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 16.65 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:18"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 16.65 +0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:23"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"BUTTING STOPPER",type:"ACCESSORY",status1:"MOVE TO LATHE M1 COMPLETED",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-15 19:18:21"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:19"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:08"},
-  {sc:"1167",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:49:10"},
-
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 15.95 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:25"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 15.95 +0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:26"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:33"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:09"},
-  {sc:"1168",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:49:27"},
-
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 25.0 +0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:28"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 25.0 +0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:31"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:38"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:11"},
-  {sc:"1169",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:49:49"},
-
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG DIA 22.0+0.03",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:34"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"SP DIA 22.0+0.03",type:"SP",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 19:37:36"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"M6 T CONNECTOR",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-03-30 11:04:46"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"FEET PLATE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 15:13:17"},
-  {sc:"1171",po:"AGIPLPO2326",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 12:50:09"},
-
-  // PO 2: AGIPLPO14 (25/03/2026)
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"APG DIA 24.0 -0.007/-0.028",type:"APG",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:14:43"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"SRG DIA 24.0 -0.007/-0.028",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:23:27"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"VERTICAL BENCH MOUNT PLATE",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:45"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"JIG FEET",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:35"},
-  {sc:"1187",po:"AGIPLPO14",poDate:"2026-03-25",product:"DEPTH COLLAR",type:"ACCESSORY",status1:"BLK COMPLETED, MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-03 15:16:12"},
-
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"APG DIA 26.0-0.024/-0.011",type:"APG",status1:"MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:23:39"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"SRG DIA 26.0-0.024/-0.011",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO BLK",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:23:38"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"VERTICAL BENCH MOUNT PLATE",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:48"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"JIG FEET",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:38:38"},
-  {sc:"1188",po:"AGIPLPO14",poDate:"2026-03-25",product:"DEPTH COLLAR",type:"ACCESSORY",status1:"BLK COMPLETED, MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-03 15:16:22"},
-
-  {sc:"1192",po:"AGIPLPO14",poDate:"2026-03-25",product:"APG DIA 42.0-0.02",type:"APG",status1:"MOVE TO FB",status2:"HT REJECTED,REWORK WITH VENDOR",inhouse:"VENDOR",currentStage:"HTV",timestamp:"2026-04-13 16:54:01"},
-  {sc:"1192",po:"AGIPLPO14",poDate:"2026-03-25",product:"SRG DIA 42.0-0.02",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO BLK",status2:"CA COMPLETED, MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-07 18:59:51"},
-  {sc:"1192",po:"AGIPLPO14",poDate:"2026-03-25",product:"EXTENSION 25 MM",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"STOCK",timestamp:"2026-04-03 11:36:02"},
-
-  {sc:"1195",po:"AGIPLPO14",poDate:"2026-03-25",product:"ARG DIA 25.0-0.02/-0.01",type:"ARG",status1:"LATHE COMPLETED, MOVE TO M1",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:24:30"},
-  {sc:"1195",po:"AGIPLPO14",poDate:"2026-03-25",product:"SP DIA 25.0-0.02/-0.01",type:"SP",status1:"RM AVAILABLE, MOVE TO FB",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:24:37"},
-  {sc:"1195",po:"AGIPLPO14",poDate:"2026-03-25",product:"ARG BASE",type:"ACCESSORY",status1:"FB,BLK COMPLETED,MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 12:51:54"},
-
-  // PO 3: AGIPLPO2333
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 14.620+0.030",type:"APG",status1:"HT,SZ,CG COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-09 13:47:39"},
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 14.620+0.030",type:"SRG",status1:"SG COMPLETED, MOVE TO DCPL",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-11 18:26:10"},
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"EXTENSION 100 MM",type:"ACCESSORY",status1:"INHOUSE",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:14:47"},
-  {sc:"1172",po:"AGIPLPO2333",poDate:"2026-03-25",product:"HALF CIRCLE DEPTH COLLAR",type:"ACCESSORY",status1:"FB COMPLETED, MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-13 17:45:27"},
-
-  {sc:"1173",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 18.100 +/-0.035",type:"APG",status1:"JET AS,CG COMPLETED, MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:16:05"},
-  {sc:"1173",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 18.100 +/-0.035",type:"SRG",status1:"SG COMPLETED, MOVE TO DCPL",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:16:09"},
-  {sc:"1174",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 8.006+/-0.01",type:"APG",status1:"SZ,JC COMPLETED,MOVE TO SD",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:25:22"},
-  {sc:"1174",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 8.006+/-0.01",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:25:24"},
-  {sc:"1175",po:"AGIPLPO2333",poDate:"2026-03-25",product:"APG DIA 9.00 H7+0.015",type:"APG",status1:"HT,SZ,CG,SG COMPLETED",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-09 18:46:03"},
-  {sc:"1175",po:"AGIPLPO2333",poDate:"2026-03-25",product:"SRG DIA 9.00 H7+0.015",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:16:28"},
-
-  // PO 4: AGIPLPO2338
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"APG DIA 10.002 +/-0.004",type:"APG",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 19:33:54"},
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SRG DIA 10.002 +/-0.004",type:"SRG",status1:"HARDENED JOB AVAILABLE, MOVE TO CA",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:26:18"},
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SEATING BLOCK IN BENCH",type:"ACCESSORY",status1:"HT,SZ COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-10 11:37:50"},
-  {sc:"1184",po:"AGIPLPO2338",poDate:"2026-03-25",product:"VERTICAL BENCH MOUNT PLATE",type:"ACCESSORY",status1:"BLK COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-13 13:22:40"},
-
-  {sc:"1185-1",po:"AGIPLPO2338",poDate:"2026-03-25",product:"APG DIA 5.456+/-0.006",type:"APG",status1:"SD COMPLETED, MOVE TO VA",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:22:54"},
-  {sc:"1185-1",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SRG DIA 5.456+/-0.006",type:"SRG",status1:"SG COMPLETED,MOVE TO DCPL",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:02"},
-  {sc:"1185-2",po:"AGIPLPO2338",poDate:"2026-03-25",product:"APG DIA 5.456+/-0.006",type:"APG",status1:"HSS BIT AVAILABLE, MOVE TO STORES",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 19:34:13"},
-  {sc:"1185-2",po:"AGIPLPO2338",poDate:"2026-03-25",product:"SRG DIA 5.456+/-0.006",type:"SRG",status1:"SG COMPLETED,MOVE TO DCPL",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-11 15:59:53"},
-
-  // PO 5
-  {sc:"1177",po:"AGIPLPO2341",poDate:"2026-03-26",product:"APG DIA 15.993 +/-0.008",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-10 11:39:44"},
-  {sc:"1177",po:"AGIPLPO2341",poDate:"2026-03-26",product:"SRG DIA 15.993 +/-0.008",type:"SRG",status1:"BLK COMPLETED, MOVE TO CG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-09 13:45:05"},
-
-  // PO 6
-  {sc:"1182",po:"AGIPLPO2343",poDate:"2026-03-26",product:"APG DIA 17.032/17.059",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:27"},
-  {sc:"1182",po:"AGIPLPO2343",poDate:"2026-03-26",product:"SRG DIA 17.032/17.059",type:"SRG",status1:"BLK,CG COMPLETED,MOVE TO HO",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:36"},
-  {sc:"1183",po:"AGIPLPO2343",poDate:"2026-03-26",product:"APG DIA 17.016/17.043",type:"APG",status1:"JET AS,CG COMPLETED, MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:49"},
-  {sc:"1183",po:"AGIPLPO2343",poDate:"2026-03-26",product:"SRG DIA 17.016/17.043",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:23:52"},
-
-  // PO 8: AGIPLPO2339
-  {sc:"1181-1",po:"AGIPLPO2339",poDate:"2026-03-26",product:"APG DIA 7.90 +/-0.035",type:"APG",status1:"MOVE TO HC",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:25:49"},
-  {sc:"1181-1",po:"AGIPLPO2339",poDate:"2026-03-26",product:"SRG DIA 7.90 +/-0.035",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:26:02"},
-  {sc:"1181-2",po:"AGIPLPO2339",poDate:"2026-03-26",product:"APG DIA 7.90 +/-0.035",type:"APG",status1:"MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:26:07"},
-  {sc:"1181-2",po:"AGIPLPO2339",poDate:"2026-03-26",product:"SRG DIA 7.90 +/-0.035",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:26:09"},
-
-  // PO 9: AGIPLPO2349
-  {sc:"1186-1",po:"AGIPLPO2349",poDate:"2026-03-27",product:"APG DIA 6.420 +/-0.01",type:"APG",status1:"HT,SZ,JC COMPLETED,MOVE TO SD",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-10 11:49:14"},
-  {sc:"1186-1",po:"AGIPLPO2349",poDate:"2026-03-27",product:"SRG DIA 6.420 +/-0.01",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"HO COMPLETED, MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-11 13:59:00"},
-  {sc:"1186-2",po:"AGIPLPO2349",poDate:"2026-03-27",product:"APG DIA 6.420 +/-0.01",type:"APG",status1:"HT,SZ,JC COMPLETED,MOVE TO SD",status2:"MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-10 11:49:22"},
-  {sc:"1186-2",po:"AGIPLPO2349",poDate:"2026-03-27",product:"SRG DIA 6.420 +/-0.01",type:"SRG",status1:"HT,SZ COMPLETED,MOVE TO SG",status2:"HO COMPLETED, MOVE TO VA",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-11 13:59:03"},
-
-  // PO 10: AGIPLPO2359
-  {sc:"1196-1",po:"AGIPLPO2359",poDate:"2026-03-28",product:"APG DIA 68 R6 -0.037/-0.056",type:"APG",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-07 18:38:31"},
-  {sc:"1196-1",po:"AGIPLPO2359",poDate:"2026-03-28",product:"SRG DIA 68 R6 -0.037/-0.056",type:"SRG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-08 18:25:42"},
-  {sc:"1196-2",po:"AGIPLPO2359",poDate:"2026-03-28",product:"APG DIA 68 R6 -0.037/-0.056",type:"APG",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:24:12"},
-  {sc:"1196-2",po:"AGIPLPO2359",poDate:"2026-03-28",product:"SRG DIA 68 R6 -0.037/-0.056",type:"SRG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"MOVE TO STORES",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 13:24:09"},
-
-  // PO 12: AGIPLPO2367
-  {sc:"1198",po:"AGIPLPO2367",poDate:"2026-03-30",product:"APG DIA 5.0 +0.012",type:"APG",status1:"RM AVAILABLE, MOVE TO FB",status2:"SZ COMPLETED, MOVE TO BLK",inhouse:"VENDOR",currentStage:"BLV",timestamp:"2026-04-15 18:23:57"},
-  {sc:"1198",po:"AGIPLPO2367",poDate:"2026-03-30",product:"SRG DIA 5.0 +0.012",type:"SRG",status1:"MOVE TO HT",status2:"WC COMPLETED, MOVE TO CA",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 18:30:48"},
-  {sc:"1198",po:"AGIPLPO2367",poDate:"2026-03-30",product:"12 DIA ADAPTOR HANDLE",type:"ACCESSORY",status1:"RM AVAILABLE, MOVE TO LATHE",status2:"FB,BLK COMPLETED,MOVE TO STORES",inhouse:"INHOUSE",currentStage:"STORES",timestamp:"2026-04-15 12:35:04"},
-
-  // PO 14: AGIPLPO2370
-  {sc:"1203",po:"AGIPLPO2370",poDate:"2026-03-31",product:"APG DIA 15.850/15.830",type:"APG",status1:"RM AVAILABLE, MOVE TO FB",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 19:35:14"},
-  {sc:"1203",po:"AGIPLPO2370",poDate:"2026-03-31",product:"SRG DIA 15.850/15.830",type:"SRG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"VA COMPLETED",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-09 13:45:14"},
-
-  // PO 15: AGIPLPO2374
-  {sc:"1208",po:"AGIPLPO2374",poDate:"2026-04-01",product:"APG DIA 58.8 +/-0.035",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:03"},
-  {sc:"1208",po:"AGIPLPO2374",poDate:"2026-04-01",product:"SRG DIA 58.8 +/-0.035",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:09"},
-  {sc:"1209",po:"AGIPLPO2374",poDate:"2026-04-01",product:"APG DIA 45.3-0.03",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 12:25:01"},
-  {sc:"1209",po:"AGIPLPO2374",poDate:"2026-04-01",product:"SRG DIA 45.3-0.03",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:27:44"},
-
-  // PO 16: AGIPLPO2390
-  {sc:"1205-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 10.1+0.018",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:58"},
-  {sc:"1205-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 10.1+0.018",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:27:47"},
-  {sc:"1205-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 10.1+0.018",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:59"},
-  {sc:"1205-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 10.1+0.018",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:28:08"},
-  {sc:"1206-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 8.0+0.018",type:"APG",status1:"JC,SD COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 12:38:17"},
-  {sc:"1206-1",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 8.0+0.018",type:"SRG",status1:"HO COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-16 12:24:08"},
-  {sc:"1206-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"APG DIA 8.0+0.018",type:"APG",status1:"JC,SD COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 12:38:33"},
-  {sc:"1206-2",po:"AGIPLPO2390",poDate:"2026-04-01",product:"SRG DIA 8.0+0.018",type:"SRG",status1:"HO COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 15:41:49"},
-
-  // PO 17: AGIPLPO2389
-  {sc:"1207-1",po:"AGIPLPO2389",poDate:"2026-04-01",product:"APG DIA 30.0 +/-0.02",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:52"},
-  {sc:"1207-1",po:"AGIPLPO2389",poDate:"2026-04-01",product:"SRG DIA 30.0 +/-0.02",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-15 19:28:58"},
-  {sc:"1207-2",po:"AGIPLPO2389",poDate:"2026-04-01",product:"APG DIA 30.0 +/-0.02",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:04"},
-  {sc:"1207-2",po:"AGIPLPO2389",poDate:"2026-04-01",product:"SRG DIA 30.0 +/-0.02",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:01"},
-  {sc:"1207-3",po:"AGIPLPO2389",poDate:"2026-04-01",product:"APG DIA 30.0 +/-0.02",type:"APG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:04"},
-  {sc:"1207-3",po:"AGIPLPO2389",poDate:"2026-04-01",product:"SRG DIA 30.0 +/-0.02",type:"SRG",status1:"MOVE TO STORES",status2:"",inhouse:"INHOUSE",currentStage:"READY",timestamp:"2026-04-13 18:12:10"},
-
-  // PO 21: AGIPLPO15 (VERY URGENT GNUTTI CARLO)
-  {sc:"1212-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 21.548+/-0.013",type:"APG",status1:"HT,SZ,BLK,JET ASS COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-11 18:18:22"},
-  {sc:"1212-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 21.548+/-0.013",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:29:36"},
-  {sc:"1212-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 21.548+/-0.013",type:"APG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:29:41"},
-  {sc:"1212-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 21.548+/-0.013",type:"SRG",status1:"HT,SZ,BLK,SG COMPLETED,MOVE TO CG",status2:"",inhouse:"VENDOR",currentStage:"STOCK",timestamp:"2026-04-11 17:56:00"},
-  {sc:"1213-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 5.502+/-0.013",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 12:25:10"},
-  {sc:"1213-1",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 5.502+/-0.013",type:"SRG",status1:"WC COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 18:31:22"},
-  {sc:"1213-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"APG DIA 5.502+/-0.013",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 14:45:16"},
-  {sc:"1213-2",po:"AGIPLPO15",poDate:"2026-04-03",product:"SRG DIA 5.502+/-0.013",type:"SRG",status1:"WC COMPLETED, MOVE TO CA",status2:"",inhouse:"INHOUSE",currentStage:"CA",timestamp:"2026-04-15 18:31:25"},
-
-  // PO 22: AGIPLPO16 (VERY URGENT GNUTTI CARLO)
-  {sc:"1214-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 15.075+/-0.013",type:"APG",status1:"HT,SZ,BLK,CG COMPLETED,MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-13 15:02:53"},
-  {sc:"1214-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"SRG DIA 15.075+/-0.013",type:"SRG",status1:"CG COMPLETED, MOVE TO HO",status2:"",inhouse:"VENDOR",currentStage:"HOV",timestamp:"2026-04-15 15:38:34"},
-  {sc:"1214-4",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 15.075+/-0.013",type:"APG",status1:"CG OVALITY ISSUE, NEED TO SEND HC",status2:"",inhouse:"VENDOR",currentStage:"HCV",timestamp:"2026-04-13 16:54:54"},
-  {sc:"1215-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 12.668+/-0.006",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:02:44"},
-  {sc:"1215-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"SRG DIA 12.668+/-0.006",type:"SRG",status1:"CG COMPLETED, MOVE TO HO",status2:"",inhouse:"VENDOR",currentStage:"HOV",timestamp:"2026-04-15 15:39:28"},
-  {sc:"1216-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"APG DIA 12.802 +/-0.025",type:"APG",status1:"JC COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:35"},
-  {sc:"1216-1",po:"AGIPLPO16",poDate:"2026-04-03",product:"SRG DIA 12.802 +/-0.025",type:"SRG",status1:"CG COMPLETED, MOVE TO HO",status2:"",inhouse:"VENDOR",currentStage:"HOV",timestamp:"2026-04-15 15:41:19"},
-
-  // PO 23: AGIPLPO2384
-  {sc:"1219",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 42H7 +0.025",type:"APG",status1:"SZ COMPLETED, MOVE TO BLK",status2:"",inhouse:"VENDOR",currentStage:"BLV",timestamp:"2026-04-15 18:24:42"},
-  {sc:"1219",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 42H7 +0.025",type:"SRG",status1:"BLK COMPLETED, MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-13 13:39:28"},
-  {sc:"1220",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 62.0 M7-0.03",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:20:17"},
-  {sc:"1220",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 62.0 M7-0.03",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:28:56"},
-  {sc:"1221",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 65 H8 +0.046",type:"APG",status1:"HT,SZ,BLK COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 12:44:45"},
-  {sc:"1221",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 65 H8 +0.046",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-15 18:26:38"},
-  {sc:"1222",po:"AGIPLPO2384",poDate:"2026-04-04",product:"APG DIA 55H7 +0.030",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-16 14:45:44"},
-  {sc:"1222",po:"AGIPLPO2384",poDate:"2026-04-04",product:"SRG DIA 55H7 +0.030",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:28:58"},
-
-  // PO 25: AGIPLPO46
-  {sc:"1225-1",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:00:59"},
-  {sc:"1225-2",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:00:59"},
-  {sc:"1225-3",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:02"},
-  {sc:"1225-5",po:"AGIPLPO46",poDate:"2026-04-06",product:"APG DIA 17.000/17.018",type:"APG",status1:"CG COMPLETED, MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:01:03"},
-
-  // PO 26: AGIPLPO29
-  {sc:"1226-1",po:"AGIPLPO29",poDate:"2026-04-07",product:"APG DIA 11.42 +/-0.020",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:03:03"},
-  {sc:"1226-1",po:"AGIPLPO29",poDate:"2026-04-07",product:"SRG DIA 11.42 +/-0.020",type:"SRG",status1:"CG,SG COMPLETED, MOVE TO DCPL",status2:"",inhouse:"INHOUSE",currentStage:"DCPLI",timestamp:"2026-04-15 19:10:01"},
-  {sc:"1226-2",po:"AGIPLPO29",poDate:"2026-04-07",product:"APG DIA 11.42 +/-0.020",type:"APG",status1:"MOVE TO SD",status2:"",inhouse:"VENDOR",currentStage:"SDV",timestamp:"2026-04-13 17:03:12"},
-  {sc:"1226-2",po:"AGIPLPO29",poDate:"2026-04-07",product:"SRG DIA 11.42 +/-0.020",type:"SRG",status1:"CG,SG COMPLETED, MOVE TO DCPL",status2:"",inhouse:"INHOUSE",currentStage:"DCPLI",timestamp:"2026-04-13 13:35:27"},
-
-  // PO 27: AGIPLPO26
-  {sc:"1227",po:"AGIPLPO26",poDate:"2026-04-07",product:"APG DIA 27.10 +0.06",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:42"},
-  {sc:"1227",po:"AGIPLPO26",poDate:"2026-04-07",product:"SRG DIA 27.10 +0.06",type:"SRG",status1:"CA COMPLETED, MOVE TO VA",status2:"",inhouse:"INHOUSE",currentStage:"VA",timestamp:"2026-04-16 12:29:04"},
-  {sc:"1228",po:"AGIPLPO26",poDate:"2026-04-07",product:"APG DIA 12.02 +/-0.035",type:"APG",status1:"BLK COMPLETED, MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-11 15:18:08"},
-  {sc:"1229",po:"AGIPLPO26",poDate:"2026-04-07",product:"APG DIA 8.32 +/-0.035",type:"APG",status1:"CG COMPLETED, MOVE TO SG",status2:"",inhouse:"INHOUSE",currentStage:"SG",timestamp:"2026-04-13 09:45:26"},
-  {sc:"1229",po:"AGIPLPO26",poDate:"2026-04-07",product:"SRG DIA 8.32 +/-0.035",type:"SRG",status1:"SZ COMPLETED, MOVE TO BLK",status2:"",inhouse:"VENDOR",currentStage:"BLV",timestamp:"2026-04-15 18:24:46"},
-
-  // PO 30: AGIPLPO71 JAYAM ENGG URGENT
-  {sc:"1237",po:"AGIPLPO71",poDate:"2026-04-10",product:"APG DIA 98.0+0.02",type:"APG",status1:"LATHE,JC,M1 COMPLETED,MOVE TO QC",status2:"",inhouse:"INHOUSE",currentStage:"QC",timestamp:"2026-04-16 10:43:51"},
-  {sc:"1237",po:"AGIPLPO71",poDate:"2026-04-10",product:"SRG DIA 98.0+0.02",type:"SRG",status1:"FB COMPLETED, MOVE TO HT",status2:"",inhouse:"INHOUSE",currentStage:"HT",timestamp:"2026-04-16 12:26:48"},
-  {sc:"1236",po:"AGIPLPO71",poDate:"2026-04-10",product:"APG DIA 36.450/36.489",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:43"},
-  {sc:"1235",po:"AGIPLPO71",poDate:"2026-04-10",product:"APG DIA 54.950/54.930",type:"APG",status1:"M1,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-15 19:08:07"},
-
-  // PO 31: AGIPLPO64
-  {sc:"1233",po:"AGIPLPO64",poDate:"2026-04-10",product:"APG DIA 4-0.015/-0.027",type:"APG",status1:"BRZ COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 18:25:44"},
-  {sc:"1234",po:"AGIPLPO64",poDate:"2026-04-10",product:"APG DIA 4-0.015/-0.027",type:"APG",status1:"BRZ COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 18:25:49"},
-
-  // PO 32: SR CRAFT
-  {sc:"1238",po:"SR CRAFT",poDate:"2026-04-10",product:"APG DIA 27.000/27.051",type:"APG",status1:"LATHE,JC,M1 COMPLETED,MOVE TO QC",status2:"",inhouse:"INHOUSE",currentStage:"QC",timestamp:"2026-04-16 10:44:18"},
-  {sc:"1238",po:"SR CRAFT",poDate:"2026-04-10",product:"SRG DIA 27.000/27.051",type:"SRG",status1:"HT,SZ,BLK,SG COMPLETED,MOVE TO CG",status2:"",inhouse:"INHOUSE",currentStage:"CG",timestamp:"2026-04-15 15:46:03"},
-  {sc:"1239",po:"SR CRAFT",poDate:"2026-04-10",product:"APG DIA 36.499/36.550",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-16 12:22:54"},
-
-  // PO 33: AGIPLPO48 SCL USA
-  {sc:"1240",po:"AGIPLPO48",poDate:"2026-04-11",product:"APG DIA 18.750 +0.015/-0.010",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 18:32:22"},
-  {sc:"1240",po:"AGIPLPO48",poDate:"2026-04-11",product:"SRG DIA 18.750 +0.015/-0.010",type:"SRG",status1:"LATHE,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-15 19:04:16"},
-  {sc:"1241",po:"AGIPLPO48",poDate:"2026-04-11",product:"APG DIA 22.00 +0.052",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-15 19:02:31"},
-  {sc:"1241",po:"AGIPLPO48",poDate:"2026-04-11",product:"SRG DIA 22.00 +0.052",type:"SRG",status1:"LATHE,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:43"},
-  {sc:"1243",po:"AGIPLPO48",poDate:"2026-04-11",product:"APG DIA 13.980 +/-0.010",type:"APG",status1:"LATHE COMPLETED,MOVE TO HT",status2:"",inhouse:"INHOUSE",currentStage:"HT",timestamp:"2026-04-16 10:46:23"},
-
-  // PO 34: AGIPLPO62 MM FORGINGS
-  {sc:"1245-1",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 93.14 +/-0.015",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:46:58"},
-  {sc:"1245-1",po:"AGIPLPO62",poDate:"2026-04-11",product:"SRG DIA 93.14 +/-0.015",type:"SRG",status1:"RM AVAILABLE,MOVE TO FB",status2:"",inhouse:"VENDOR",currentStage:"FBV",timestamp:"2026-04-16 15:17:59"},
-  {sc:"1245-2",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 93.14 +/-0.015",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:47:53"},
-  {sc:"1246",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 24.012 +/-0.012",type:"APG",status1:"INHOUSE RM",status2:"",inhouse:"INHOUSE",currentStage:"RM",timestamp:""},
-  {sc:"1247-1",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 51.71 +/-0.012",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:48:00"},
-  {sc:"1248",po:"AGIPLPO62",poDate:"2026-04-11",product:"APG DIA 37.0 +0.008/-0.038",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 10:48:10"},
-
-  // PO 35: AGIPLPO66 SAHANA ENGG
-  {sc:"1244-1",po:"AGIPLPO66",poDate:"2026-04-11",product:"APG DIA 52.245 +/-0.025",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-16 10:44:51"},
-  {sc:"1244-2",po:"AGIPLPO66",poDate:"2026-04-11",product:"APG DIA 52.245 +/-0.025",type:"APG",status1:"JC COMPLETED, MOVE TO M1",status2:"",inhouse:"INHOUSE",currentStage:"M1",timestamp:"2026-04-16 10:45:06"},
-  {sc:"1244",po:"AGIPLPO66",poDate:"2026-04-11",product:"SRG DIA 52.245 +/-0.025",type:"SRG",status1:"LATHE,HT COMPLETED,MOVE TO SZ",status2:"",inhouse:"INHOUSE",currentStage:"SZ",timestamp:"2026-04-16 15:23:48"},
-
-  // PO 36: AGIPLPO76 RANE STEERING
-  {sc:"1249",po:"AGIPLPO76",poDate:"2026-04-13",product:"APG DIA 36.0 -0.035/-0.065",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 14:44:34"},
-  {sc:"1249",po:"AGIPLPO76",poDate:"2026-04-13",product:"SRG DIA 36.0 -0.035/-0.065",type:"SRG",status1:"LATHE COMPLETED, MOVE TO HT",status2:"",inhouse:"INHOUSE",currentStage:"HT",timestamp:"2026-04-16 14:44:31"},
-
-  // PO 37: SONA COMSTAR
-  {sc:"1251",po:"SONA COMSTAR 1",poDate:"2026-04-13",product:"APG DIA 69.96 +/-0.025",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:16:33"},
-  {sc:"1251",po:"SONA COMSTAR 1",poDate:"2026-04-13",product:"SRG DIA 69.96 +/-0.025",type:"SRG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:16:35"},
-
-  // PO 38: NEXTEER URGENT
-  {sc:"1250",po:"NEXTEER",poDate:"2026-04-15",product:"APG DIA 46.975/46.990",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:13:30"},
-
-  // PO 39: AGIPLPO84 MERIND
-  {sc:"1254",po:"AGIPLPO84",poDate:"2026-04-15",product:"APG DIA 14 -0.04/-0.058",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 08:25:18"},
-  {sc:"1252",po:"AGIPLPO84",poDate:"2026-04-15",product:"APG DIA 14.0 -0.016/-0.031",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:53"},
-  {sc:"1253",po:"AGIPLPO84",poDate:"2026-04-15",product:"APG DIA 40P7 -0.042/-0.017",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:54"},
-
-  // PO 40: AGIPLPO81 SONA COMSTAR
-  {sc:"1255",po:"AGIPLPO81",poDate:"2026-04-15",product:"APG DIA 52.0 +0.034/+0.009",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:57"},
-  {sc:"1256",po:"AGIPLPO81",poDate:"2026-04-15",product:"APG DIA 40.0+0.039",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:14:45"},
-  {sc:"1257",po:"AGIPLPO81",poDate:"2026-04-15",product:"APG DIA 10.0+0.015",type:"APG",status1:"RM AVAILABLE,MOVE TO LATHE",status2:"",inhouse:"INHOUSE",currentStage:"LATHE",timestamp:"2026-04-16 15:15:57"},
-];
-
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const AIRPLUG_TYPES = ['APG','ARG'];
 const MASTER_TYPES  = ['SPG','SRG','SP','SRG'];
@@ -649,7 +404,34 @@ function calculateProcessEfficiency(activeTime, totalTime) {
   if(!totalTime || totalTime === 0) return 0;
   return Math.round((activeTime / totalTime) * 100);
 }
+// ── STAGE SPELL-CORRECTION MAP ───────────────────────────────────────────────
+// Add or edit entries here whenever a new misspelling appears in the sheet
+const STAGE_CORRECTIONS = {
+  // Confirmed misspelling visible in screenshot
+  'BLACKENEING'  : 'BLACKENING',
+  'BLACKNING'    : 'BLACKENING',
+  'BLACKENNING'  : 'BLACKENING',
+  // Common typos for vendor stages
+  'BLACING'      : 'PLACING',
+  'BRASING'      : 'BRAZING',
+  'PLATING '     : 'PLATING',   // trailing space
+  // Ready/Stores variants
+  'READDY'       : 'READY',
+  'REAADY'       : 'READY',
+  'STORE'        : 'STORES',
+  'STORRES'      : 'STORES',
+  'STOERS'       : 'STORES',
+  // Calibration
+  'CALIBARTION'  : 'CALIBRATION',
+  'CALLIBRATION' : 'CALIBRATION',
+  // Add your own misspellings below this line
+};
 
+function correctStageName(stage) {
+  if (!stage) return stage;
+  const up = stage.trim().toUpperCase();
+  return STAGE_CORRECTIONS[up] || up;
+}
 function getStageColor(stage) {
   if(!stage) return '#3d6080';
   const s = stage.toUpperCase();
@@ -697,26 +479,249 @@ function useChart(ref, config, deps) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── SINGLE CANONICAL DATE PARSER — DD/MM/YYYY is the Velan Excel standard ───
+// ALL date parsing in the entire app MUST go through this one function.
+// Supports: Date objects | ISO YYYY-MM-DD | DD/MM/YYYY | DD-MM-YYYY | Excel serial numbers
+function toIsoDateString(value) {
+  if (value === undefined || value === null || value === '') return '';
+  // Native Date object
+  if (value instanceof Date && !isNaN(value)) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  // Already ISO YYYY-MM-DD — pass through unchanged
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  // YYYY-MM-DD with time suffix — e.g. "2026-05-09 13:40:43" or "2026-05-09T13:40:43"
+  const isoTime = text.match(/^(\d{4}-\d{2}-\d{2})[T ]/);
+  if (isoTime) return isoTime[1];
+  // YYYY/MM/DD or YYYY/MM/DD HH:MM:SS — e.g. "2026/05/09 13:40"
+  const ySlash = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (ySlash) return `${ySlash[1]}-${ySlash[2].padStart(2,'0')}-${ySlash[3].padStart(2,'0')}`;
+  // YYYY MM DD ... (space-separated, year first) — e.g. "2026 05 09 13:40:43"
+  const ySpace = text.match(/^(\d{4})\s+(\d{1,2})\s+(\d{1,2})(?:\s|$)/);
+  if (ySpace) return `${ySpace[1]}-${ySpace[2].padStart(2,'0')}-${ySpace[3].padStart(2,'0')}`;
+  // DD/MM/YYYY or DD-MM-YYYY (Velan Excel standard)
+  // match[1]=day  match[2]=month  match[3]=year
+  let match = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (match) {
+    const day   = match[1].padStart(2, '0');
+    const month = match[2].padStart(2, '0');
+    const year  = match[3];
+    return `${year}-${month}-${day}`;
+  }
+  // DD/MM/YYYY or DD-MM-YYYY with time suffix — e.g. "09-05-2026 13:40:43"
+  const dmyTime = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T ]/);
+  if (dmyTime) return `${dmyTime[3]}-${dmyTime[2].padStart(2,'0')}-${dmyTime[1].padStart(2,'0')}`;
+  // DD MM YYYY (space-separated) — e.g. "07 05 2026"
+  const dSpace = text.match(/^(\d{1,2})\s+(\d{1,2})\s+(\d{4})(?:\s|$)/);
+  if (dSpace) return `${dSpace[3]}-${dSpace[2].padStart(2,'0')}-${dSpace[1].padStart(2,'0')}`;
+  // Excel serial number (e.g. 46148)
+  const num = Number(text);
+  if (!isNaN(num) && num > 20000 && num < 80000) {
+    if (window.XLSX?.SSF?.parse_date_code) {
+      const dc = window.XLSX.SSF.parse_date_code(num);
+      if (dc && dc.y && dc.m && dc.d) {
+        return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
+      }
+    }
+    // Fallback epoch math if SSF unavailable
+    const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
+    const y2  = epoch.getUTCFullYear();
+    const mo2 = String(epoch.getUTCMonth() + 1).padStart(2, '0');
+    const d2  = String(epoch.getUTCDate()).padStart(2, '0');
+    return `${y2}-${mo2}-${d2}`;
+  }
+  return '';
+}
 function App() {
-  const [data, setData] = useState(SAMPLE_DATA);
+  const [data, setData] = useState([]);
+  const [liveRows, setLiveRows] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastSync, setLastSync] = useState('');
   const [activeNav, setActiveNav] = useState('overview');
   const [filters, setFilters] = useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
+  const [dateRange, setDateRange] = useState({ from:'', to:'' });
+  const [serverStatus, setServerStatus] = useState('loading');
   const [now] = useState(new Date());
+  const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:4000'
+    : '';
 
   // ── PARSE UPLOADED EXCEL / JSON ──────────────────────────────────────────
   const [uploadStatus, setUploadStatus] = useState(null);
   const [liveConfig, setLiveConfig] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('velan_live_source_v1') || '{}');
+      const stored = JSON.parse(localStorage.getItem('velan_live_source_v1') || '{}');
+      return {
+        enabled: stored.enabled === true,
+        url: typeof stored.url === 'string' ? stored.url : '',
+        intervalSec: Number(stored.intervalSec) || 300,
+      };
     } catch {
-      return {};
+      return { enabled:false, url:'', intervalSec:300 };
     }
   });
   const [liveState, setLiveState] = useState({ active:false, lastSync:'', lastError:'' });
+  const [historyConfig, setHistoryConfig] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('velan_history_source_v1') || '{}');
+      return { url: typeof stored.url === 'string' ? stored.url : '' };
+    } catch { return { url:'' }; }
+  });
+  const [importState, setImportState] = useState({ loading:false, lastMsg:'' });
 
   useEffect(() => {
     localStorage.setItem('velan_live_source_v1', JSON.stringify(liveConfig || {}));
   }, [liveConfig]);
+  useEffect(() => {
+    localStorage.setItem('velan_history_source_v1', JSON.stringify(historyConfig || {}));
+  }, [historyConfig]);
+
+  useEffect(() => {
+    async function loadServerData() {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${apiBase}/api/data`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        // Historical warehouse
+        setData(Array.isArray(payload.rows) ? payload.rows : []);
+        // Current live operational rows
+        setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
+        if (payload.lastSync) setLastSync(payload.lastSync);
+        setServerStatus('ready');
+      } catch (err) {
+        setServerStatus('offline');
+        setData([]);
+        setLiveRows([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadServerData();
+  }, []);
+  function saveRowsToServer(rows) {
+    if (!rows || rows.length === 0) return;
+    fetch(`${apiBase}/api/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (result && result.success) {
+          if (result.lastSync) setLastSync(result.lastSync);
+          // Re-fetch full DB so UI shows ALL historical rows, not just uploaded slice
+          return fetch(`${apiBase}/api/data`)
+            .then(r => r.json())
+            .then(payload => {
+              setData(Array.isArray(payload.rows) ? payload.rows : []);
+              setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
+              setUploadStatus({
+                type: 'success',
+                msg: `✅ Saved ${rows.length} rows to live dashboard`,
+                detail: `Live: ${result.liveTotal} rows | Historical DB: ${result.total} rows.`,
+              });
+            });
+        }
+      })
+      .catch(() => {
+        setUploadStatus({
+          type: 'warn',
+          msg: '⚠ Backend save failed',
+          detail: 'Data is loaded locally, but backend storage is unavailable.',
+        });
+      });
+  }
+
+
+  // ── Import rows into the permanent historical DB (append-only) ─────────────
+  function importRowsToDb(rows) {
+    if (!rows || rows.length === 0) return;
+    setImportState({ loading:true, lastMsg:'Importing…' });
+    fetch(apiBase + '/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    })
+      .then(r => r.json())
+      .then(result => {
+        const msg = result.success
+          ? '✅ Imported ' + result.imported + ' new rows to DB (' + result.skipped + ' duplicates skipped). Total DB: ' + result.total
+          : '❌ Import failed';
+        setImportState({ loading:false, lastMsg: msg });
+        return fetch(apiBase + '/api/data').then(r => r.json()).then(payload => {
+          setData(Array.isArray(payload.rows) ? payload.rows : []);
+        });
+      })
+      .catch(err => setImportState({ loading:false, lastMsg:'❌ ' + String(err) }));
+  }
+
+  // ── Fetch rows from a URL (CSV / XLSX / JSON) ─────────────────────────────
+  async function fetchRowsFromUrl(sourceUrl) {
+    const cleanPath = sourceUrl.split('?')[0].toLowerCase();
+    const queryText = sourceUrl.toLowerCase();
+    const isCsv  = cleanPath.endsWith('.csv')  || /[?&]output=csv([&#]|$)/.test(queryText);
+    const isXlsx = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
+    if (isCsv) {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const wb = XLSX.read(text, {type:'string'});
+      return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+    } else if (isXlsx) {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
+      return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+    } else {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const parsed = await res.json();
+      return Array.isArray(parsed) ? parsed : [parsed];
+    }
+  }
+
+  // ── Sync the backup Google Sheet → import into DB ─────────────────────────
+  async function syncHistorySheet() {
+    const url = String(historyConfig.url || '').trim();
+    if (!url) { setImportState({ loading:false, lastMsg:'❌ No backup sheet URL set.' }); return; }
+    setImportState({ loading:true, lastMsg:'Fetching backup data from Google Sheet…' });
+    try {
+      const rawRows = await fetchRowsFromUrl(url);
+      if (!rawRows || rawRows.length === 0) {
+        setImportState({ loading:false, lastMsg:'❌ No rows found in backup sheet.' });
+        return;
+      }
+      const normalized = rawRows.map(raw => {
+        const product = String(raw.product || raw['Product Name'] || '').trim();
+        const status1 = String(raw.status1 || '').trim();
+        const status2 = String(raw.status2 || '').trim();
+        const opStage = String(raw.currentStage || '').trim();
+        const poRaw   = String(raw.po || '').trim();
+        const poDate  = toIsoDateString(raw.poDate);
+        const po      = toIsoDateString(poRaw) ? '' : poRaw;
+        return {
+          ...raw,
+          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
+          po, poDate, product,
+          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
+          status1, status2,
+          inhouse: normalizeInhouse(raw.inhouse),
+          currentStage: resolveLatestStage({ opStage, status1, status2 }),
+          timestamp: normalizeTimestamp(raw.timestamp),
+        };
+      }).filter(r => r.sc || r.po);
+      importRowsToDb(normalized);
+    } catch(err) {
+      setImportState({ loading:false, lastMsg:'❌ Fetch error: ' + String(err) });
+    }
+  }
 
   // ── Auto-detect product TYPE from product name ────────────────────────────
   function inferType(productName) {
@@ -777,36 +782,7 @@ function App() {
     );
   }
 
-  function toIsoDateString(value) {
-    if(value === undefined || value === null || value === '') return '';
-    if(value instanceof Date && !isNaN(value)) {
-      const y = value.getFullYear();
-      const m = String(value.getMonth() + 1).padStart(2, '0');
-      const d = String(value.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-
-    const s = String(value).trim();
-    if(!s) return '';
-
-    // yyyy-mm-dd or yyyy/mm/dd
-    let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
-    if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
-
-    // dd-mm-yyyy or dd/mm/yyyy (common in uploaded Velan sheets)
-    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
-    if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-
-    // Excel serial date value
-    const num = Number(s);
-    if(!isNaN(num) && num > 20000 && num < 80000 && window.XLSX?.SSF?.parse_date_code) {
-      const dc = window.XLSX.SSF.parse_date_code(num);
-      if(dc?.y && dc?.m && dc?.d) {
-        return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
-      }
-    }
-    return '';
-  }
+  
 
   function normalizeTimestamp(value) {
     if(value === undefined || value === null || value === '') return '';
@@ -837,7 +813,13 @@ function App() {
     let currentPO = '', currentPODate = '', currentSC = '', currentStage = '';
 
     for(const row of rows) {
-      const v = (i) => (row[i] !== undefined && row[i] !== null && String(row[i]).trim() !== '' && String(row[i]).trim() !== 'nan') ? String(row[i]).trim() : null;
+      const v = (i) => {
+        const val = row[i];
+        if (val === undefined || val === null) return null;
+        if (val instanceof Date) return val;
+        const s = String(val).trim();
+        return (s === '' || s === 'nan') ? null : s;
+      };
 
       // Skip header rows and title rows
       const col1 = v(1); const col5 = v(5);
@@ -922,7 +904,7 @@ function App() {
         sc:           pickField(r, ['sc','sc no','sc#','scno']).replace(/\s+/g,''),
         // Avoid generic "po" token because it can incorrectly match "PO RECD DATE"
         po:           pickField(r, ['po no','pono','purchase order','purchaseorder']),
-        poDate:       pickField(r, ['po recd date','porecddate','po date','podate','date received','date']).substring(0,10),
+        poDate:       toIsoDateString(pickField(r, ['po recd date','porecddate','po date','podate','date received','date'])),
         product,
         type,
         status1,
@@ -994,7 +976,13 @@ function App() {
     let currentSC = '', currentPO = '', currentPODate = '';
     for(let i=headerRowIdx + 1; i<rawAoA.length; i++) {
       const row = rawAoA[i] || [];
-      const getVal = (idx) => (idx === undefined ? '' : String(row[idx] ?? '').trim());
+      const getVal = (idx) => {
+        if (idx === undefined) return '';
+        const v = row[idx];
+        if (v === null || v === undefined) return '';
+        if (v instanceof Date) return v;
+        return String(v).trim();
+      };
 
       const scRaw = getVal(headerMap.sc);
       if(scRaw) currentSC = scRaw.replace(/\s+/g,'');
@@ -1061,7 +1049,8 @@ function App() {
         };
       }).filter(r => r.sc || r.po);
       const missingStage = normalizedRows.filter(r=>!r.currentStage).length;
-      setData(normalizedRows);
+      setLiveRows(normalizedRows);
+      saveRowsToServer(normalizedRows);
       setUploadStatus({
         type:'success',
         msg:`✅ ${normalizedRows.length} rows loaded from "${sourceName}" — live latest status resolved`,
@@ -1222,16 +1211,74 @@ function App() {
   }
 
   useEffect(() => {
-    if(!liveConfig?.enabled || !liveConfig?.url) return;
+    const enabled = liveConfig?.enabled === true;
+    const url = String(liveConfig?.url || '').trim();
+    if(!enabled || !url) return;
+
     const sec = Math.max(30, Number(liveConfig.intervalSec) || 300);
-    syncLiveDataNow(liveConfig.url);
-    const timer = setInterval(() => { syncLiveDataNow(liveConfig.url); }, sec * 1000);
+    syncLiveDataNow(url);
+    const timer = setInterval(() => { syncLiveDataNow(url); }, sec * 1000);
     return () => clearInterval(timer);
   }, [liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec]);
 
   // ── FILTERED DATA ──────────────────────────────────────────────────────────
+  // ── REQ 11: CENTRALIZED processedData — pendingDays & cycleTime on every row ──
+  const processedData = useMemo(() => {
+  const now = new Date();
+
+  return data.map(row => ({
+    ...row,
+
+    pendingDays: row.timestamp
+      ? Math.floor(
+          (now - new Date(row.timestamp.replace(' ', 'T')))
+          / (1000 * 60 * 60 * 24)
+        )
+      : null,
+
+    cycleTime:
+      (row.timestamp && row.poDate)
+        ? Math.floor(
+            (
+              new Date(row.timestamp.replace(' ', 'T')) -
+              new Date(row.poDate)
+            ) / (1000 * 60 * 60 * 24)
+          )
+        : null,
+      }));
+    }, [data]);
+    // ── ALL DB DATA: historical + live combined (for Database page only) ───────
+  const allDbData = useMemo(() => {
+    const seen = new Set();
+    return [...processedData, ...liveRows.map(row => ({
+      ...row,
+      pendingDays: row.timestamp ? Math.floor((new Date() - new Date(row.timestamp.replace(' ','T'))) / 86400000) : null,
+      cycleTime: (row.timestamp && row.poDate) ? Math.floor((new Date(row.timestamp.replace(' ','T')) - new Date(row.poDate)) / 86400000) : null,
+    }))].filter(r => {
+      const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [processedData, liveRows]);
+    // ── LIVE OPERATIONAL DATA — active WIP only (last 30 days, not completed) ──
+  const liveData = useMemo(() => {
+    const now = new Date();
+    // Use liveRows directly — this is the current uploaded/synced operational snapshot
+    // NOT filtered from historical processedData
+    return liveRows.map(row => ({
+      ...row,
+      pendingDays: row.timestamp
+        ? Math.floor((now - new Date(row.timestamp.replace(' ', 'T'))) / (1000 * 60 * 60 * 24))
+        : null,
+      cycleTime: (row.timestamp && row.poDate)
+        ? Math.floor((new Date(row.timestamp.replace(' ', 'T')) - new Date(row.poDate)) / (1000 * 60 * 60 * 24))
+        : null,
+    }));
+  }, [liveRows]);
+  // filtered uses liveData — operational pages only show active production
   const filtered = useMemo(() => {
-    return data.filter(row => {
+    return liveData.filter(row => {
       if(filters.po && row.po !== filters.po) return false;
       if(filters.stage && row.currentStage !== filters.stage) return false;
       if(filters.type && row.type !== filters.type) return false;
@@ -1243,7 +1290,7 @@ function App() {
       }
       return true;
     });
-  }, [data, filters]);
+  }, [liveData, filters]);
 
   // ── SC GROUPS ──────────────────────────────────────────────────────────────
   // Built from full `data` (not filtered) so that completeness is evaluated
@@ -1251,22 +1298,22 @@ function App() {
   // product across the entire SC is READY / STORES / STOCK.
   const scGroups = useMemo(() => {
     const g = {};
-    data.forEach(row => {
+    liveData.forEach(row => {
       if(!g[row.sc]) g[row.sc] = { sc:row.sc, po:row.po, poDate:row.poDate, items:[] };
       g[row.sc].items.push(row);
     });
     return Object.values(g);
-  }, [data]);
+  }, [liveData]);
 
   // ── PO GROUPS ──────────────────────────────────────────────────────────────
   const poGroups = useMemo(() => {
     const g = {};
-    data.forEach(row => {
+    liveData.forEach(row => {
       if(!g[row.po]) g[row.po] = { po:row.po, poDate:row.poDate, items:[] };
       g[row.po].items.push(row);
     });
     return Object.values(g);
-  }, [data]);
+  }, [liveData]);
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -1299,7 +1346,7 @@ function App() {
     // ── MODULE 2: Stage-wise WIP (Lathe / FB / Stores) ──
     // Count items per stage
     const stageWIP = {};
-    data.forEach(row => {
+    liveData.forEach(row => {
       const stage = row.currentStage;
       if(!stageWIP[stage]) stageWIP[stage] = 0;
       stageWIP[stage]++;
@@ -1330,7 +1377,7 @@ function App() {
     // ── MODULE 1: Total Production Output (Daily – Ready / Moved to Stores) ──
     // Grouped by date: count items by stage (READY vs STORES)
     const dailyOutput = {};
-    data.forEach(row => {
+    liveData.forEach(row => {
       if(!row.timestamp) return;
       const date = row.timestamp.substring(0,10);
       if(!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0 };
@@ -1594,16 +1641,17 @@ function App() {
       delayedPOs, onTimePOs,
       dailyOutput, dailyOutputArray,
     };
-  }, [filtered, scGroups, poGroups, data]);
+  }, [filtered, scGroups, poGroups, liveData]);
 
   // ── UNIQUE OPTIONS ─────────────────────────────────────────────────────────
-  const uniquePOs     = useMemo(()=>[...new Set(data.map(r=>r.po))].sort(),[data]);
-  const uniqueStages  = useMemo(()=>[...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort(),[data]);
-  const uniqueTypes   = useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
-
+  const uniquePOs     = useMemo(()=>[...new Set(liveData.map(r=>r.po))].sort(),[liveData]);
+  const uniqueStages  = useMemo(()=>[...new Set(liveData.map(r=>r.currentStage))].filter(Boolean).sort(),[liveData]);
+  const uniqueTypes   = useMemo(()=>[...new Set(liveData.map(r=>r.type))].filter(Boolean).sort(),[liveData]);
   // ── NAV ───────────────────────────────────────────────────────────────────
   const navItems = [
     {id:'overview',label:'Overview',icon:'⬡'},
+    {id:'monthday',label:'Month / Day View',icon:'📅'},
+    {id:'database',label:'Database',icon:'🗄'},
     {id:'production',label:'Production',icon:'⚙'},
     {id:'wip',label:'Stage / WIP',icon:'⟳'},
     {id:'cycletime',label:'Cycle Time',icon:'⏱'},
@@ -1624,10 +1672,21 @@ function App() {
           <div className="logo-sub">PRODUCTION COMMAND CENTER</div>
         </div>
         <div className="header-right">
+<<<<<<< HEAD
           {liveState?.active && (
             <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',padding:'4px 12px',borderRadius:20,fontSize:10,fontFamily:'Share Tech Mono,monospace',color:'var(--success)'}}>
               <span style={{width:6,height:6,background:'var(--success)',borderRadius:'50%',animation:'pulse 1.5s infinite',display:'inline-block'}}/>
               SHEETS LIVE
+=======
+          {lastSync && (
+            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-muted)'}}>
+              LAST SYNC: {new Date(lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+            </div>
+          )}
+          {liveData.length > 0 && (
+            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--accent3)'}}>
+              {liveData.length} LIVE · {data.length} TOTAL
+>>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
             </div>
           )}
           <div className="live-badge"><div className="live-dot"/><span>LIVE</span></div>
@@ -1682,10 +1741,11 @@ function App() {
             </select>
             <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
             <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
-            <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {data.length} total</span>
+            <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {liveData.length} live · {data.length} db</span>
           </div>
 
           {/* PAGES */}
+<<<<<<< HEAD
           {activeNav==='overview' && <OverviewPage kpis={kpis} data={data} filtered={filtered}/>}
           {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
           {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
@@ -1696,10 +1756,54 @@ function App() {
           {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
           {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
         </div>
+=======
+          {/* PAGES */}
+          {isLoading ? (
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
+              <div style={{fontSize:36,animation:'pulse 1.5s infinite'}}>⏳</div>
+              <div style={{fontFamily:'Share Tech Mono',fontSize:14,color:'var(--accent1)',letterSpacing:2}}>
+                LOADING DATABASE…
+              </div>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>Fetching records from backend</div>
+            </div>
+          ) : liveData.length === 0 && !['upload','database'].includes(activeNav) ? (
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:16}}>
+              <div style={{fontSize:48}}>📭</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:22,fontWeight:700,color:'var(--text-secondary)',letterSpacing:2}}>
+                No Data Available
+              </div>
+              <div style={{fontSize:13,color:'var(--text-muted)',textAlign:'center',maxWidth:400,lineHeight:1.7}}>
+                Upload file to begin<br/>
+                <span style={{fontSize:11}}>Use the Upload Data tab to load your Excel / CSV / JSON file</span>
+              </div>
+              <button
+                onClick={() => setActiveNav('upload')}
+                style={{marginTop:8,padding:'10px 24px',background:'linear-gradient(135deg,var(--accent1),var(--accent2))',border:'none',borderRadius:8,color:'#000',fontWeight:700,fontSize:13,cursor:'pointer',letterSpacing:1}}
+              >
+                ⬆ Go to Upload
+              </button>
+            </div>
+          ) : (
+            <>
+              {activeNav==='overview' && <OverviewPage kpis={kpis} data={liveData} filtered={filtered}/>}
+              {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
+              {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
+              {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
+              {activeNav==='bottleneck' && <BottleneckPage kpis={kpis} filtered={filtered}/>}
+              {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
+              {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
+              {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered}/>}
+              {activeNav==='monthday' && <MonthDayPage data={liveData}/>}
+              {activeNav==='database' && <DatabasePage data={allDbData} dateRange={dateRange} setDateRange={setDateRange} serverStatus={serverStatus}/>}
+              {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
+            </>
+          )}
+          </div>
+>>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
       </div>
     </div>
   );
-}
+  }
 
 // ─── OVERVIEW PAGE ─────────────────────────────────────────────────────────────
 function OverviewPage({kpis, data, filtered}) {
@@ -2912,15 +3016,6 @@ function VendorPage({kpis, data, setActiveNav}) {
   useChart(vendorBarRef, {
     type:'bar',
     data:{
-      labels:vendors.map(v=>v.code),
-      datasets:[{label:'Items at Vendor',data:vendors.map(v=>v.count),backgroundColor:'#b24bff88',borderColor:'#b24bff',borderWidth:1,borderRadius:4}]
-    },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}},y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}}}}
-  }, [kpis]);
-
-  useChart(vendorTimeRef, {
-    type:'bar',
-    data:{
       labels: vendors.map(v=>v.code),
       datasets:[
         {label:'Avg Pending Days (Today - Last Update)',data:vendors.map(v=>v.avgDays||0),backgroundColor:vendors.map(v=>(v.avgDays||0)>21?'#ff3d5a99':'#ffd60a99'),borderColor:vendors.map(v=>(v.avgDays||0)>21?'#ff3d5a':'#ffd60a'),borderWidth:1,borderRadius:4},
@@ -3447,7 +3542,520 @@ function VendorPage({kpis, data, setActiveNav}) {
     </div>
   );
 }
-function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState}) {
+
+function MonthDayPage({data}) {
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [dateMode, setDateMode] = useState('timestamp');
+  const months = useMemo(() => {
+    const map = {};
+    data.forEach(row => {
+      const dateStr = dateMode === 'timestamp'
+        ? (row.timestamp ? row.timestamp.substring(0,10) : null)
+        : (row.poDate ? row.poDate.substring(0,10) : null);
+      if (!dateStr) return;
+      const monthKey = dateStr.substring(0,7);
+      if (!map[monthKey]) {
+        map[monthKey] = { month: monthKey, poSet: new Set(), scSet: new Set(), items: [], daily: {} };
+      }
+      map[monthKey].poSet.add(row.po);
+      map[monthKey].scSet.add(row.sc);
+      map[monthKey].items.push(row);
+      const dayKey = dateStr.substring(0,10);
+      if (!map[monthKey].daily[dayKey]) map[monthKey].daily[dayKey] = { date: dayKey, items: [], ready: 0, stores: 0, wip: 0 };
+      map[monthKey].daily[dayKey].items.push(row);
+      if (row.currentStage === 'READY') map[monthKey].daily[dayKey].ready++;
+      else if (row.currentStage === 'STORES') map[monthKey].daily[dayKey].stores++;
+      else map[monthKey].daily[dayKey].wip++;
+    });
+    return Object.values(map).sort((a,b) => b.month.localeCompare(a.month));
+  }, [data, dateMode]);
+
+  const selected = selectedMonth ? months.find(m => m.month === selectedMonth) : null;
+  const monthTitle = (month) => {
+    const [year, mon] = month.split('-');
+    const date = new Date(`${month}-01`);
+    return date.toLocaleString('en-IN', { month:'long', year:'numeric' });
+  };
+
+  return (
+    <div>
+      <div className="section-title">Month / Day <span>View</span><div className="section-line"/></div>
+      <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
+        <button className={`filter-btn ${dateMode==='timestamp' ? 'active' : ''}`} onClick={()=>{setDateMode('timestamp');setSelectedMonth(null);}}>
+          📅 Activity Date (Timestamp)
+        </button>
+        <button className={`filter-btn ${dateMode==='poDate' ? 'active' : ''}`} onClick={()=>{setDateMode('poDate');setSelectedMonth(null);}}>
+          📋 PO Received Date
+        </button>
+        <span style={{fontSize:11,color:'var(--text-muted)',alignSelf:'center',marginLeft:4}}>
+          {dateMode==='timestamp' ? 'Grouped by last update / activity date' : 'Grouped by PO received date'}
+        </span>
+      </div>
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div className="chart-title">Monthly Summary</div>
+        <div className="chart-sub">Click a month to drill into daily PO / SC details.</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginTop:16}}>
+          {months.map(month => {
+            const ready = month.items.filter(r => r.currentStage === 'READY').length;
+            return (
+              <button key={month.month} onClick={() => setSelectedMonth(month.month)} style={{border:'1px solid var(--border)',borderRadius:12,padding:18,textAlign:'left',background:selectedMonth===month.month?'rgba(0,201,255,0.12)':'var(--bg-card)',color:'var(--text-primary)',cursor:'pointer'}}>
+                <div style={{fontSize:14,fontWeight:700,color:'var(--accent1)'}}>{monthTitle(month.month)}</div>
+                <div style={{fontSize:24,fontWeight:700,margin:'12px 0'}}>{month.items.length}</div>
+                <div style={{fontSize:11,color:'var(--text-muted)'}}>{month.poSet.size} POs · {month.scSet.size} SCs</div>
+                <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:8}}>{ready} ready items</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selected ? (
+        <div className="chart-card" style={{marginBottom:20}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+            <div>
+              <div className="chart-title">{monthTitle(selected.month)} — Daily Breakdown</div>
+              <div className="chart-sub">{dateMode==='timestamp' ? 'Activity/timestamp date grouped by day' : 'PO received date grouped by day'}</div>
+            </div>
+            <button className="filter-btn" onClick={()=>setSelectedMonth(null)}>Back to months</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
+            {Object.values(selected.daily).sort((a,b)=>a.date.localeCompare(b.date)).map(day => (
+              <div key={day.date} style={{border:'1px solid var(--border)',borderRadius:12,padding:14,background:'var(--bg-secondary)'}}>
+                <div style={{fontSize:10,fontFamily:'Share Tech Mono',color:'var(--text-muted)',marginBottom:8}}>{day.date}</div>
+                <div style={{fontSize:18,fontWeight:700,color:'var(--text-primary)'}}>{day.items.length} items</div>
+                <div style={{fontSize:10,color:'var(--accent1)',marginTop:10}}>{[...new Set(day.items.map(r=>r.po))].length} POs · {[...new Set(day.items.map(r=>r.sc))].length} SCs</div>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10,fontSize:10}}>
+                  <span className="status-pill badge-green">READY {day.ready}</span>
+                  <span className="status-pill badge-blue">STORES {day.stores}</span>
+                  <span className="status-pill badge-yellow">WIP {day.wip}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="chart-card" style={{marginBottom:20}}>
+          <div className="chart-title">Month / Day Explanation</div>
+          <div className="chart-sub">Select a month card to see per-day counts of POs, SCs, and item statuses.</div>
+          <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:12,lineHeight:1.7}}>
+            <b>Activity Date (Timestamp)</b> — groups items by their last update/timestamp. Use this to see May 2026 activity even when POs were received in April.<br/>
+            <b>PO Received Date</b> — groups items by the date the PO was received. Use this for order intake analysis.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DatabasePage({data, dateRange, setDateRange, serverStatus}) {
+  const [dateMode, setDateMode] = useState('poDate');
+  const [stageFilter, setStageFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [afterFilter, setAfterFilter] = useState('');
+  const [autoCorrect, setAutoCorrect] = useState(false);   // ← NEW
+
+  // Apply spell-corrections when checkbox is ON
+  const correctedData = React.useMemo(() => {
+    if (!autoCorrect) return data;
+    return data.map(row => ({
+      ...row,
+      currentStage: correctStageName(row.currentStage),
+    }));
+  }, [data, autoCorrect]);
+  const availableStages = useMemo(() => [...new Set(correctedData.map(r => r.currentStage).filter(Boolean))].sort(), [correctedData]);
+  const availableTypes  = useMemo(() => [...new Set(correctedData.map(r => r.type).filter(Boolean))].sort(), [correctedData]);
+  const availablePOs    = useMemo(() => [...new Set(correctedData.map(r => r.po).filter(Boolean))].sort(), [correctedData]);
+  const filteredByDate = useMemo(() => {
+    return correctedData.filter(row => {
+      const date = dateMode === 'timestamp' ? row.timestamp?.substring(0,10) : row.poDate || '';
+      if (!date && (dateRange.from || dateRange.to)) return false;
+      if (dateRange.from && date && date < dateRange.from) return false;
+      if (dateRange.to && date && date > dateRange.to) return false;
+      if (stageFilter && row.currentStage !== stageFilter) return false;
+      if (typeFilter && row.type !== typeFilter) return false;
+      if (locationFilter && row.inhouse !== locationFilter) return false;
+      if (afterFilter && row.po !== afterFilter) return false;
+      return true;
+    });
+    }, [correctedData, dateMode, dateRange, stageFilter, typeFilter, locationFilter, afterFilter]);
+
+  // ── KPI TOTALS — reflects active filters (filteredByDate) ──
+  const fullDbKpis = useMemo(() => {
+    const totalPOs = new Set(filteredByDate.map(r => r.po).filter(Boolean)).size;
+    const totalSCs = new Set(filteredByDate.map(r => r.sc).filter(Boolean)).size;
+    let airplugs = 0, masters = 0, accessories = 0;
+    filteredByDate.forEach(r => {
+      const t = (r.type || '').toUpperCase();
+      if (t === 'APG' || t === 'ARG') airplugs++;
+      else if (t === 'SPG' || t === 'SRG' || t === 'SP') masters++;
+      else accessories++;
+    });
+    return { totalPOs, totalSCs, airplugs, masters, accessories };
+  }, [filteredByDate]);
+
+  // ── DATABASE VISIBLE ROWS: filters applied + only READY / STORES / STOCK ──
+  // Uses filteredByDate so all active filters (date, stage, type, location, PO) are respected
+  const databaseVisibleRows = useMemo(() => {
+    return filteredByDate.filter(row => {
+      const stage = String(row.currentStage || '').toUpperCase();
+      return ['READY', 'STORES', 'STOCK'].includes(stage);
+    });
+  }, [filteredByDate]);
+  // ── PO-BASED OPERATIONAL ANALYTICS ────────────────────────────────────────
+  const databasePOAnalytics = React.useMemo(() => {
+    const FINAL = ['STOCK','STORES','READY'];
+    const poStateMap = {};
+
+    filteredByDate.forEach(row => {
+      const po = row.po;
+      if (!po) return;
+      if (!poStateMap[po]) {
+        poStateMap[po] = { po, stage: 'INPROCESS', type: row.type, items: [], scs: new Set() };
+      }
+      poStateMap[po].items.push(row);
+      if (row.sc) poStateMap[po].scs.add(row.sc);
+      // Priority: STOCK > STORES > READY > INPROCESS
+      const cur = poStateMap[po].stage;
+      const cs  = (row.currentStage || '').toUpperCase();
+      if (cs === 'STOCK')  poStateMap[po].stage = 'STOCK';
+      else if (cs === 'STORES' && cur !== 'STOCK')  poStateMap[po].stage = 'STORES';
+      else if (cs === 'READY'  && !['STOCK','STORES'].includes(cur)) poStateMap[po].stage = 'READY';
+    });
+
+    const poList = Object.values(poStateMap).map(p => ({
+      ...p,
+      scCount: p.scs.size,
+      itemCount: p.items.length,
+      category: getProductCategory(p.type),
+    }));
+
+    const byState = { READY:[], STORES:[], STOCK:[], INPROCESS:[] };
+    poList.forEach(p => { (byState[p.stage] || byState.INPROCESS).push(p); });
+
+    function stateStats(poArr) {
+      const cats = { AIRPLUG:0, MASTER:0, ACCESSORY:0 };
+      let totalSCs = 0;
+      poArr.forEach(p => {
+        cats[getProductCategory(p.type)] = (cats[getProductCategory(p.type)] || 0) + 1;
+        totalSCs += p.scCount;
+      });
+      return { count: poArr.length, ...cats, totalSCs };
+    }
+
+    return {
+      totalPOs: poList.length,
+      byState,
+      ready:     stateStats(byState.READY),
+      stores:    stateStats(byState.STORES),
+      stock:     stateStats(byState.STOCK),
+      inprocess: stateStats(byState.INPROCESS),
+    };
+  }, [filteredByDate]);
+
+  function handlePrint() {
+    window.print();
+  }
+
+  function handleDownloadPdf() {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      alert('PDF export library is not loaded.');
+      return;
+    }
+    const doc = new jsPDF('landscape', 'pt', 'a4');
+    const title = 'Velan Database Report';
+    const generatedAt = new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const rangeText = dateRange.from || dateRange.to ? `${dateRange.from || '...'} → ${dateRange.to || '...'}` : 'All dates';
+
+    doc.setFontSize(16);
+    doc.text(title, 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Date range: ${rangeText}`, 40, 60);
+    doc.text(`Rows: ${filteredByDate.length}`, 40, 74);
+    doc.text(`Exported: ${generatedAt}`, 40, 88);
+
+    const header = [['PO', 'PO DATE', 'SC', 'PRODUCT', 'TYPE', 'CATEGORY', 'STAGE', 'INHOUSE', 'TIMESTAMP']];
+    const rows = filteredByDate.slice(0, 250).map(row => [
+      row.po || '—',
+      row.poDate || '—',
+      row.sc || '—',
+      String(row.product || '—').substring(0, 48),
+      row.type || '—',
+      getProductCategory(row.type),
+      row.currentStage || '—',
+      row.inhouse || '—',
+      row.timestamp || '—',
+    ]);
+
+    doc.autoTable({
+      startY: 110,
+      head: header,
+      body: rows,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [0, 201, 255], textColor: 20 },
+      columnStyles: { 3: { cellWidth: 140 }, 8: { cellWidth: 100 } },
+      margin: { left: 40, right: 40 },
+      theme: 'striped',
+    });
+
+    if (filteredByDate.length > 250) {
+      doc.setFontSize(10);
+      doc.text(`Only the first 250 filtered rows are included in this export.`, 40, doc.lastAutoTable.finalY + 24);
+    }
+
+    const fileName = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.pdf`;
+    doc.save(fileName);
+  }
+
+  function handleDownloadXlsx() {
+    const ws = XLSX.utils.json_to_sheet(filteredByDate.map(row => ({
+      PO: row.po,
+      'PO DATE': row.poDate,
+      SC: row.sc,
+      PRODUCT: row.product,
+      TYPE: row.type,
+      CATEGORY: getProductCategory(row.type),
+      STAGE: row.currentStage,
+      INHOUSE: row.inhouse,
+      TIMESTAMP: row.timestamp,
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Database');
+    XLSX.writeFile(wb, `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.xlsx`);
+  }
+
+  function handleDownloadCsv() {
+    const ws = XLSX.utils.json_to_sheet(filteredByDate.map(row => ({
+      PO: row.po,
+      'PO DATE': row.poDate,
+      SC: row.sc,
+      PRODUCT: row.product,
+      TYPE: row.type,
+      CATEGORY: getProductCategory(row.type),
+      STAGE: row.currentStage,
+      INHOUSE: row.inhouse,
+      TIMESTAMP: row.timestamp,
+    })));
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleDownloadJson() {
+    const blob = new Blob([JSON.stringify(filteredByDate, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function setQuickRange(days) {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - days + 1);
+    setDateRange({ from: start.toISOString().substring(0,10), to: end.toISOString().substring(0,10) });
+  }
+
+  const filterSummary = `FILTER ACTIVE: ${dateRange.from || '...'} → ${dateRange.to || '...'} (${dateMode === 'timestamp' ? 'Timestamp' : 'PO Date'}) | Stage: ${stageFilter || 'All'} | Type: ${typeFilter || 'All'} | Location: ${locationFilter || 'All'} | PO: ${afterFilter || 'All'}`;
+
+  return (
+    <div>
+      <div className="section-title">Database <span>& Reports</span><div className="section-line"/></div>
+      {serverStatus === 'offline' && (
+        <div style={{marginBottom:20,padding:14,borderRadius:10,background:'rgba(0,201,255,0.08)',border:'1px solid rgba(0,201,255,0.25)',color:'var(--text-primary)'}}>
+          ✅ {data.length} rows restored from local database
+        </div>
+      )}
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div className="chart-title">Date Range & Filters</div>
+        <div className="chart-sub">PO Received Date / Last Update Timestamp</div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:16,alignItems:'center'}}>
+          <button className={`filter-btn ${dateMode==='poDate' ? 'active' : ''}`} onClick={()=>setDateMode('poDate')}>PO Received Date</button>
+          <button className={`filter-btn ${dateMode==='timestamp' ? 'active' : ''}`} onClick={()=>setDateMode('timestamp')}>Last Update Timestamp</button>
+        </div>
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:16,alignItems:'center'}}>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>From
+            <input type="date" value={dateRange.from} onChange={e => setDateRange(prev => ({...prev, from: e.target.value}))} className="filter-input" style={{width:160}} />
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>To
+            <input type="date" value={dateRange.to} onChange={e => setDateRange(prev => ({...prev, to: e.target.value}))} className="filter-input" style={{width:160}} />
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Stage
+            <select className="filter-select" value={stageFilter} onChange={e=>setStageFilter(e.target.value)} style={{width:160}}>
+              <option value="">All Stages</option>
+              {availableStages.map(stage => <option key={stage} value={stage}>{stage}</option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Type
+            <select className="filter-select" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:160}}>
+              <option value="">All Types</option>
+              {availableTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Location
+            <select className="filter-select" value={locationFilter} onChange={e=>setLocationFilter(e.target.value)} style={{width:160}}>
+              <option value="">All</option>
+              <option value="INHOUSE">Inhouse</option>
+              <option value="VENDOR">Vendor</option>
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>After
+            <select className="filter-select" value={afterFilter} onChange={e=>setAfterFilter(e.target.value)} style={{width:160}}>
+              <option value="">All POs</option>
+              {availablePOs.map(po => <option key={po} value={po}>{po}</option>)}
+            </select>
+          </label>
+          <button className="filter-btn" onClick={() => { setDateRange({ from:'', to:'' }); setStageFilter(''); setTypeFilter(''); setLocationFilter(''); setAfterFilter(''); }}>✕ Reset</button>
+          <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:12,color: autoCorrect ? 'var(--accent3)' : 'var(--text-secondary)',border:`1px solid ${autoCorrect ? 'var(--accent3)' : 'var(--border)'}`,borderRadius:6,padding:'6px 12px',background: autoCorrect ? 'rgba(0,255,157,0.08)' : 'transparent',transition:'all 0.2s'}}>
+            <input
+              type="checkbox"
+              checked={autoCorrect}
+              onChange={e => { setAutoCorrect(e.target.checked); setStageFilter(''); }}
+              style={{accentColor:'var(--accent3)',width:14,height:14,cursor:'pointer'}}
+            />
+            <span style={{fontFamily:'Share Tech Mono,monospace',letterSpacing:1}}>✓ AUTO-CORRECT STAGES</span>
+          </label>
+          {autoCorrect && (
+            <div style={{width:'100%',marginTop:6,padding:'8px 12px',borderRadius:6,background:'rgba(0,255,157,0.06)',border:'1px solid rgba(0,255,157,0.2)',fontSize:11,color:'var(--accent3)',fontFamily:'Share Tech Mono,monospace'}}>
+              ⚡ ACTIVE — misspelled stage names in your sheet are being auto-corrected. Corrections: {Object.keys(STAGE_CORRECTIONS).filter(k => [...new Set(data.map(r=>r.currentStage))].map(s=>(s||'').toUpperCase()).includes(k)).join(', ') || 'none detected yet'}
+            </div>
+          )}
+        </div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
+          {[7,14,30,60,90].map(days => (
+            <button key={days} className="filter-btn" onClick={()=>setQuickRange(days)}>{days} Days</button>
+          ))}
+          <button className="filter-btn" onClick={()=>setQuickRange(180)}>6 Months</button>
+        </div>
+        <div style={{marginTop:14,padding:14,background:'rgba(0,201,255,0.06)',border:'1px solid rgba(0,201,255,0.16)',borderRadius:10,fontSize:11,color:'var(--text-secondary)'}}>
+          {filterSummary}
+        </div>
+      </div>
+
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div>
+            <div className="chart-title">Download Report</div>
+            <div className="chart-sub">Export the current filtered dataset in any format.</div>
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+            <button className="filter-btn" onClick={handlePrint}>Print</button>
+            <button className="filter-btn" onClick={handleDownloadPdf}>PDF</button>
+            <button className="filter-btn" onClick={handleDownloadXlsx}>Excel</button>
+            <button className="filter-btn" onClick={handleDownloadCsv}>CSV</button>
+            <button className="filter-btn" onClick={handleDownloadJson}>JSON</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── FULL-DB KPI CARDS ── */}
+      <div className="kpi-grid" style={{marginBottom:20}}>
+        <KPICard label="TOTAL POs"         value={fullDbKpis.totalPOs}    sub="unique purchase orders · full DB"  color1="#00c9ff" color2="#0fa8e0" />
+        <KPICard label="TOTAL SCs"         value={fullDbKpis.totalSCs}    sub="unique job sets · full DB"         color1="#00e676" color2="#00c9ff" />
+        <KPICard label="TOTAL AIRPLUGS"    value={fullDbKpis.airplugs}    sub="rows · type APG + ARG"             color1="#b24bff" color2="#00c9ff" />
+        <KPICard label="TOTAL MASTERS"     value={fullDbKpis.masters}     sub="rows · type SPG + SRG + SP"        color1="#ffd60a" color2="#ff6b35" />
+        <KPICard label="TOTAL ACCESSORIES" value={fullDbKpis.accessories}  sub="rows · all remaining types"       color1="#00e676" color2="#b24bff" />
+      </div>
+
+      {/* ── DATABASE RECORDS TABLE (READY / STORES / STOCK only) ── */}
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div>
+            <div className="chart-title">Database Records</div>
+            <div className="chart-sub">
+              Showing only completed stages: READY · STORES · STOCK &nbsp;·&nbsp;
+              <span style={{color:'var(--accent3)',fontFamily:'Share Tech Mono,monospace',fontSize:11}}>
+                {databaseVisibleRows.length} rows
+              </span>
+            </div>
+          </div>
+        </div>
+        <div style={{overflowX:'auto',maxHeight:520,overflowY:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr>
+                {['PO','PO DATE','SC','PRODUCT','TYPE','CATEGORY','STAGE','INHOUSE','TIMESTAMP'].map(h => (
+                  <th key={h} style={{
+                    padding:'8px 10px',
+                    background:'var(--bg-secondary)',
+                    color:'var(--text-muted)',
+                    fontFamily:'Share Tech Mono,monospace',
+                    fontSize:10,
+                    letterSpacing:1,
+                    borderBottom:'1px solid var(--border)',
+                    position:'sticky',
+                    top:0,
+                    whiteSpace:'nowrap',
+                    textAlign:'left',
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {databaseVisibleRows.slice(0, 500).map((row, i) => {
+                const stage = (row.currentStage || '').toUpperCase();
+                const stageColor = stage === 'READY' ? '#00e676' : stage === 'STORES' ? '#00c9ff' : '#ffd60a';
+                const cat = getProductCategory(row.type);
+                const catColor = cat === 'AIRPLUG' ? '#00c9ff' : cat === 'MASTER' ? '#b24bff' : '#ffd60a';
+                return (
+                  <tr key={i} style={{borderBottom:'1px solid rgba(26,58,92,0.4)',background: i%2===0 ? 'transparent' : 'rgba(13,31,53,0.4)'}}>
+                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',color:'var(--accent1)',whiteSpace:'nowrap'}}>{row.po || '—'}</td>
+                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.poDate || '—'}</td>
+                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',color:'var(--accent3)',whiteSpace:'nowrap'}}>{row.sc || '—'}</td>
+                    <td style={{padding:'7px 10px',color:'var(--text-primary)',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={row.product}>{row.product || '—'}</td>
+                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.type || '—'}</td>
+                    <td style={{padding:'7px 10px',whiteSpace:'nowrap'}}>
+                      <span style={{
+                        padding:'2px 8px',borderRadius:4,fontSize:10,
+                        fontFamily:'Share Tech Mono,monospace',
+                        background:`${catColor}18`,color:catColor,
+                        border:`1px solid ${catColor}44`,
+                      }}>{cat}</span>
+                    </td>
+                    <td style={{padding:'7px 10px',whiteSpace:'nowrap'}}>
+                      <span style={{
+                        padding:'2px 8px',borderRadius:4,fontSize:10,
+                        fontFamily:'Share Tech Mono,monospace',
+                        background:`${stageColor}18`,color:stageColor,
+                        border:`1px solid ${stageColor}44`,
+                      }}>{row.currentStage || '—'}</span>
+                    </td>
+                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.inhouse || '—'}</td>
+                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>{row.timestamp || '—'}</td>
+                  </tr>
+                );
+              })}
+              {databaseVisibleRows.length === 0 && (
+                <tr><td colSpan={9} style={{padding:32,textAlign:'center',color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',fontSize:12}}>
+                  NO RECORDS FOUND — no items at READY / STORES / STOCK stage
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+          {databaseVisibleRows.length > 500 && (
+            <div style={{padding:'10px 14px',fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',borderTop:'1px solid var(--border)'}}>
+              ⚡ Showing first 500 of {databaseVisibleRows.length} rows. Export to view all records.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState, historyConfig, setHistoryConfig, onSyncHistory, importState}) {
   const [drag, setDrag] = useState(false);
   const fileRef = useRef();
 
@@ -3548,6 +4156,7 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             />
           </div>
 
+<<<<<<< HEAD
           {/* ── GOOGLE SHEETS LIVE SYNC ── */}
           <div style={{marginTop:14,padding:'14px 16px',background:'rgba(15,110,86,0.08)',border:'1px solid rgba(15,110,86,0.4)',borderRadius:8}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
@@ -3563,6 +4172,36 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               )}
             </div>
 
+=======
+          {/* ── HISTORICAL BACKUP IMPORT ─────────────────────────────────── */}
+          <div style={{marginTop:14,padding:'12px 14px',background:'rgba(0,255,157,0.06)',border:'1px solid rgba(0,255,157,0.3)',borderRadius:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--accent3)',marginBottom:4}}>📚 HISTORICAL BACKUP IMPORT</div>
+            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8,fontFamily:'Share Tech Mono,monospace'}}>
+              Paste your Nov 2025 – May 7 2026 backup Google Sheet CSV URL. Rows are appended to DB once — duplicates auto-skipped.
+            </div>
+            <input
+              type="text"
+              value={historyConfig?.url || ''}
+              onChange={e=>setHistoryConfig(prev=>({...prev,url:e.target.value}))}
+              placeholder="Google Sheet → File → Share → Publish to web → CSV → paste link here"
+              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'8px 10px',fontSize:11,marginBottom:8}}
+            />
+            <button className="filter-btn" style={{width:'100%',padding:'9px'}} onClick={onSyncHistory} disabled={importState?.loading}>
+              {importState?.loading ? '⏳ Importing…' : '⬇ Import Backup to Database'}
+            </button>
+            {importState?.lastMsg && (
+              <div style={{marginTop:6,fontSize:10,color:importState.lastMsg.startsWith('✅') ? 'var(--success)' : 'var(--danger)',fontFamily:'Share Tech Mono,monospace',whiteSpace:'pre-wrap'}}>
+                {importState.lastMsg}
+              </div>
+            )}
+            <div style={{marginTop:6,fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',lineHeight:1.7}}>
+              ℹ How to get the URL: Google Sheets → File → Share → Publish to web → choose your sheet → CSV → Publish → copy the link
+            </div>
+          </div>
+
+          <div style={{marginTop:14,padding:'12px 14px',background:'rgba(178,75,255,0.08)',border:'1px solid rgba(178,75,255,0.35)',borderRadius:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--accent6)',marginBottom:8}}>⚡ LIVE SOURCE SYNC (May 8 onwards)</div>
+>>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
             <input
               type="text"
               value={liveConfig?.url || ''}
@@ -3583,7 +4222,7 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               <input
                 type="number"
                 min="30"
-                value={liveConfig?.intervalSec || 300}
+                value={liveConfig.intervalSec || 300}
                 onChange={e=>setLiveConfig(prev=>({...prev,intervalSec:Number(e.target.value)||300}))}
                 style={{width:80,background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'6px 8px',fontSize:11,textAlign:'center'}}
               />
@@ -3591,7 +4230,7 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-secondary)',marginLeft:'auto',cursor:'pointer'}}>
                 <input
                   type="checkbox"
-                  checked={!!liveConfig?.enabled}
+                  checked={liveConfig.enabled === true}
                   onChange={e=>setLiveConfig(prev=>({...prev,enabled:e.target.checked}))}
                 />
                 Auto-sync
@@ -3599,6 +4238,7 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             </div>
 
             <div style={{display:'flex',gap:8}}>
+<<<<<<< HEAD
               <button
                 className="filter-btn"
                 style={{flex:2,padding:'10px',background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.4)',color:'var(--success)',fontWeight:700}}
@@ -3607,6 +4247,10 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
                 🔄 Sync from Google Sheets Now
               </button>
               <button className="filter-btn" style={{flex:1,padding:'10px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
+=======
+              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>onSyncNow(String(liveConfig.url || '').trim())}>🔄 Sync Now</button>
+              <button className="filter-btn" style={{flex:1,padding:'8px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
+>>>>>>> 63339d89d952aee3ce87f8fecfd09a67671f7f42
             </div>
 
             <div style={{marginTop:8,display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
