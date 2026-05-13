@@ -1933,36 +1933,38 @@ function App() {
 
         {/* CONTENT */}
         <div className="content">
-          {/* FILTER BAR */}
-          <div className="filter-bar">
-            <div className="filter-label">FILTERS</div>
-            <select className="filter-select" value={filters.po} onChange={e=>setFilters(f=>({...f,po:e.target.value}))}>
-              <option value="">All POs</option>
-              {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
-            </select>
-            <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
-              <option value="">All Stages</option>
-              {uniqueStages.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
-              <option value="">All Types</option>
-              {uniqueTypes.map(t=><option key={t} value={t}>{t}</option>)}
-            </select>
-            <select className="filter-select" value={filters.category} onChange={e=>setFilters(f=>({...f,category:e.target.value}))}>
-              <option value="">All Categories</option>
-              <option value="AIRPLUG">Airplug (APG/ARG)</option>
-              <option value="MASTER">Master (SRG/SP/SPG)</option>
-              <option value="ACCESSORY">Accessories</option>
-            </select>
-            <select className="filter-select" value={filters.inhouse} onChange={e=>setFilters(f=>({...f,inhouse:e.target.value}))}>
-              <option value="">Inhouse + Vendor</option>
-              <option value="INHOUSE">Inhouse Only</option>
-              <option value="VENDOR">Vendor Only</option>
-            </select>
-            <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
-            <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
-            <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {liveData.length} live · {data.length} db</span>
-          </div>
+          {/* FILTER BAR: Only show in non-database modules */}
+          {activeNav!=="database" && (
+            <div className="filter-bar">
+              <div className="filter-label">FILTERS</div>
+              <select className="filter-select" value={filters.po} onChange={e=>setFilters(f=>({...f,po:e.target.value}))}>
+                <option value="">All POs</option>
+                {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+              <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
+                <option value="">All Stages</option>
+                {uniqueStages.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
+                <option value="">All Types</option>
+                {uniqueTypes.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+              <select className="filter-select" value={filters.category} onChange={e=>setFilters(f=>({...f,category:e.target.value}))}>
+                <option value="">All Categories</option>
+                <option value="AIRPLUG">Airplug (APG/ARG)</option>
+                <option value="MASTER">Master (SRG/SP/SPG)</option>
+                <option value="ACCESSORY">Accessories</option>
+              </select>
+              <select className="filter-select" value={filters.inhouse} onChange={e=>setFilters(f=>({...f,inhouse:e.target.value}))}>
+                <option value="">Inhouse + Vendor</option>
+                <option value="INHOUSE">Inhouse Only</option>
+                <option value="VENDOR">Vendor Only</option>
+              </select>
+              <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
+              <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
+              <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {liveData.length} live · {data.length} db</span>
+            </div>
+          )}
 
           {/* PAGES */}
           {activeNav==='overview'  && <OverviewPage kpis={kpis} data={data} filtered={filtered} liveData={liveData}/>}
@@ -1983,7 +1985,7 @@ function App() {
   }
 
 // ─── OVERVIEW PAGE ─────────────────────────────────────────────────────────────
-function OverviewPage({kpis, data, filtered}) {
+function OverviewPage({kpis, data, filtered, liveData}) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showReadyDetails, setShowReadyDetails] = useState(false);
   const stageChartRef = useRef();
@@ -1996,31 +1998,34 @@ const today =
   String(now.getMonth() + 1).padStart(2, '0') + '-' +
   String(now.getDate()).padStart(2, '0');
   
-  // FEATURE 1: Overview Categories - Daily Set, Delayed PO, InProgress
-  const dailySetItems = data.filter(d => d.poDate === today);
-  const inProgressItems = data.filter(d => !['READY','STORES','STOCK'].includes(d.currentStage));
-  const readyItems = data.filter(d => d.currentStage === 'READY');
 
-  // Determine delayed PO groups by PO-level age and completion status
-  const delayedPOKeys = new Set();
-  const poGroupsMap = {};
-  data.forEach(item => {
+  // Use liveData for all calculations
+  const todayStr = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+  })();
+
+  // 1. Daily Set: POs where all SCs are completed (READY/STORES/STOCK) and completed today
+  const poGroupsLive = {};
+  liveData.forEach(item => {
     if(!item.po) return;
-    if(!poGroupsMap[item.po]) poGroupsMap[item.po] = [];
-    poGroupsMap[item.po].push(item);
+    if(!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
+    poGroupsLive[item.po].push(item);
   });
-  Object.values(poGroupsMap).forEach(poItems => {
-    const lastTs = getSCLastTimestamp(poItems);
-    const days = daysBetween(poItems[0].poDate, lastTs);
-    const allDone = poItems.every(i => ['READY','STORES','STOCK'].includes(i.currentStage));
-    if(allDone) {
-      if(days !== null && days > TARGET_DAYS) delayedPOKeys.add(poItems[0].po);
-    } else {
-      const elapsed = daysBetween(poItems[0].poDate, today);
-      if(elapsed !== null && elapsed > TARGET_DAYS) delayedPOKeys.add(poItems[0].po);
-    }
+  const dailySetPOs = Object.entries(poGroupsLive).filter(([po, items]) => {
+    // All SCs completed
+    const allDone = items.every(i => ['READY','STORES','STOCK'].includes(i.currentStage));
+    // Completed today (last updated today)
+    const completedToday = items.some(i => i.timestamp && i.timestamp.slice(0,10) === todayStr);
+    return allDone && completedToday;
   });
-  const delayedPOItems = data.filter(d => delayedPOKeys.has(d.po));
+  const dailySetItems = dailySetPOs.flatMap(([_, items]) => items);
+
+  // 2. Delayed PO: items with pendingDays > 21
+  const delayedPOItems = liveData.filter(i => (i.pendingDays ?? 0) > 21);
+
+  // 3. In Progress: not completed and pendingDays <= 21
+  const inProgressItems = liveData.filter(i => !['READY','STORES','STOCK'].includes(i.currentStage) && (i.pendingDays ?? 0) <= 21);
 
   // Group items by PO for modal display
   function groupByPO(items) {
@@ -2040,7 +2045,6 @@ const today =
   const dailyPOs = groupByPO(dailySetItems);
   const delayedPOs = groupByPO(delayedPOItems);
   const inProgressPOs = groupByPO(inProgressItems);
-  const readyPOs = groupByPO(readyItems);
 
   const stages = Object.entries(kpis.stageCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
 
@@ -4148,18 +4152,234 @@ function MonthDayPage({ liveData }) {
 
 // ─── DATABASE PAGE ─────────────────────────────────────────────────────────────
 function DatabasePage({ data }) {
+  // --- State for filters ---
+  const [dateType, setDateType] = React.useState('poDate');
+  const [fromDate, setFromDate] = React.useState('');
+  const [toDate, setToDate] = React.useState('');
+  const [filters, setFilters] = React.useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
+
+  // --- Unique options ---
+  const uniquePOs = React.useMemo(()=>[...new Set(data.map(r=>r.po))].sort(),[data]);
+  const uniqueStages = React.useMemo(()=>[...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort(),[data]);
+  const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
+
+  // --- Date filter logic ---
+  function dateInRange(val) {
+    if (!val) return true;
+    const d = val.slice(0,10);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  }
+
+  // --- Filtered data ---
+  const filtered = React.useMemo(() => {
+    return data.filter(row => {
+      // Date filter
+      const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
+      if (!dateInRange(dateVal)) return false;
+      if(filters.po && row.po !== filters.po) return false;
+      if(filters.stage && row.currentStage !== filters.stage) return false;
+      if(filters.type && row.type !== filters.type) return false;
+      if(filters.inhouse && row.inhouse !== filters.inhouse) return false;
+      if(filters.category && getProductCategory && getProductCategory(row.type) !== filters.category) return false;
+      if(filters.search) {
+        const s = filters.search.toLowerCase();
+        if(!String(row.sc||'').toLowerCase().includes(s) && !String(row.product||'').toLowerCase().includes(s) && !String(row.po||'').toLowerCase().includes(s)) return false;
+      }
+      return true;
+    });
+  }, [data, filters, fromDate, toDate, dateType]);
+
+  // --- KPI stats ---
+  const kpiStats = React.useMemo(() => {
+    const total = filtered.length;
+    const uniquePO = new Set(filtered.map(r=>r.po)).size;
+    const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
+    const ready = filtered.filter(r=>r.currentStage==='READY' || r.currentStage==='STORES').length;
+    const wip = filtered.filter(r=>!['READY','STORES','STOCK'].includes(r.currentStage)).length;
+    const inhouse = filtered.filter(r=>r.inhouse==='INHOUSE').length;
+    const vendor = filtered.filter(r=>r.inhouse==='VENDOR').length;
+    return { total, uniquePO, uniqueSC, ready, wip, inhouse, vendor };
+  }, [filtered]);
+
+  // --- Export handlers ---
+  function exportJSON() {
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filtered_data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportCSV() {
+    const header = Object.keys(filtered[0]||{});
+    const rows = filtered.map(r=>header.map(h=>`"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+    const csv = [header.join(','),...rows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filtered_data.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportPDF() {
+    // Use jsPDF and autoTable to export the filtered table
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    // Table columns
+    const columns = [
+      { header: 'SC', dataKey: 'sc' },
+      { header: 'PO', dataKey: 'po' },
+      { header: 'PO DATE', dataKey: 'poDate' },
+      { header: 'PRODUCT', dataKey: 'product' },
+      { header: 'STAGE', dataKey: 'currentStage' },
+      { header: 'INHOUSE', dataKey: 'inhouse' },
+      { header: 'TIMESTAMP', dataKey: 'timestamp' },
+      { header: 'PENDING DAYS', dataKey: 'pendingDays' },
+    ];
+    // Table rows
+    const rows = filtered.map(r => ({
+      sc: r.sc || '',
+      po: r.po || '',
+      poDate: r.poDate ? fmtDate(r.poDate) : '',
+      product: r.product || '',
+      currentStage: r.currentStage || '',
+      inhouse: r.inhouse || '',
+      timestamp: r.timestamp ? fmtTs(r.timestamp) : '',
+      pendingDays: r.pendingDays ?? '',
+    }));
+    doc.text('Velan Metrology – Database Export', 40, 40);
+    doc.text(`Exported Rows: ${rows.length}`, 40, 60);
+    doc.autoTable({
+      columns,
+      body: rows,
+      startY: 80,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [0, 201, 255] },
+      theme: 'grid',
+      margin: { left: 40, right: 40 },
+      tableWidth: 'auto',
+      bodyStyles: { textColor: 20 },
+    });
+    doc.save('database_export.pdf');
+  }
+
+  // --- Quick date buttons ---
+  function setQuickDays(days) {
+    const today = new Date();
+    const to = today.toISOString().slice(0,10);
+    const from = new Date(today.getTime() - (days*24*60*60*1000));
+    setFromDate(from.toISOString().slice(0,10));
+    setToDate(to);
+  }
+
   return (
     <div>
       <div className="section-title">Database <span>Archive</span><div className="section-line"/></div>
+
+      {/* FILTER BAR */}
+      <div className="chart-card" style={{marginBottom:16,background:'rgba(0,20,40,0.9)'}}>
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
+          <div style={{display:'flex',gap:4}}>
+            <button className={`filter-btn${dateType==='poDate'?' active':''}`} onClick={()=>setDateType('poDate')}>PO Received Date</button>
+            <button className={`filter-btn${dateType==='timestamp'?' active':''}`} onClick={()=>setDateType('timestamp')}>Last Updated Timestamp</button>
+          </div>
+          <input type="date" className="filter-input" value={fromDate} onChange={e=>setFromDate(e.target.value)} placeholder="From"/>
+          <input type="date" className="filter-input" value={toDate} onChange={e=>setToDate(e.target.value)} placeholder="To"/>
+          <button className="filter-btn reset" onClick={()=>{setFromDate('');setToDate('');}}>✕ Reset</button>
+          <div style={{display:'flex',gap:4,marginLeft:8}}>
+            <button className="filter-btn" onClick={()=>setQuickDays(7)}>Last 7 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(14)}>Last 14 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(30)}>Last 30 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(60)}>Last 60 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(90)}>Last 90 Days</button>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
+          <select className="filter-select" value={filters.po} onChange={e=>setFilters(f=>({...f,po:e.target.value}))}>
+            <option value="">All POs</option>
+            {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+          <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
+            <option value="">All Stages</option>
+            {uniqueStages.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
+            <option value="">All Types</option>
+            {uniqueTypes.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="filter-select" value={filters.category} onChange={e=>setFilters(f=>({...f,category:e.target.value}))}>
+            <option value="">All Categories</option>
+            <option value="AIRPLUG">Airplug (APG/ARG)</option>
+            <option value="MASTER">Master (SRG/SP/SPG)</option>
+            <option value="ACCESSORY">Accessories</option>
+          </select>
+          <select className="filter-select" value={filters.inhouse} onChange={e=>setFilters(f=>({...f,inhouse:e.target.value}))}>
+            <option value="">Inhouse + Vendor</option>
+            <option value="INHOUSE">Inhouse Only</option>
+            <option value="VENDOR">Vendor Only</option>
+          </select>
+          <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
+          <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
+          <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} filtered · {data.length} total</span>
+        </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div style={{display:'flex',gap:12,marginBottom:18,flexWrap:'wrap'}}>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">Filtered Items</div>
+          <div className="kpi-value">{kpiStats.total}</div>
+          <div className="kpi-sub">all records</div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">Purchase Orders</div>
+          <div className="kpi-value">{kpiStats.uniquePO}</div>
+          <div className="kpi-sub">unique POs in range</div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">SC Sets</div>
+          <div className="kpi-value">{kpiStats.uniqueSC}</div>
+          <div className="kpi-sub">job sets in range</div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">Ready / Stores</div>
+          <div className="kpi-value">{kpiStats.ready}</div>
+          <div className="kpi-sub">complete</div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">WIP</div>
+          <div className="kpi-value">{kpiStats.wip}</div>
+          <div className="kpi-sub">in-progress items</div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">Inhouse / Vendor</div>
+          <div className="kpi-value">{kpiStats.inhouse} / {kpiStats.vendor}</div>
+          <div className="kpi-sub">location split</div>
+        </div>
+      </div>
+
+      {/* EXPORT BUTTONS */}
+      <div style={{display:'flex',gap:10,marginBottom:18}}>
+        <button className="filter-btn" style={{background:'rgba(0,201,255,0.08)',color:'var(--accent1)',fontWeight:700}} onClick={exportJSON}>⬇ JSON</button>
+        <button className="filter-btn" style={{background:'rgba(0,255,100,0.08)',color:'var(--success)',fontWeight:700}} onClick={exportCSV}>⬇ CSV</button>
+        <button className="filter-btn" style={{background:'rgba(255,61,90,0.08)',color:'var(--danger)',fontWeight:700}} onClick={exportPDF}>⬇ PDF</button>
+        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT FILTERED ({filtered.length} rows):</span>
+      </div>
+
+      {/* DATA TABLE */}
       <div className="chart-card" style={{marginBottom:16}}>
-        <div className="chart-title">All Historical Rows — {data.length} total</div>
+        <div className="chart-title">All Historical Rows — {filtered.length} shown</div>
         <div className="chart-sub">COMBINED LIVE + DB SNAPSHOT</div>
         <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
           <table>
             <thead>
               <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th><th>PENDING DAYS</th></tr>
             </thead>
-            <tbody>{data.map((r,i)=>(
+            <tbody>{filtered.map((r,i)=>(
               <tr key={i}>
                 <td className="mono text-accent">{r.sc||'—'}</td>
                 <td style={{fontSize:11}}>{r.po||'—'}</td>
