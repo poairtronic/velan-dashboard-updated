@@ -332,19 +332,81 @@ const COMPANY_HOLIDAYS = new Set([
 // Count only Mon–Sat, skipping Sundays and company holidays
 function workingDaysBetween(d1Str, d2Str) {
   if (!d1Str || !d2Str) return null;
-  const start = new Date(d1Str.substring(0, 10));
-  const end   = new Date(d2Str.substring(0, 10));
-  if (isNaN(start) || isNaN(end)) return null;
-  let count = 0;
-  const cur = new Date(start);
-  while (cur <= end) {
-    const day = cur.getDay();           // 0=Sun, 6=Sat
-    const iso = cur.toISOString().substring(0, 10);
-    if (day !== 0 && !COMPANY_HOLIDAYS.has(iso)) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+  try {
+    // parseLocalDate: uses same smart DD/MM vs MM/DD resolution as toIsoDateString
+    function parseLocalDate(str) {
+      if (!str) return null;
+      const clean = String(str).trim().substring(0,10);
+      let day, month, year;
+
+      if (clean.includes('/')) {
+        const parts = clean.split('/');
+        const p0 = parseInt(parts[0], 10);
+        const p1 = parseInt(parts[1], 10);
+        let   p2 = parseInt(parts[2], 10);
+        if (p2 < 100) p2 += 2000;
+        year = p2;
+        if (String(parts[2]).trim().length <= 2) {
+          // Google Sheets M/D/YY → month first
+          month = p0; day = p1;
+        } else {
+          // 4-digit year: apply smart resolution
+          // If p0 > 12: must be day (DD/MM/YYYY)
+          // If p1 > 12: must be month (MM/DD/YYYY — Google Sheets)
+          // Both ≤ 12: default DD/MM/YYYY (Velan Excel standard)
+          if (p0 > 12) { day = p0; month = p1; }
+          else if (p1 > 12) { month = p0; day = p1; }
+          else { day = p0; month = p1; } // DD/MM default
+        }
+      } else if (clean.includes('-')) {
+        const parts = clean.split('-');
+        if (parts[0].length === 4) {
+          year  = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          day   = parseInt(parts[2], 10);
+        } else {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          year = parseInt(parts[2], 10);
+          if (year < 100) year += 2000;
+          // Smart resolution for dash-separated too
+          if (p0 > 12) { day = p0; month = p1; }
+          else if (p1 > 12) { month = p0; day = p1; }
+          else { day = p0; month = p1; }
+        }
+      } else {
+        return null;
+      }
+
+      if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+      return new Date(year, month - 1, day);
+    }
+    const d1 = parseLocalDate(d1Str);
+    const d2 = parseLocalDate(d2Str);
+    if (!d1 || !d2 || isNaN(d1.getTime()) || isNaN(d2.getTime())) {
+      return null;
+    }
+    let count = 0;
+    const cur = new Date(
+  d1 < d2 ? d1.getTime() : d2.getTime()
+);
+
+const end = new Date(
+  d1 > d2 ? d1.getTime() : d2.getTime()
+);
+    while (cur <= end) {
+      const dow = cur.getDay();
+      const ds =
+  cur.getFullYear() + '-' +
+  String(cur.getMonth() + 1).padStart(2, '0') + '-' +
+  String(cur.getDate()).padStart(2, '0');
+      if (dow !== 0 && !COMPANY_HOLIDAYS.has(ds)) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return d2 < d1 ? -count : count;
+  } catch { return null; }
 }
+
 
 function getProductCategory(type) {
   if(['APG','ARG'].includes(type)) return 'AIRPLUG';
@@ -357,13 +419,67 @@ function daysBetween(d1Str, d2Str) {
 }
 // ─── PROCESS TIME CALCULATION HELPERS ──────────────────────────────────────
 // Calculate hours between two timestamps (YYYY-MM-DD HH:MM:SS format)
+
+
+function parseDateTime(str) {
+  if (!str) return null;
+  const cleaned = String(str).trim();
+  const [datePart, timePart = '00:00:00'] = cleaned.split(' ');
+
+  let day, month, year;
+
+  if (datePart.includes('/')) {
+    const parts = datePart.split('/');
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    // Smart resolution: if p0>12 → DD/MM; if p1>12 → MM/DD; else DD/MM default
+    if (p0 > 12) { day = p0; month = p1; }
+    else if (p1 > 12) { month = p0; day = p1; }
+    else { day = p0; month = p1; }
+  } else if (datePart.includes('-')) {
+    const parts = datePart.split('-');
+    if (parts[0].length === 4) {
+      year  = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10);
+      day   = parseInt(parts[2], 10);
+    } else {
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
+      year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+      if (p0 > 12) { day = p0; month = p1; }
+      else if (p1 > 12) { month = p0; day = p1; }
+      else { day = p0; month = p1; }
+    }
+  } else {
+    return null;
+  }
+
+  const time = timePart.split(':');
+  const hh = parseInt(time[0] || 0, 10);
+  const mm = parseInt(time[1] || 0, 10);
+  const ss = parseInt(time[2] || 0, 10);
+
+  return new Date(year, month - 1, day, hh, mm, ss);
+}
+
 function hoursBetween(t1Str, t2Str) {
-  if(!t1Str || !t2Str) return null;
+
+  if (!t1Str || !t2Str) return null;
+
   try {
-    const d1 = new Date(t1Str.replace(' ', 'T'));
-    const d2 = new Date(t2Str.replace(' ', 'T'));
-    if(isNaN(d1) || isNaN(d2)) return null;
-    return Math.round((d2 - d1) / (1000 * 60 * 60) * 100) / 100; // hours with 2 decimals
+
+    const d1 = parseDateTime(t1Str);
+    const d2 = parseDateTime(t2Str);
+
+    if (!d1 || !d2 || isNaN(d1) || isNaN(d2)) {
+      return null;
+    }
+
+    return Math.round(((d2 - d1) / (1000 * 60 * 60)) * 100) / 100;
+
   } catch {
     return null;
   }
@@ -371,12 +487,20 @@ function hoursBetween(t1Str, t2Str) {
 
 // Calculate minutes between two timestamps
 function minutesBetween(t1Str, t2Str) {
-  if(!t1Str || !t2Str) return null;
+
+  if (!t1Str || !t2Str) return null;
+
   try {
-    const d1 = new Date(t1Str.replace(' ', 'T'));
-    const d2 = new Date(t2Str.replace(' ', 'T'));
-    if(isNaN(d1) || isNaN(d2)) return null;
+
+    const d1 = parseDateTime(t1Str);
+    const d2 = parseDateTime(t2Str);
+
+    if (!d1 || !d2 || isNaN(d1) || isNaN(d2)) {
+      return null;
+    }
+
     return Math.round((d2 - d1) / (1000 * 60));
+
   } catch {
     return null;
   }
@@ -393,10 +517,17 @@ function calculateProcessCycleTime(poDate, currentTs) {
 // Check SLA violation (> 2 days pending)
 function isSLAViolation(agingDays, threshold = 2) {
   return agingDays !== null && agingDays > threshold;
-}function calculateVendorAging(lastTs, today) {
-  // Working days only (Mon–Sat, minus company holidays)
-  const days = workingDaysBetween(lastTs, today);
-  return days !== null && days >= 0 ? days : null;
+}
+
+// Calculate vendor aging: working days from last timestamp to today
+function calculateVendorAging(lastTs, today) {
+  if (!lastTs) return null;
+  // Accept either a Date object or a string for today
+  const todayStr = (today instanceof Date)
+    ? `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+    : String(today).substring(0, 10);
+  const days = workingDaysBetween(lastTs, todayStr);
+  return (days !== null && days >= 0) ? days : null;
 }
 
 // Calculate process efficiency: activeTime / totalTime
@@ -478,17 +609,72 @@ function useChart(ref, config, deps) {
   }, deps);
 }
 
+// ─── RAW CSV PARSER ────────────────────────────────────────────────────────────
+// Parses CSV text → array-of-arrays WITHOUT any type coercion.
+// All cell values are preserved as raw strings so date columns like
+// "06/05/2026" (DD/MM/YYYY) are NOT auto-converted to US-format Date objects
+// by SheetJS (which would silently flip day↔month for values where both parts ≤ 12).
+function parseRawCsv(text) {
+  const rows = [];
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cells = [];
+    let inQuote = false, cell = '';
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cell += '"'; i++; }  // escaped ""
+        else { inQuote = !inQuote; }
+      } else if (ch === ',' && !inQuote) {
+        cells.push(cell.trim());
+        cell = '';
+      } else {
+        cell += ch;
+      }
+    }
+    cells.push(cell.trim());
+    rows.push(cells);
+  }
+  return rows;
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-// ─── SINGLE CANONICAL DATE PARSER — DD/MM/YYYY is the Velan Excel standard ───
+// ─── SINGLE CANONICAL DATE PARSER — DD/MM/YYYY is the Velan/Indian standard ───
 // ALL date parsing in the entire app MUST go through this one function.
 // Supports: Date objects | ISO YYYY-MM-DD | DD/MM/YYYY | DD-MM-YYYY | Excel serial numbers
+//
+// ROOT-CAUSE FIX (May 2026):
+//   SheetJS auto-detects "06/05/2026" in CSV as June 5 (US MM/DD format) and formats
+//   it back as "6/5/26" (2-digit year). This caused May dates to appear in June.
+//   Fix: All CSV/Google Sheets data is now parsed through parseRawCsv() which preserves
+//   raw strings. "06/05/2026" therefore arrives here as-is and the DD/MM default gives
+//   the correct ISO date 2026-05-06. Excel uploads still use cellDates:true → Date objects.
+//
+// Resolution rule for ambiguous A/B/YYYY or A/B/YY where A≤12 and B≤12:
+//   → Default to DD/MM/YYYY (Indian / Velan Excel standard)
+//   Date objects from XLSX (cellDates:true) are always correct and handled first.
+
+// Sub-helper: given p0/p1/year (all integers, year is 4-digit), return ISO string.
+// slashSep=true means original delimiter was '/'.
+// Velan standard is DD/MM/YYYY (Indian format). Google Sheets CSV is fetched via
+// parseRawCsv() which preserves the raw string, so "06/05/2026" arrives here as p0=6,
+// p1=5 and the DD/MM default correctly returns 2026-05-06 (6 May).
+function _resolveSlashDate(p0, p1, year, slashSep) {
+  // Unambiguous: only one interpretation is valid
+  if (p0 > 12 && p1 <= 12) return `${year}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;  // DD/MM
+  if (p1 > 12 && p0 <= 12) return `${year}-${String(p0).padStart(2,'0')}-${String(p1).padStart(2,'0')}`;  // MM/DD
+  // Both ≤ 12 — default DD/MM/YYYY (Velan/Indian standard) for ALL separators.
+  return `${year}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;  // DD/MM/YYYY default
+}
+
 function toIsoDateString(value) {
   if (value === undefined || value === null || value === '') return '';
-  // Native Date object
+  // Native Date object (produced by XLSX with cellDates:true) — always correct
   if (value instanceof Date && !isNaN(value)) {
-    const y = value.getUTCFullYear();
-    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(value.getUTCDate()).padStart(2, '0');
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
   const text = String(value).trim();
@@ -504,18 +690,50 @@ function toIsoDateString(value) {
   // YYYY MM DD ... (space-separated, year first) — e.g. "2026 05 09 13:40:43"
   const ySpace = text.match(/^(\d{4})\s+(\d{1,2})\s+(\d{1,2})(?:\s|$)/);
   if (ySpace) return `${ySpace[1]}-${ySpace[2].padStart(2,'0')}-${ySpace[3].padStart(2,'0')}`;
-  // DD/MM/YYYY or DD-MM-YYYY (Velan Excel standard)
-  // match[1]=day  match[2]=month  match[3]=year
-  let match = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (match) {
-    const day   = match[1].padStart(2, '0');
-    const month = match[2].padStart(2, '0');
-    const year  = match[3];
-    return `${year}-${month}-${day}`;
+  // DD/MM/YY — 2-digit year, Velan/Indian standard: day first
+  // (Even if SheetJS re-formats a date as M/D/YY the _resolveSlashDate DD/MM
+  //  default below will reconstruct the correct Velan date.)
+  const shortSlash = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:\s|$|\/)/);
+  if (shortSlash) {
+    const p0 = parseInt(shortSlash[1], 10);
+    const p1 = parseInt(shortSlash[2], 10);
+    const yr  = parseInt(shortSlash[3], 10) + 2000;
+    // Unambiguous: only one part can be a valid day (>12)
+    if (p0 > 12 && p1 <= 12) // DD/MM
+      return `${yr}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;
+    if (p1 > 12 && p0 <= 12) // MM/DD
+      return `${yr}-${String(p0).padStart(2,'0')}-${String(p1).padStart(2,'0')}`;
+    // Both ≤ 12 — default DD/MM (Indian / Velan standard)
+    if (p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 12)
+      return `${yr}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;
   }
-  // DD/MM/YYYY or DD-MM-YYYY with time suffix — e.g. "09-05-2026 13:40:43"
+  // D/M/YYYY or DD/MM/YYYY with optional time — slash separator, 4-digit year
+  // ALSO catches Google Sheets M/D/YYYY — resolved by _resolveSlashDate
+  const slashFull = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[T ]|$)/);
+  if (slashFull) {
+    const p0   = parseInt(slashFull[1], 10);
+    const p1   = parseInt(slashFull[2], 10);
+    const year = parseInt(slashFull[3], 10);
+    if (p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 31 && year > 1900)
+      return _resolveSlashDate(p0, p1, year, true);
+  }
+  // DD-MM-YYYY (dash, 4-digit year, no time)
+  const dashFull = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dashFull) {
+    const p0   = parseInt(dashFull[1], 10);
+    const p1   = parseInt(dashFull[2], 10);
+    const year = parseInt(dashFull[3], 10);
+    if (p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 31 && year > 1900)
+      return _resolveSlashDate(p0, p1, year, false);
+  }
+  // DD-MM-YYYY or DD/MM/YYYY with time suffix — e.g. "09-05-2026 13:40:43"
   const dmyTime = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T ]/);
-  if (dmyTime) return `${dmyTime[3]}-${dmyTime[2].padStart(2,'0')}-${dmyTime[1].padStart(2,'0')}`;
+  if (dmyTime) {
+    const p0   = parseInt(dmyTime[1], 10);
+    const p1   = parseInt(dmyTime[2], 10);
+    const year = parseInt(dmyTime[3], 10);
+    return _resolveSlashDate(p0, p1, year, dmyTime[0].includes('/'));
+  }
   // DD MM YYYY (space-separated) — e.g. "07 05 2026"
   const dSpace = text.match(/^(\d{1,2})\s+(\d{1,2})\s+(\d{4})(?:\s|$)/);
   if (dSpace) return `${dSpace[3]}-${dSpace[2].padStart(2,'0')}-${dSpace[1].padStart(2,'0')}`;
@@ -530,12 +748,29 @@ function toIsoDateString(value) {
     }
     // Fallback epoch math if SSF unavailable
     const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
-    const y2  = epoch.getUTCFullYear();
-    const mo2 = String(epoch.getUTCMonth() + 1).padStart(2, '0');
-    const d2  = String(epoch.getUTCDate()).padStart(2, '0');
+    const y2  = epoch.getFullYear();
+    const mo2 = String(epoch.getMonth() + 1).padStart(2, '0');
+    const d2  = String(epoch.getDate()).padStart(2, '0');
     return `${y2}-${mo2}-${d2}`;
   }
   return '';
+}
+// ── Display helpers: convert stored ISO → DD/MM/YYYY ─────────────────────────
+function fmtDate(isoStr) {
+  if (!isoStr) return '—';
+  const s = String(isoStr).trim().substring(0, 10); // "YYYY-MM-DD"
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return `${s.substring(8,10)}/${s.substring(5,7)}/${s.substring(0,4)}`;
+  }
+  return s || '—';
+}
+function fmtTs(tsStr) {
+  if (!tsStr) return '—';
+  const s = String(tsStr).trim();
+  const datePart = s.substring(0, 10); // "YYYY-MM-DD"
+  const timePart = s.substring(11, 16); // "HH:MM"
+  const d = fmtDate(datePart);
+  return timePart ? `${d} ${timePart}` : d;
 }
 function App() {
   const [data, setData] = useState([]);
@@ -548,7 +783,7 @@ function App() {
   const [serverStatus, setServerStatus] = useState('loading');
   const [now] = useState(new Date());
   const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:4000'
+    ? 'http://localhost:3000'
     : '';
 
   // ── PARSE UPLOADED EXCEL / JSON ──────────────────────────────────────────
@@ -671,8 +906,9 @@ function App() {
       const res = await fetch(sourceUrl, {cache:'no-store'});
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
-      const wb = XLSX.read(text, {type:'string'});
-      return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+      // Raw parser preserves DD/MM date strings — no SheetJS date auto-detection
+      const rawAoA = parseRawCsv(text);
+      return parseRowsFromHeaderAoA(rawAoA);
     } else if (isXlsx) {
       const res = await fetch(sourceUrl, {cache:'no-store'});
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -736,13 +972,21 @@ function App() {
   }
 
   function normalizeStage(stage) {
-    if(!stage) return '';
-    const s = String(stage).trim().toUpperCase();
-    if(!s) return '';
-    if(s.includes('READY')) return 'READY';
-    if(s.includes('STORE')) return 'STORES';
-    if(s === 'DCPL') return 'DCPLI';
-    return s.replace(/\s+/g,'');
+    if (!stage) return '';
+    const s = String(stage).trim().toUpperCase().replace(/[\.\s]/g, '');
+    if (!s) return '';
+    const aliases = {
+      'STORE':'STORES','STORRES':'STORES','STOERS':'STORES',
+      'READDY':'READY','REAADY':'READY',
+      'BLACKENEING':'BLACKENING','BLACKNING':'BLACKENING','BLACKENNING':'BLACKENING',
+      'DCPL':'DCPLI',
+      'HOV':'HOV','HOVE':'HOV',
+      'SDV':'SDV','BLV':'BLV','FBV':'FBV','HTV':'HTV','HCV':'HCV',
+    };
+    const corrected = aliases[s] || s;
+    if (corrected.includes('READY')) return 'READY';
+    if (corrected.includes('STORE')) return 'STORES';
+    return corrected.replace(/\s+/g, '');
   }
 
   function normalizeInhouse(val) {
@@ -911,7 +1155,7 @@ function App() {
         status2,
         inhouse,
         currentStage: resolveLatestStage({ opStage, status1, status2 }),
-        timestamp:    pickField(r, ['timestamp','time stamp','last updated','op time']).substring(0,19),
+        timestamp:    normalizeTimestamp(pickField(r, ['timestamp','time stamp','last updated','op time'])),
       };
     }).filter(r => r.sc || r.po);
   }
@@ -1105,10 +1349,10 @@ function App() {
     } else if(ext === 'csv') {
       reader.onload = e => {
         try {
-          const wb = XLSX.read(e.target.result, {type:'string'});
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
-          finalizeRows(parseGenericRows(rows), file.name);
+          // Raw parser — preserves DD/MM date strings without SheetJS M/D auto-conversion
+          const rawAoA = parseRawCsv(e.target.result);
+          const rows   = parseRowsFromHeaderAoA(rawAoA);
+          finalizeRows(rows, file.name);
         } catch(err) { setUploadStatus({type:'error', msg:'Failed to parse CSV.', detail:String(err)}); }
       };
       reader.readAsText(file);
@@ -1168,9 +1412,10 @@ function App() {
       const res = await fetch(fetchUrl, {cache:'no-store'});
       if (!res.ok) throw new Error(`HTTP ${res.status} — make sure the sheet is shared "Anyone with the link"`);
       const text = await res.text();
-      const wb = XLSX.read(text, {type:'string'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      return parseWorksheet(ws);
+      // Use raw CSV parser (not XLSX) so date strings like "06/05/2026" are
+      // preserved as-is and NOT auto-converted to US MM/DD Date objects by SheetJS.
+      const rawAoA = parseRawCsv(text);
+      return parseRowsFromHeaderAoA(rawAoA);
     } else if (isExcelUrl) {
       const res = await fetch(fetchUrl, {cache:'no-store'});
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1224,36 +1469,23 @@ function App() {
   // ── FILTERED DATA ──────────────────────────────────────────────────────────
   // ── REQ 11: CENTRALIZED processedData — pendingDays & cycleTime on every row ──
   const processedData = useMemo(() => {
-  const now = new Date();
-
-  return data.map(row => ({
-    ...row,
-
-    pendingDays: row.timestamp
-      ? Math.floor(
-          (now - new Date(row.timestamp.replace(' ', 'T')))
-          / (1000 * 60 * 60 * 24)
-        )
-      : null,
-
-    cycleTime:
-      (row.timestamp && row.poDate)
-        ? Math.floor(
-            (
-              new Date(row.timestamp.replace(' ', 'T')) -
-              new Date(row.poDate)
-            ) / (1000 * 60 * 60 * 24)
-          )
-        : null,
-      }));
-    }, [data]);
+    const n = new Date();
+    const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    return data.map(row => ({
+      ...row,
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
+    }));
+  }, [data]);
     // ── ALL DB DATA: historical + live combined (for Database page only) ───────
   const allDbData = useMemo(() => {
+    const n = new Date();
+    const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
     const seen = new Set();
     return [...processedData, ...liveRows.map(row => ({
       ...row,
-      pendingDays: row.timestamp ? Math.floor((new Date() - new Date(row.timestamp.replace(' ','T'))) / 86400000) : null,
-      cycleTime: (row.timestamp && row.poDate) ? Math.floor((new Date(row.timestamp.replace(' ','T')) - new Date(row.poDate)) / 86400000) : null,
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }))].filter(r => {
       const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'');
       if (seen.has(key)) return false;
@@ -1263,17 +1495,13 @@ function App() {
   }, [processedData, liveRows]);
     // ── LIVE OPERATIONAL DATA — active WIP only (last 30 days, not completed) ──
   const liveData = useMemo(() => {
-    const now = new Date();
+    const n = new Date();
+    const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
     // Use liveRows directly — this is the current uploaded/synced operational snapshot
-    // NOT filtered from historical processedData
     return liveRows.map(row => ({
       ...row,
-      pendingDays: row.timestamp
-        ? Math.floor((now - new Date(row.timestamp.replace(' ', 'T'))) / (1000 * 60 * 60 * 24))
-        : null,
-      cycleTime: (row.timestamp && row.poDate)
-        ? Math.floor((new Date(row.timestamp.replace(' ', 'T')) - new Date(row.poDate)) / (1000 * 60 * 60 * 24))
-        : null,
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }));
   }, [liveRows]);
   // filtered uses liveData — operational pages only show active production
@@ -1324,25 +1552,27 @@ function App() {
     const inhouse = filtered.filter(r=>r.inhouse==='INHOUSE').length;
     const vendor = filtered.filter(r=>r.inhouse==='VENDOR').length;
 
-    const today = new Date().toISOString().substring(0,10);
+    const _n = new Date();
+    const today = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
 
-    // ── PO on-time analysis ──────────────────────────────────────────────────
-    let onTime=0, delayed=0, onTimePOs=[], delayedPOs=[];
+    // ── PO on-time analysis — denominator = COMPLETED POs only ──────────────
+    let onTime=0, delayed=0, onTimePOs=[], delayedPOs=[], completedPOCount=0;
     poGroups.forEach(pg => {
       const lastTs = getSCLastTimestamp(pg.items);
-      const days = daysBetween(pg.poDate, lastTs);
       const allDone = pg.items.every(i=>['READY','STORES','STOCK'].includes(i.currentStage));
-      if(allDone) {
-        if(days!==null && days<=TARGET_DAYS) { onTime++; onTimePOs.push({...pg,days}); }
+      if (allDone) {
+        completedPOCount++;
+        const days = daysBetween(pg.poDate, lastTs);
+        if (days!==null && days<=TARGET_DAYS) { onTime++; onTimePOs.push({...pg,days}); }
         else { delayed++; delayedPOs.push({...pg,days}); }
       } else {
         const elapsed = daysBetween(pg.poDate, today);
-        if(elapsed!==null && elapsed>TARGET_DAYS) { delayed++; delayedPOs.push({...pg,days:elapsed,inProgress:true}); }
+        if (elapsed!==null && elapsed>TARGET_DAYS) { delayed++; delayedPOs.push({...pg,days:elapsed,inProgress:true}); }
       }
     });
     const totalPOs = poGroups.length;
-    const onTimePct = totalPOs>0 ? Math.round(onTime/totalPOs*100) : 0;
-
+    // Correct: divide by completed POs only, not total POs
+    const onTimePct = completedPOCount>0 ? Math.round(onTime/completedPOCount*100) : 0;
     // ── MODULE 2: Stage-wise WIP (Lathe / FB / Stores) ──
     // Count items per stage
     const stageWIP = {};
@@ -1364,14 +1594,11 @@ function App() {
       return {...pg, days, done};
     }).sort((a,b)=>(b.days||0)-(a.days||0));
 
-    // ── Helper: date-only diff (PO received date → last timestamp DATE only) ─
+    // ── Helper: working-day diff (routes through workingDaysBetween) ─────────
     const dateDiff = (poDate, tsStr) => {
-      if(!poDate || !tsStr) return null;
-      const d1 = new Date(poDate.substring(0,10));
-      const d2 = new Date(tsStr.substring(0,10));
-      if(isNaN(d1)||isNaN(d2)) return null;
-      const diff = Math.round((d2-d1)/(1000*60*60*24));
-      return diff >= 0 ? diff : null;
+      if (!poDate || !tsStr) return null;
+      const d = workingDaysBetween(poDate, tsStr);
+      return (d !== null && d >= 0) ? d : null;
     };
 
     // ── MODULE 1: Total Production Output (Daily – Ready / Moved to Stores) ──
@@ -1424,10 +1651,10 @@ function App() {
     // For each SC, sort records by timestamp and calculate stage durations
     const stageDurations = {}; // stage → [duration days]
     Object.values(scRecordMap).forEach(records => {
-      // Sort records by timestamp for this SC
+      // Sort records by timestamp for this SC — use parseDateTime to avoid MM/DD misparse
       const sorted = records.sort((a, b) => {
-        const tA = new Date(a.timestamp);
-        const tB = new Date(b.timestamp);
+        const tA = parseDateTime(a.timestamp) || new Date(0);
+        const tB = parseDateTime(b.timestamp) || new Date(0);
         return tA - tB;
       });
       
@@ -1438,10 +1665,11 @@ function App() {
         
         if(!current.currentStage || !current.timestamp || !next.timestamp) continue;
         
-        // Calculate days between consecutive timestamps
-        const d1 = new Date(current.timestamp.substring(0, 10));
-        const d2 = new Date(next.timestamp.substring(0, 10));
-        const daysDiff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+        // Calculate working days between consecutive timestamps
+        const daysDiff = workingDaysBetween(
+          current.timestamp.substring(0, 10),
+          next.timestamp.substring(0, 10)
+        );
         
         if(daysDiff >= 0) {
           const stage = current.currentStage;
@@ -1567,21 +1795,24 @@ function App() {
       stats.avgActiveTime = stats.avgFromPO || 0;
     });
 
-    // ── NEW: Vendor Process Bottleneck Detection ────────────────────────────
-    // Find vendor operations with highest avg pending days (worst bottleneck)
+    // ── Vendor Process Bottleneck Detection ─────────────────────────────────
+    // Rank by: most SLA violations → highest avg pending days → highest item count
     const vendorBottlenecks = Object.values(vendorStats)
       .map(v => ({
         vendor: v.vendor,
         count: v.count,
         avgPending: v.avgPending,
-        score: v.avgPending * Math.log(v.count + 1), // weighted score
+        maxPending: v.maxPending,
         slaViolations: v.slaViolations,
         efficiency: v.processEfficiency,
       }))
-      .sort((a, b) => b.score - a.score);
-    
-    const topVendorBottleneck = vendorBottlenecks[0] || null;
+      .sort((a, b) =>
+        b.slaViolations - a.slaViolations ||
+        b.avgPending    - a.avgPending    ||
+        b.count         - a.count
+      );
 
+    const topVendorBottleneck = vendorBottlenecks[0] || null;
     // Old vendor time map (kept for backward compatibility with existing displays)
     const vendorTimeMap = {};
     filtered.forEach(r => {
@@ -1734,15 +1965,17 @@ function App() {
           </div>
 
           {/* PAGES */}
-          {activeNav==='overview' && <OverviewPage kpis={kpis} data={data} filtered={filtered}/>}
-          {activeNav==='production' && <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
-          {activeNav==='wip' && <WIPPage kpis={kpis} filtered={filtered}/>}
+          {activeNav==='overview'  && <OverviewPage kpis={kpis} data={data} filtered={filtered} liveData={liveData}/>}
+          {activeNav==='monthday'  && <MonthDayPage liveData={liveData}/>}
+          {activeNav==='database'  && <DatabasePage data={allDbData}/>}
+          {activeNav==='production'&& <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
+          {activeNav==='wip'       && <WIPPage kpis={kpis} filtered={filtered}/>}
           {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
-          {activeNav==='bottleneck' && <BottleneckPage kpis={kpis} filtered={filtered}/>}
-          {activeNav==='po' && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
-          {activeNav==='sc' && <SCPage kpis={kpis} scGroups={scGroups}/>}
-          {activeNav==='vendor' && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
-          {activeNav==='upload' && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
+          {activeNav==='bottleneck'&& <BottleneckPage kpis={kpis} filtered={filtered}/>}
+          {activeNav==='po'        && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
+          {activeNav==='sc'        && <SCPage kpis={kpis} scGroups={scGroups}/>}
+          {activeNav==='vendor'    && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
+          {activeNav==='upload'    && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState}/>}
         </div>
       </div>
     </div>
@@ -1757,7 +1990,11 @@ function OverviewPage({kpis, data, filtered}) {
   const donutRef = useRef();
   const typeChartRef = useRef();
 
-  const today = new Date().toISOString().substring(0,10);
+  const now = new Date();
+const today =
+  now.getFullYear() + '-' +
+  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(now.getDate()).padStart(2, '0');
   
   // FEATURE 1: Overview Categories - Daily Set, Delayed PO, InProgress
   const dailySetItems = data.filter(d => d.poDate === today);
@@ -1993,7 +2230,7 @@ function OverviewPage({kpis, data, filtered}) {
                         <span style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--accent1)'}}>{item.sc}</span>
                         <span style={{fontSize:10,color:'var(--text-primary)'}}>{item.product}</span>
                         <span style={{fontSize:10,color:'var(--text-muted)'}}>Stage: <strong>{item.currentStage}</strong></span>
-                        <span style={{fontSize:10,color:'var(--text-muted)'}}>Last update: {item.timestamp?.substring(0,16) || '—'}</span>
+                        <span style={{fontSize:10,color:'var(--text-muted)'}}>Last update: {fmtTs(item.timestamp)}</span>
                       </div>
                     </div>
                   ))}
@@ -2173,7 +2410,7 @@ function ProductionPage({kpis, filtered, scGroups}) {
                     <td className="mono text-accent fw7">{sg.sc}</td>
                     <td style={{fontSize:11}}>{sg.po}</td>
                     <td style={{fontSize:10,color:'var(--text-muted)',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sg.items.map(i=>i.product).join(' · ')}</td>
-                    <td className="mono" style={{fontSize:10}}>{lastTs?.substring(0,10)||'—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(lastTs)}</td>
                     <td><span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:17,color:(days||0)>21?'var(--danger)':'var(--success)'}}>{days??'—'}</span></td>
                     <td><span className={`status-pill ${hasStore?'s-stores':'s-ready'}`}>{hasStore?'STORES':'READY'}</span></td>
                   </tr>
@@ -2193,7 +2430,7 @@ function ProductionPage({kpis, filtered, scGroups}) {
                 <tr key={i}><td className="mono text-accent">{r.sc}</td><td>{r.po}</td><td>{r.product}</td>
                   <td><span className="status-pill badge-blue">{r.type||'—'}</span></td>
                   <td><span className="status-pill badge-green">{getProductCategory(r.type)}</span></td>
-                  <td>{r.inhouse}</td><td className="mono" style={{fontSize:10}}>{r.timestamp}</td>
+                  <td>{r.inhouse}</td><td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -2274,7 +2511,7 @@ function WIPPage({kpis, filtered}) {
                   <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage}</span></td>
                   <td style={{fontSize:10,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.status1}</td>
                   <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
-                  <td className="mono" style={{fontSize:10}}>{r.timestamp?.substring(0,10)}</td>
+                  <td className="mono" style={{fontSize:10}}>{fmtDate(r.timestamp)}</td>
                   <td>
                     <button onClick={() => setExpandedItem(expandedItem===i?null:i)} style={{background:'none',border:'none',color:'var(--accent1)',cursor:'pointer',fontSize:11}}>
                       {expandedItem===i?'▼':'▶'}
@@ -2299,7 +2536,9 @@ function WIPPage({kpis, filtered}) {
                         </div>
                         <div>
                           <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>Days Pending</div>
-                          <div style={{fontSize:13,fontWeight:700,color:r.timestamp?((new Date()-new Date(r.timestamp))/(1000*60*60*24)>2?'var(--danger)':'var(--success)'):''}}>{r.timestamp?Math.round((new Date()-new Date(r.timestamp))/(1000*60*60*24)):'-'}d</div>
+                          <div style={{fontSize:13,fontWeight:700,color:(r.pendingDays||0)>2?'var(--danger)':'var(--success)'}}>
+                            {r.pendingDays!=null?r.pendingDays:'-'}d
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -2746,11 +2985,11 @@ function POPage({kpis, poGroups, scGroups}) {
                         {p.po}
                       </button>
                     </td>
-                    <td className="mono" style={{fontSize:11}}>{p.poDate?.substring(0,10)}</td>
+                    <td className="mono" style={{fontSize:11}}>{fmtDate(p.poDate)}</td>
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:15,
                       color:'var(--text-muted)'}}>{p.scs.length}</td>
                     <td>{p.items.length}</td>
-                    <td className="mono" style={{fontSize:10}}>{p.lastTs?.substring(0,10)||'—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(p.lastTs)}</td>
                     <td>
                       <span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,
                         color:p.done&&p.days!=null&&p.days>21?'var(--danger)':
@@ -2815,7 +3054,7 @@ function POPage({kpis, poGroups, scGroups}) {
                       <td className="mono text-accent fw7">{sg.sc}</td>
                       <td>{sg.items.length}</td>
                       <td className="mono" style={{fontSize:10}}>
-                        {scLastTs?.substring(0,10)||'—'}
+                        {fmtDate(scLastTs)}
                       </td>
                       <td>
                         <span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,
@@ -2884,9 +3123,9 @@ function SCPage({kpis, scGroups}) {
                       </button>
                     </td>
                     <td style={{fontSize:11}}>{sg.po}</td>
-                    <td className="mono" style={{fontSize:11}}>{sg.poDate?.substring(0,10)}</td>
+                    <td className="mono" style={{fontSize:11}}>{fmtDate(sg.poDate)}</td>
                     <td>{sg.items.length}</td>
-                    <td className="mono" style={{fontSize:10}}>{lastTs?.substring(0,16)||'—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtTs(lastTs)}</td>
                     <td><span style={{fontFamily:'Rajdhani',fontSize:18,fontWeight:700,color:done&&days!=null&&days>21?'var(--danger)':done?'var(--success)':'var(--warning)'}}>{days??'—'}</span></td>
                     <td><span className={`status-pill ${done?'s-ready':'s-wip'}`}>{done?'COMPLETE':'IN PROGRESS'}</span></td>
                   </tr>
@@ -2935,7 +3174,7 @@ function SCPage({kpis, scGroups}) {
                     </td>
                     <td style={{fontSize:10,maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.status1||'—'}</td>
                     <td><span className={`status-pill ${item.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{item.inhouse||'INHOUSE'}</span></td>
-                    <td className="mono" style={{fontSize:10}}>{item.timestamp?.substring(0,16) || '—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtTs(item.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2980,7 +3219,11 @@ function VendorPage({kpis, data, setActiveNav}) {
   const venPct = 100-inhPct;
   const worstVendor = vendors.reduce((a,b)=>(b.avgDays||0)>(a.avgDays||0)?b:a, vendors[0]||{});
   const mostDelayed = vendors.reduce((a,b)=>(b.delayed||0)>(a.delayed||0)?b:a, vendors[0]||{});
-  const todayRef = new Date().toISOString().substring(0,10);
+  const now = new Date();
+  const todayRef =
+  now.getFullYear() + '-' +
+  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(now.getDate()).padStart(2, '0');
 
   return (
     <div>
@@ -3154,7 +3397,7 @@ function VendorPage({kpis, data, setActiveNav}) {
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:'var(--accent1)'}}>{v.avgFromPO!=null?`${v.avgFromPO}d`:'—'}</td>
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:v.processEfficiency>=80?'var(--success)':v.processEfficiency>=60?'var(--warning)':'var(--danger)'}}>{v.processEfficiency!=null?`${v.processEfficiency}%`:'—'}</td>
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:v.slaViolations>0?'var(--danger)':'var(--success)'}}>{v.slaViolations||0}</td>
-                    <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{latestTs?.substring(0,16)||'—'}</td>
+                    <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{fmtTs(latestTs)}</td>
                     <td style={{fontSize:12}}>{rating}</td>
                     <td style={{fontSize:10,color:'var(--text-muted)',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                       {v.items.slice(0,3).map(i=>i.product).join(' · ')}
@@ -3207,7 +3450,7 @@ function VendorPage({kpis, data, setActiveNav}) {
                       <td style={{fontSize:11}}>{r.po||'—'}</td>
                       <td style={{fontSize:11,maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
                       <td><span className="status-pill s-vendor">{r.currentStage||'UNKNOWN'}</span></td>
-                      <td className="mono" style={{fontSize:10}}>{r.timestamp?.substring(0,16)||'—'}</td>
+                      <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                       <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:overdue?'var(--danger)':'var(--success)'}}>{pending!=null?`${pending}d`:'—'}</td>
                       <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:'var(--accent1)'}}>{cycle!=null?`${cycle}d`:'—'}</td>
                       <td><span className={`status-pill ${r.slaViolation?'badge-red':'badge-green'}`}>{slaStatus}</span></td>
@@ -3258,7 +3501,11 @@ function VendorPage({kpis, data, setActiveNav}) {
                   .filter(r=>r.sc===selectedSC && r.inhouse==='VENDOR')
                   .map((item, idx)=>{
                     const cycleTime = calculateProcessCycleTime(item.poDate, item.timestamp);
-                    const today = new Date().toISOString().substring(0,10);
+                    const now = new Date();
+                    const today =
+                    now.getFullYear() + '-' +
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(now.getDate()).padStart(2, '0');
                     const pendingDays = daysBetween(item.timestamp, today);
                     const isDelayed = pendingDays !== null && pendingDays > 2;
                     const isOnTime = cycleTime !== null && cycleTime <= 21;
@@ -3274,7 +3521,7 @@ function VendorPage({kpis, data, setActiveNav}) {
                             {item.currentStage}
                           </span>
                         </td>
-                        <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{item.timestamp?.substring(0,16)||'—'}</td>
+                        <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{fmtTs(item.timestamp)}</td>
                         <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:13,color:'var(--accent1)'}}>
                           {cycleTime!==null?`${cycleTime}d`:'—'}
                         </td>
@@ -3311,7 +3558,13 @@ function VendorPage({kpis, data, setActiveNav}) {
                 const totalItems = scItems.length;
                 const completedItems = scItems.filter(r=>['READY','STORES','STOCK'].includes(r.currentStage)).length;
                 const delayedItems = scItems.filter(r=>{
-                  const pending = daysBetween(r.timestamp, new Date().toISOString().substring(0,10));
+                  const now = new Date();
+const today =
+  now.getFullYear() + '-' +
+  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(now.getDate()).padStart(2, '0');
+
+const pending = daysBetween(r.timestamp, today);
                   return pending !== null && pending > 2;
                 }).length;
                 const onTimeItems = scItems.filter(r=>{
@@ -3388,7 +3641,11 @@ function VendorPage({kpis, data, setActiveNav}) {
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
               {(() => {
                 const cycle = calculateProcessCycleTime(selectedItem.poDate, selectedItem.timestamp);
-                const today = new Date().toISOString().substring(0,10);
+                const now = new Date();
+                const today =
+                  now.getFullYear() + '-' +
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(now.getDate()).padStart(2, '0');
                 const pending = daysBetween(selectedItem.timestamp, today);
                 const isDelayed = pending !== null && pending > 2;
                 const isOnTime = cycle !== null && cycle <= 21;
@@ -3409,7 +3666,7 @@ function VendorPage({kpis, data, setActiveNav}) {
                     </div>
                     <div style={{background:'rgba(0,0,0,0.2)',border:'1px solid var(--border)',borderRadius:8,padding:12}}>
                       <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:6}}>Last Update</div>
-                      <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-secondary)'}}>{selectedItem.timestamp?.substring(0,16)||'—'}</div>
+                      <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-secondary)'}}>{fmtTs(selectedItem.timestamp)}</div>
                     </div>
                   </>
                 );
@@ -3419,7 +3676,11 @@ function VendorPage({kpis, data, setActiveNav}) {
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
               {(() => {
                 const cycle = calculateProcessCycleTime(selectedItem.poDate, selectedItem.timestamp);
-                const today = new Date().toISOString().substring(0,10);
+                const now = new Date();
+                const today =
+                  now.getFullYear() + '-' +
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(now.getDate()).padStart(2, '0');
                 const pending = daysBetween(selectedItem.timestamp, today);
                 const isDelayed = pending !== null && pending > 2;
                 const isOnTime = cycle !== null && cycle <= 21;
@@ -3487,517 +3748,7 @@ function VendorPage({kpis, data, setActiveNav}) {
   );
 }
 
-function MonthDayPage({data}) {
-  const [selectedMonth, setSelectedMonth] = useState(null);
-  const [dateMode, setDateMode] = useState('timestamp');
-  const months = useMemo(() => {
-    const map = {};
-    data.forEach(row => {
-      const dateStr = dateMode === 'timestamp'
-        ? (row.timestamp ? row.timestamp.substring(0,10) : null)
-        : (row.poDate ? row.poDate.substring(0,10) : null);
-      if (!dateStr) return;
-      const monthKey = dateStr.substring(0,7);
-      if (!map[monthKey]) {
-        map[monthKey] = { month: monthKey, poSet: new Set(), scSet: new Set(), items: [], daily: {} };
-      }
-      map[monthKey].poSet.add(row.po);
-      map[monthKey].scSet.add(row.sc);
-      map[monthKey].items.push(row);
-      const dayKey = dateStr.substring(0,10);
-      if (!map[monthKey].daily[dayKey]) map[monthKey].daily[dayKey] = { date: dayKey, items: [], ready: 0, stores: 0, wip: 0 };
-      map[monthKey].daily[dayKey].items.push(row);
-      if (row.currentStage === 'READY') map[monthKey].daily[dayKey].ready++;
-      else if (row.currentStage === 'STORES') map[monthKey].daily[dayKey].stores++;
-      else map[monthKey].daily[dayKey].wip++;
-    });
-    return Object.values(map).sort((a,b) => b.month.localeCompare(a.month));
-  }, [data, dateMode]);
 
-  const selected = selectedMonth ? months.find(m => m.month === selectedMonth) : null;
-  const monthTitle = (month) => {
-    const [year, mon] = month.split('-');
-    const date = new Date(`${month}-01`);
-    return date.toLocaleString('en-IN', { month:'long', year:'numeric' });
-  };
-
-  return (
-    <div>
-      <div className="section-title">Month / Day <span>View</span><div className="section-line"/></div>
-      <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
-        <button className={`filter-btn ${dateMode==='timestamp' ? 'active' : ''}`} onClick={()=>{setDateMode('timestamp');setSelectedMonth(null);}}>
-          📅 Activity Date (Timestamp)
-        </button>
-        <button className={`filter-btn ${dateMode==='poDate' ? 'active' : ''}`} onClick={()=>{setDateMode('poDate');setSelectedMonth(null);}}>
-          📋 PO Received Date
-        </button>
-        <span style={{fontSize:11,color:'var(--text-muted)',alignSelf:'center',marginLeft:4}}>
-          {dateMode==='timestamp' ? 'Grouped by last update / activity date' : 'Grouped by PO received date'}
-        </span>
-      </div>
-      <div className="chart-card" style={{marginBottom:20}}>
-        <div className="chart-title">Monthly Summary</div>
-        <div className="chart-sub">Click a month to drill into daily PO / SC details.</div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginTop:16}}>
-          {months.map(month => {
-            const ready = month.items.filter(r => r.currentStage === 'READY').length;
-            return (
-              <button key={month.month} onClick={() => setSelectedMonth(month.month)} style={{border:'1px solid var(--border)',borderRadius:12,padding:18,textAlign:'left',background:selectedMonth===month.month?'rgba(0,201,255,0.12)':'var(--bg-card)',color:'var(--text-primary)',cursor:'pointer'}}>
-                <div style={{fontSize:14,fontWeight:700,color:'var(--accent1)'}}>{monthTitle(month.month)}</div>
-                <div style={{fontSize:24,fontWeight:700,margin:'12px 0'}}>{month.items.length}</div>
-                <div style={{fontSize:11,color:'var(--text-muted)'}}>{month.poSet.size} POs · {month.scSet.size} SCs</div>
-                <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:8}}>{ready} ready items</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {selected ? (
-        <div className="chart-card" style={{marginBottom:20}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-            <div>
-              <div className="chart-title">{monthTitle(selected.month)} — Daily Breakdown</div>
-              <div className="chart-sub">{dateMode==='timestamp' ? 'Activity/timestamp date grouped by day' : 'PO received date grouped by day'}</div>
-            </div>
-            <button className="filter-btn" onClick={()=>setSelectedMonth(null)}>Back to months</button>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
-            {Object.values(selected.daily).sort((a,b)=>a.date.localeCompare(b.date)).map(day => (
-              <div key={day.date} style={{border:'1px solid var(--border)',borderRadius:12,padding:14,background:'var(--bg-secondary)'}}>
-                <div style={{fontSize:10,fontFamily:'Share Tech Mono',color:'var(--text-muted)',marginBottom:8}}>{day.date}</div>
-                <div style={{fontSize:18,fontWeight:700,color:'var(--text-primary)'}}>{day.items.length} items</div>
-                <div style={{fontSize:10,color:'var(--accent1)',marginTop:10}}>{[...new Set(day.items.map(r=>r.po))].length} POs · {[...new Set(day.items.map(r=>r.sc))].length} SCs</div>
-                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10,fontSize:10}}>
-                  <span className="status-pill badge-green">READY {day.ready}</span>
-                  <span className="status-pill badge-blue">STORES {day.stores}</span>
-                  <span className="status-pill badge-yellow">WIP {day.wip}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="chart-card" style={{marginBottom:20}}>
-          <div className="chart-title">Month / Day Explanation</div>
-          <div className="chart-sub">Select a month card to see per-day counts of POs, SCs, and item statuses.</div>
-          <div style={{fontSize:11,color:'var(--text-secondary)',marginTop:12,lineHeight:1.7}}>
-            <b>Activity Date (Timestamp)</b> — groups items by their last update/timestamp. Use this to see May 2026 activity even when POs were received in April.<br/>
-            <b>PO Received Date</b> — groups items by the date the PO was received. Use this for order intake analysis.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DatabasePage({data, dateRange, setDateRange, serverStatus}) {
-  const [dateMode, setDateMode] = useState('poDate');
-  const [stageFilter, setStageFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [afterFilter, setAfterFilter] = useState('');
-  const [autoCorrect, setAutoCorrect] = useState(false);   // ← NEW
-
-  // Apply spell-corrections when checkbox is ON
-  const correctedData = React.useMemo(() => {
-    if (!autoCorrect) return data;
-    return data.map(row => ({
-      ...row,
-      currentStage: correctStageName(row.currentStage),
-    }));
-  }, [data, autoCorrect]);
-  const availableStages = useMemo(() => [...new Set(correctedData.map(r => r.currentStage).filter(Boolean))].sort(), [correctedData]);
-  const availableTypes  = useMemo(() => [...new Set(correctedData.map(r => r.type).filter(Boolean))].sort(), [correctedData]);
-  const availablePOs    = useMemo(() => [...new Set(correctedData.map(r => r.po).filter(Boolean))].sort(), [correctedData]);
-  const filteredByDate = useMemo(() => {
-    return correctedData.filter(row => {
-      const date = dateMode === 'timestamp' ? row.timestamp?.substring(0,10) : row.poDate || '';
-      if (!date && (dateRange.from || dateRange.to)) return false;
-      if (dateRange.from && date && date < dateRange.from) return false;
-      if (dateRange.to && date && date > dateRange.to) return false;
-      if (stageFilter && row.currentStage !== stageFilter) return false;
-      if (typeFilter && row.type !== typeFilter) return false;
-      if (locationFilter && row.inhouse !== locationFilter) return false;
-      if (afterFilter && row.po !== afterFilter) return false;
-      return true;
-    });
-    }, [correctedData, dateMode, dateRange, stageFilter, typeFilter, locationFilter, afterFilter]);
-
-  // ── KPI TOTALS — reflects active filters (filteredByDate) ──
-  const fullDbKpis = useMemo(() => {
-    const totalPOs = new Set(filteredByDate.map(r => r.po).filter(Boolean)).size;
-    const totalSCs = new Set(filteredByDate.map(r => r.sc).filter(Boolean)).size;
-    let airplugs = 0, masters = 0, accessories = 0;
-    filteredByDate.forEach(r => {
-      const t = (r.type || '').toUpperCase();
-      if (t === 'APG' || t === 'ARG') airplugs++;
-      else if (t === 'SPG' || t === 'SRG' || t === 'SP') masters++;
-      else accessories++;
-    });
-    return { totalPOs, totalSCs, airplugs, masters, accessories };
-  }, [filteredByDate]);
-
-  // ── DATABASE VISIBLE ROWS: filters applied + only READY / STORES / STOCK ──
-  // Uses filteredByDate so all active filters (date, stage, type, location, PO) are respected
-  const databaseVisibleRows = useMemo(() => {
-    return filteredByDate.filter(row => {
-      const stage = String(row.currentStage || '').toUpperCase();
-      return ['READY', 'STORES', 'STOCK'].includes(stage);
-    });
-  }, [filteredByDate]);
-  // ── PO-BASED OPERATIONAL ANALYTICS ────────────────────────────────────────
-  const databasePOAnalytics = React.useMemo(() => {
-    const FINAL = ['STOCK','STORES','READY'];
-    const poStateMap = {};
-
-    filteredByDate.forEach(row => {
-      const po = row.po;
-      if (!po) return;
-      if (!poStateMap[po]) {
-        poStateMap[po] = { po, stage: 'INPROCESS', type: row.type, items: [], scs: new Set() };
-      }
-      poStateMap[po].items.push(row);
-      if (row.sc) poStateMap[po].scs.add(row.sc);
-      // Priority: STOCK > STORES > READY > INPROCESS
-      const cur = poStateMap[po].stage;
-      const cs  = (row.currentStage || '').toUpperCase();
-      if (cs === 'STOCK')  poStateMap[po].stage = 'STOCK';
-      else if (cs === 'STORES' && cur !== 'STOCK')  poStateMap[po].stage = 'STORES';
-      else if (cs === 'READY'  && !['STOCK','STORES'].includes(cur)) poStateMap[po].stage = 'READY';
-    });
-
-    const poList = Object.values(poStateMap).map(p => ({
-      ...p,
-      scCount: p.scs.size,
-      itemCount: p.items.length,
-      category: getProductCategory(p.type),
-    }));
-
-    const byState = { READY:[], STORES:[], STOCK:[], INPROCESS:[] };
-    poList.forEach(p => { (byState[p.stage] || byState.INPROCESS).push(p); });
-
-    function stateStats(poArr) {
-      const cats = { AIRPLUG:0, MASTER:0, ACCESSORY:0 };
-      let totalSCs = 0;
-      poArr.forEach(p => {
-        cats[getProductCategory(p.type)] = (cats[getProductCategory(p.type)] || 0) + 1;
-        totalSCs += p.scCount;
-      });
-      return { count: poArr.length, ...cats, totalSCs };
-    }
-
-    return {
-      totalPOs: poList.length,
-      byState,
-      ready:     stateStats(byState.READY),
-      stores:    stateStats(byState.STORES),
-      stock:     stateStats(byState.STOCK),
-      inprocess: stateStats(byState.INPROCESS),
-    };
-  }, [filteredByDate]);
-
-  function handlePrint() {
-    window.print();
-  }
-
-  function handleDownloadPdf() {
-    const { jsPDF } = window.jspdf || {};
-    if (!jsPDF) {
-      alert('PDF export library is not loaded.');
-      return;
-    }
-    const doc = new jsPDF('landscape', 'pt', 'a4');
-    const title = 'Velan Database Report';
-    const generatedAt = new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    const rangeText = dateRange.from || dateRange.to ? `${dateRange.from || '...'} → ${dateRange.to || '...'}` : 'All dates';
-
-    doc.setFontSize(16);
-    doc.text(title, 40, 40);
-    doc.setFontSize(10);
-    doc.text(`Date range: ${rangeText}`, 40, 60);
-    doc.text(`Rows: ${filteredByDate.length}`, 40, 74);
-    doc.text(`Exported: ${generatedAt}`, 40, 88);
-
-    const header = [['PO', 'PO DATE', 'SC', 'PRODUCT', 'TYPE', 'CATEGORY', 'STAGE', 'INHOUSE', 'TIMESTAMP']];
-    const rows = filteredByDate.slice(0, 250).map(row => [
-      row.po || '—',
-      row.poDate || '—',
-      row.sc || '—',
-      String(row.product || '—').substring(0, 48),
-      row.type || '—',
-      getProductCategory(row.type),
-      row.currentStage || '—',
-      row.inhouse || '—',
-      row.timestamp || '—',
-    ]);
-
-    doc.autoTable({
-      startY: 110,
-      head: header,
-      body: rows,
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [0, 201, 255], textColor: 20 },
-      columnStyles: { 3: { cellWidth: 140 }, 8: { cellWidth: 100 } },
-      margin: { left: 40, right: 40 },
-      theme: 'striped',
-    });
-
-    if (filteredByDate.length > 250) {
-      doc.setFontSize(10);
-      doc.text(`Only the first 250 filtered rows are included in this export.`, 40, doc.lastAutoTable.finalY + 24);
-    }
-
-    const fileName = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.pdf`;
-    doc.save(fileName);
-  }
-
-  function handleDownloadXlsx() {
-    const ws = XLSX.utils.json_to_sheet(filteredByDate.map(row => ({
-      PO: row.po,
-      'PO DATE': row.poDate,
-      SC: row.sc,
-      PRODUCT: row.product,
-      TYPE: row.type,
-      CATEGORY: getProductCategory(row.type),
-      STAGE: row.currentStage,
-      INHOUSE: row.inhouse,
-      TIMESTAMP: row.timestamp,
-    })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Database');
-    XLSX.writeFile(wb, `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.xlsx`);
-  }
-
-  function handleDownloadCsv() {
-    const ws = XLSX.utils.json_to_sheet(filteredByDate.map(row => ({
-      PO: row.po,
-      'PO DATE': row.poDate,
-      SC: row.sc,
-      PRODUCT: row.product,
-      TYPE: row.type,
-      CATEGORY: getProductCategory(row.type),
-      STAGE: row.currentStage,
-      INHOUSE: row.inhouse,
-      TIMESTAMP: row.timestamp,
-    })));
-    const csv = XLSX.utils.sheet_to_csv(ws);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  function handleDownloadJson() {
-    const blob = new Blob([JSON.stringify(filteredByDate, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Velan_Database___Reports_${new Date().toISOString().substring(0,10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  function setQuickRange(days) {
-    const end = new Date();
-    const start = new Date(end);
-    start.setDate(start.getDate() - days + 1);
-    setDateRange({ from: start.toISOString().substring(0,10), to: end.toISOString().substring(0,10) });
-  }
-
-  const filterSummary = `FILTER ACTIVE: ${dateRange.from || '...'} → ${dateRange.to || '...'} (${dateMode === 'timestamp' ? 'Timestamp' : 'PO Date'}) | Stage: ${stageFilter || 'All'} | Type: ${typeFilter || 'All'} | Location: ${locationFilter || 'All'} | PO: ${afterFilter || 'All'}`;
-
-  return (
-    <div>
-      <div className="section-title">Database <span>& Reports</span><div className="section-line"/></div>
-      {serverStatus === 'offline' && (
-        <div style={{marginBottom:20,padding:14,borderRadius:10,background:'rgba(0,201,255,0.08)',border:'1px solid rgba(0,201,255,0.25)',color:'var(--text-primary)'}}>
-          ✅ {data.length} rows restored from local database
-        </div>
-      )}
-      <div className="chart-card" style={{marginBottom:20}}>
-        <div className="chart-title">Date Range & Filters</div>
-        <div className="chart-sub">PO Received Date / Last Update Timestamp</div>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:16,alignItems:'center'}}>
-          <button className={`filter-btn ${dateMode==='poDate' ? 'active' : ''}`} onClick={()=>setDateMode('poDate')}>PO Received Date</button>
-          <button className={`filter-btn ${dateMode==='timestamp' ? 'active' : ''}`} onClick={()=>setDateMode('timestamp')}>Last Update Timestamp</button>
-        </div>
-        <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:16,alignItems:'center'}}>
-          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>From
-            <input type="date" value={dateRange.from} onChange={e => setDateRange(prev => ({...prev, from: e.target.value}))} className="filter-input" style={{width:160}} />
-          </label>
-          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>To
-            <input type="date" value={dateRange.to} onChange={e => setDateRange(prev => ({...prev, to: e.target.value}))} className="filter-input" style={{width:160}} />
-          </label>
-          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Stage
-            <select className="filter-select" value={stageFilter} onChange={e=>setStageFilter(e.target.value)} style={{width:160}}>
-              <option value="">All Stages</option>
-              {availableStages.map(stage => <option key={stage} value={stage}>{stage}</option>)}
-            </select>
-          </label>
-          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Type
-            <select className="filter-select" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:160}}>
-              <option value="">All Types</option>
-              {availableTypes.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
-          </label>
-          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>Location
-            <select className="filter-select" value={locationFilter} onChange={e=>setLocationFilter(e.target.value)} style={{width:160}}>
-              <option value="">All</option>
-              <option value="INHOUSE">Inhouse</option>
-              <option value="VENDOR">Vendor</option>
-            </select>
-          </label>
-          <label style={{display:'flex',flexDirection:'column',fontSize:11,color:'var(--text-muted)'}}>After
-            <select className="filter-select" value={afterFilter} onChange={e=>setAfterFilter(e.target.value)} style={{width:160}}>
-              <option value="">All POs</option>
-              {availablePOs.map(po => <option key={po} value={po}>{po}</option>)}
-            </select>
-          </label>
-          <button className="filter-btn" onClick={() => { setDateRange({ from:'', to:'' }); setStageFilter(''); setTypeFilter(''); setLocationFilter(''); setAfterFilter(''); }}>✕ Reset</button>
-          <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:12,color: autoCorrect ? 'var(--accent3)' : 'var(--text-secondary)',border:`1px solid ${autoCorrect ? 'var(--accent3)' : 'var(--border)'}`,borderRadius:6,padding:'6px 12px',background: autoCorrect ? 'rgba(0,255,157,0.08)' : 'transparent',transition:'all 0.2s'}}>
-            <input
-              type="checkbox"
-              checked={autoCorrect}
-              onChange={e => { setAutoCorrect(e.target.checked); setStageFilter(''); }}
-              style={{accentColor:'var(--accent3)',width:14,height:14,cursor:'pointer'}}
-            />
-            <span style={{fontFamily:'Share Tech Mono,monospace',letterSpacing:1}}>✓ AUTO-CORRECT STAGES</span>
-          </label>
-          {autoCorrect && (
-            <div style={{width:'100%',marginTop:6,padding:'8px 12px',borderRadius:6,background:'rgba(0,255,157,0.06)',border:'1px solid rgba(0,255,157,0.2)',fontSize:11,color:'var(--accent3)',fontFamily:'Share Tech Mono,monospace'}}>
-              ⚡ ACTIVE — misspelled stage names in your sheet are being auto-corrected. Corrections: {Object.keys(STAGE_CORRECTIONS).filter(k => [...new Set(data.map(r=>r.currentStage))].map(s=>(s||'').toUpperCase()).includes(k)).join(', ') || 'none detected yet'}
-            </div>
-          )}
-        </div>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
-          {[7,14,30,60,90].map(days => (
-            <button key={days} className="filter-btn" onClick={()=>setQuickRange(days)}>{days} Days</button>
-          ))}
-          <button className="filter-btn" onClick={()=>setQuickRange(180)}>6 Months</button>
-        </div>
-        <div style={{marginTop:14,padding:14,background:'rgba(0,201,255,0.06)',border:'1px solid rgba(0,201,255,0.16)',borderRadius:10,fontSize:11,color:'var(--text-secondary)'}}>
-          {filterSummary}
-        </div>
-      </div>
-
-      <div className="chart-card" style={{marginBottom:20}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <div>
-            <div className="chart-title">Download Report</div>
-            <div className="chart-sub">Export the current filtered dataset in any format.</div>
-          </div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-            <button className="filter-btn" onClick={handlePrint}>Print</button>
-            <button className="filter-btn" onClick={handleDownloadPdf}>PDF</button>
-            <button className="filter-btn" onClick={handleDownloadXlsx}>Excel</button>
-            <button className="filter-btn" onClick={handleDownloadCsv}>CSV</button>
-            <button className="filter-btn" onClick={handleDownloadJson}>JSON</button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── FULL-DB KPI CARDS ── */}
-      <div className="kpi-grid" style={{marginBottom:20}}>
-        <KPICard label="TOTAL POs"         value={fullDbKpis.totalPOs}    sub="unique purchase orders · full DB"  color1="#00c9ff" color2="#0fa8e0" />
-        <KPICard label="TOTAL SCs"         value={fullDbKpis.totalSCs}    sub="unique job sets · full DB"         color1="#00e676" color2="#00c9ff" />
-        <KPICard label="TOTAL AIRPLUGS"    value={fullDbKpis.airplugs}    sub="rows · type APG + ARG"             color1="#b24bff" color2="#00c9ff" />
-        <KPICard label="TOTAL MASTERS"     value={fullDbKpis.masters}     sub="rows · type SPG + SRG + SP"        color1="#ffd60a" color2="#ff6b35" />
-        <KPICard label="TOTAL ACCESSORIES" value={fullDbKpis.accessories}  sub="rows · all remaining types"       color1="#00e676" color2="#b24bff" />
-      </div>
-
-      {/* ── DATABASE RECORDS TABLE (READY / STORES / STOCK only) ── */}
-      <div className="chart-card" style={{marginBottom:20}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <div>
-            <div className="chart-title">Database Records</div>
-            <div className="chart-sub">
-              Showing only completed stages: READY · STORES · STOCK &nbsp;·&nbsp;
-              <span style={{color:'var(--accent3)',fontFamily:'Share Tech Mono,monospace',fontSize:11}}>
-                {databaseVisibleRows.length} rows
-              </span>
-            </div>
-          </div>
-        </div>
-        <div style={{overflowX:'auto',maxHeight:520,overflowY:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-            <thead>
-              <tr>
-                {['PO','PO DATE','SC','PRODUCT','TYPE','CATEGORY','STAGE','INHOUSE','TIMESTAMP'].map(h => (
-                  <th key={h} style={{
-                    padding:'8px 10px',
-                    background:'var(--bg-secondary)',
-                    color:'var(--text-muted)',
-                    fontFamily:'Share Tech Mono,monospace',
-                    fontSize:10,
-                    letterSpacing:1,
-                    borderBottom:'1px solid var(--border)',
-                    position:'sticky',
-                    top:0,
-                    whiteSpace:'nowrap',
-                    textAlign:'left',
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {databaseVisibleRows.slice(0, 500).map((row, i) => {
-                const stage = (row.currentStage || '').toUpperCase();
-                const stageColor = stage === 'READY' ? '#00e676' : stage === 'STORES' ? '#00c9ff' : '#ffd60a';
-                const cat = getProductCategory(row.type);
-                const catColor = cat === 'AIRPLUG' ? '#00c9ff' : cat === 'MASTER' ? '#b24bff' : '#ffd60a';
-                return (
-                  <tr key={i} style={{borderBottom:'1px solid rgba(26,58,92,0.4)',background: i%2===0 ? 'transparent' : 'rgba(13,31,53,0.4)'}}>
-                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',color:'var(--accent1)',whiteSpace:'nowrap'}}>{row.po || '—'}</td>
-                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.poDate || '—'}</td>
-                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',color:'var(--accent3)',whiteSpace:'nowrap'}}>{row.sc || '—'}</td>
-                    <td style={{padding:'7px 10px',color:'var(--text-primary)',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={row.product}>{row.product || '—'}</td>
-                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.type || '—'}</td>
-                    <td style={{padding:'7px 10px',whiteSpace:'nowrap'}}>
-                      <span style={{
-                        padding:'2px 8px',borderRadius:4,fontSize:10,
-                        fontFamily:'Share Tech Mono,monospace',
-                        background:`${catColor}18`,color:catColor,
-                        border:`1px solid ${catColor}44`,
-                      }}>{cat}</span>
-                    </td>
-                    <td style={{padding:'7px 10px',whiteSpace:'nowrap'}}>
-                      <span style={{
-                        padding:'2px 8px',borderRadius:4,fontSize:10,
-                        fontFamily:'Share Tech Mono,monospace',
-                        background:`${stageColor}18`,color:stageColor,
-                        border:`1px solid ${stageColor}44`,
-                      }}>{row.currentStage || '—'}</span>
-                    </td>
-                    <td style={{padding:'7px 10px',color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{row.inhouse || '—'}</td>
-                    <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>{row.timestamp || '—'}</td>
-                  </tr>
-                );
-              })}
-              {databaseVisibleRows.length === 0 && (
-                <tr><td colSpan={9} style={{padding:32,textAlign:'center',color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',fontSize:12}}>
-                  NO RECORDS FOUND — no items at READY / STORES / STOCK stage
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-          {databaseVisibleRows.length > 500 && (
-            <div style={{padding:'10px 14px',fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',borderTop:'1px solid var(--border)'}}>
-              ⚡ Showing first 500 of {databaseVisibleRows.length} rows. Export to view all records.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState, historyConfig, setHistoryConfig, onSyncHistory, importState}) {
   const [drag, setDrag] = useState(false);
@@ -4038,7 +3789,12 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Production');
-    XLSX.writeFile(wb, `velan_export_${new Date().toISOString().substring(0,10)}.xlsx`);
+    const d = new Date();
+    const exportDate =
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+    XLSX.writeFile(wb, `velan_export_${exportDate}.xlsx`);
   }
 
   const statusColors = {
@@ -4249,7 +4005,180 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
     </div>
   );
 }
+// ─── MONTH / DAY VIEW PAGE ────────────────────────────────────────────────────
+function MonthDayPage({ liveData }) {
+  const todayDate = new Date();
+  const [viewMode, setViewMode] = useState('month');
+  const [selMonth, setSelMonth] = useState(todayDate.getMonth());
+  const [selYear]  = useState(todayDate.getFullYear());
+  const [selDay, setSelDay] = useState(
+    `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,'0')}-${String(todayDate.getDate()).padStart(2,'0')}`
+  );
+  const [expandedPO, setExpandedPO] = useState(null);
 
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const monthItems = useMemo(() => {
+    const prefix = `${selYear}-${String(selMonth+1).padStart(2,'0')}`;
+    return liveData.filter(r => r.poDate && r.poDate.startsWith(prefix));
+  }, [liveData, selMonth, selYear]);
+
+  const monthStats = useMemo(() => {
+    const pos    = new Set(monthItems.map(r=>r.po)).size;
+    const scs    = new Set(monthItems.map(r=>r.sc)).size;
+    const delayed = monthItems.filter(r => (r.pendingDays||0) > TARGET_DAYS).length;
+    const ready   = monthItems.filter(r => r.currentStage==='READY').length;
+    const stores  = monthItems.filter(r => r.currentStage==='STORES').length;
+    return { total:monthItems.length, pos, scs, delayed, ready, stores };
+  }, [monthItems]);
+
+  const dayItems = useMemo(() =>
+    liveData.filter(r => r.poDate === selDay),
+  [liveData, selDay]);
+
+  const groupByPO = items => {
+    const map = {};
+    items.forEach(r => {
+      if (!map[r.po]) map[r.po] = { po:r.po, poDate:r.poDate, scs:{} };
+      if (!map[r.po].scs[r.sc]) map[r.po].scs[r.sc] = [];
+      map[r.po].scs[r.sc].push(r);
+    });
+    return Object.values(map);
+  };
+
+  return (
+    <div>
+      <div className="section-title">Month / Day <span>View</span><div className="section-line"/></div>
+      <div className="tabs">
+        <div className={`tab ${viewMode==='month'?'active':''}`} onClick={()=>setViewMode('month')}>📅 Month View</div>
+        <div className={`tab ${viewMode==='day'?'active':''}`} onClick={()=>setViewMode('day')}>📆 Day View</div>
+      </div>
+
+      {viewMode==='month' && (
+        <div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
+            {MONTHS.map((m,i)=>(
+              <button key={i} className={`filter-btn ${selMonth===i?'active':''}`} onClick={()=>setSelMonth(i)}>
+                {m} {selYear}
+              </button>
+            ))}
+          </div>
+          <div className="kpi-grid" style={{marginBottom:16}}>
+            <div className="kpi-card"><div className="kpi-label">TOTAL ITEMS</div><div className="kpi-value">{monthStats.total}</div></div>
+            <div className="kpi-card"><div className="kpi-label">DISTINCT POs</div><div className="kpi-value">{monthStats.pos}</div></div>
+            <div className="kpi-card"><div className="kpi-label">DISTINCT SCs</div><div className="kpi-value">{monthStats.scs}</div></div>
+            <div className="kpi-card"><div className="kpi-label">DELAYED</div><div className="kpi-value" style={{color:'var(--danger)'}}>{monthStats.delayed}</div></div>
+            <div className="kpi-card"><div className="kpi-label">READY</div><div className="kpi-value" style={{color:'var(--success)'}}>{monthStats.ready}</div></div>
+            <div className="kpi-card"><div className="kpi-label">IN STORES</div><div className="kpi-value" style={{color:'var(--accent1)'}}>{monthStats.stores}</div></div>
+          </div>
+          <div className="table-card">
+            <div className="table-header">
+              <span style={{fontFamily:'Rajdhani',fontWeight:700}}>Items received in {MONTHS[selMonth]} {selYear}</span>
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>{monthItems.length} items</span>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>PO</th><th>SC</th><th>PRODUCT</th><th>PO DATE</th><th>STAGE</th><th>TIMESTAMP</th><th>STATUS</th></tr></thead>
+                <tbody>{monthItems.map((r,i)=>(
+                  <tr key={i}>
+                    <td className="mono text-accent">{r.po||'—'}</td>
+                    <td className="mono">{r.sc||'—'}</td>
+                    <td style={{maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
+                    <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                    <td className="mono" style={{fontSize:10}}>{(r.timestamp||'').substring(0,16)||'—'}</td>
+                    <td><span className={`status-pill ${['READY','STORES','STOCK'].includes(r.currentStage)?'s-ready':'s-wip'}`}>
+                      {['READY','STORES','STOCK'].includes(r.currentStage)?'DONE':'WIP'}
+                    </span></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewMode==='day' && (
+        <div>
+          <div style={{marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
+            <input type="date" className="filter-input" value={selDay}
+              onChange={e=>{ setSelDay(e.target.value); setExpandedPO(null); }} style={{maxWidth:200}}/>
+            <span style={{fontSize:12,color:'var(--text-muted)'}}>{dayItems.length} items with PO date = {selDay}</span>
+          </div>
+          {groupByPO(dayItems).length === 0 && (
+            <div style={{color:'var(--text-muted)',textAlign:'center',padding:40}}>No items received on {selDay}</div>
+          )}
+          {groupByPO(dayItems).map(pg=>(
+            <div key={pg.po} className="chart-card" style={{marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}}
+                onClick={()=>setExpandedPO(expandedPO===pg.po?null:pg.po)}>
+                <span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:15}}>
+                  PO: <span className="text-accent">{pg.po||'—'}</span>
+                </span>
+                <span style={{fontSize:12,color:'var(--text-muted)'}}>
+                  {Object.keys(pg.scs).length} SCs · {Object.values(pg.scs).flat().length} items {expandedPO===pg.po?'▲':'▼'}
+                </span>
+              </div>
+              {expandedPO===pg.po && Object.entries(pg.scs).map(([sc,items])=>(
+                <div key={sc} style={{marginTop:10,paddingLeft:16,borderLeft:'2px solid var(--border-bright)'}}>
+                  <div style={{fontSize:12,color:'var(--accent1)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>SC: {sc}</div>
+                  <table>
+                    <thead><tr><th>PRODUCT</th><th>STAGE</th><th>TIMESTAMP</th><th>INHOUSE</th><th>PENDING DAYS</th></tr></thead>
+                    <tbody>{items.map((r,i)=>(
+                      <tr key={i}>
+                        <td style={{fontSize:11}}>{r.product}</td>
+                        <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                        <td className="mono" style={{fontSize:10}}>{(r.timestamp||'').substring(0,16)||'—'}</td>
+                        <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                        <td style={{color:(r.pendingDays||0)>21?'var(--danger)':(r.pendingDays||0)>7?'var(--warning)':'var(--success)'}}>
+                          {r.pendingDays??'—'}d
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DATABASE PAGE ─────────────────────────────────────────────────────────────
+function DatabasePage({ data }) {
+  return (
+    <div>
+      <div className="section-title">Database <span>Archive</span><div className="section-line"/></div>
+      <div className="chart-card" style={{marginBottom:16}}>
+        <div className="chart-title">All Historical Rows — {data.length} total</div>
+        <div className="chart-sub">COMBINED LIVE + DB SNAPSHOT</div>
+        <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
+          <table>
+            <thead>
+              <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th><th>PENDING DAYS</th></tr>
+            </thead>
+            <tbody>{data.map((r,i)=>(
+              <tr key={i}>
+                <td className="mono text-accent">{r.sc||'—'}</td>
+                <td style={{fontSize:11}}>{r.po||'—'}</td>
+                <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
+                <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product}</td>
+                <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
+                <td style={{color:(r.pendingDays||0)>21?'var(--danger)':(r.pendingDays||0)>7?'var(--warning)':'var(--success)'}}>
+                  {r.pendingDays??'—'}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 // ─── KPI CARD ──────────────────────────────────────────────────────────────────
 function KPICard({label,value,sub,color1,color2,badge,action}) {
   return (
