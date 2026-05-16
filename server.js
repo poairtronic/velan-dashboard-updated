@@ -18,13 +18,12 @@ const https  = require('https');
 const url    = require('url');
 const path   = require('path');
 const fs     = require('fs');
-
-const PORT       = process.env.PORT      || 3000;
+const PORT = process.env.PORT || 10000;
 const SHEETS_URL = process.env.SHEETS_URL || '';
 const CACHE_TTL  = Number(process.env.CACHE_TTL) || 60; // seconds
 
 // ── Persistent JSON data store ────────────────────────────────────────────────
-const DB_FILE = path.join(__dirname, 'velan_db.json');
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'velan_db.json');
 
 function loadDB() {
   try {
@@ -65,7 +64,8 @@ function fetchRemote(targetUrl) {
       try { parsedUrl = new URL(fetchUrl); }
       catch (e) { return reject(new Error('Invalid URL: ' + fetchUrl)); }
       const mod = parsedUrl.protocol === 'https:' ? https : http;
-      mod.get(fetchUrl, { headers: { 'User-Agent': 'VelanDashboard/2.0' } }, res => {
+      const reqObj = mod.get(fetchUrl, { headers: { 'User-Agent': 'VelanDashboard/2.0' }, timeout: 25000 }, res => {
+      reqObj.on('timeout', () => { reqObj.destroy(); reject(new Error('Request timed out after 25s')); });
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           redirectCount++;
           // Resolve relative redirects
