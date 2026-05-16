@@ -4212,7 +4212,18 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
 
   // --- Unique options ---
   const uniquePOs = React.useMemo(()=>[...new Set(data.map(r=>r.po))].sort(),[data]);
-  const uniqueStages = React.useMemo(()=>[...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort(),[data]);
+  const DONE_STAGES = /^(READY|STOCK|STORES?)$/i;
+  const normStage = s => {
+    if(!s) return '';
+    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+    if(/^STOCK[K]?$/.test(t)) return 'STOCK';
+    if(/^R[EAD]{2,4}Y$/.test(t)) return 'READY';
+    if(/^ST[OERATS]{2,5}$/.test(t)) return 'STORES';
+    return t;
+  };
+  const uniqueStages = React.useMemo(()=>
+    ['READY','STOCK','STORES']
+  ,[]);
   const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
 
   // --- Date filter logic ---
@@ -4225,13 +4236,31 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
   }
 
   // --- Filtered data ---
+  
+const isDoneStage = s => {
+    if(!s) return false;
+    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+    if(/^STOCK[K]?$/.test(t)) return true;
+    if(/^R[EAD]{2,4}Y$/.test(t) || t==='READY') return true;
+    if(/^ST[OERATS]{2,6}$/.test(t) || t.startsWith('ST') && t.length>=5) return true;
+    return ['READY','STOCK','STOCKK','STORES','STOIRES','STORS','STOTES','STOTRES','STRES','STROES','STROIES','STRORES'].includes(t);
+  };
+  const normStageDB = s => {
+    if(!s) return '';
+    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+    if(/^STOCK[K]?$/.test(t)) return 'STOCK';
+    if(t==='READY' || /^R[EAD]{2,4}Y$/.test(t)) return 'READY';
+    return 'STORES';
+  };
   const filtered = React.useMemo(() => {
     return data.filter(row => {
+      // Only show READY / STOCK / STORES (and all typo variants) — hide all WIP stages
+      if(!isDoneStage(row.currentStage)) return false;
       // Date filter
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
-      if(filters.stage && row.currentStage !== filters.stage) return false;
+      if(filters.stage && normStageDB(row.currentStage) !== filters.stage) return false;
       if(filters.type && row.type !== filters.type) return false;
       if(filters.inhouse && row.inhouse !== filters.inhouse) return false;
       if(filters.category && getProductCategory && getProductCategory(row.type) !== filters.category) return false;
@@ -4242,7 +4271,6 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
       return true;
     });
   }, [data, filters, fromDate, toDate, dateType]);
-
   // --- KPI stats ---
   const kpiStats = React.useMemo(() => {
     const total = filtered.length;
@@ -4290,7 +4318,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
       { header: 'STAGE', dataKey: 'currentStage' },
       { header: 'INHOUSE', dataKey: 'inhouse' },
       { header: 'TIMESTAMP', dataKey: 'timestamp' },
-      { header: 'PENDING DAYS', dataKey: 'pendingDays' },
+      
     ];
     // Table rows
     const rows = filtered.map(r => ({
@@ -4301,7 +4329,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
       currentStage: r.currentStage || '',
       inhouse: r.inhouse || '',
       timestamp: r.timestamp ? fmtTs(r.timestamp) : '',
-      pendingDays: r.pendingDays ?? '',
+      
     }));
     doc.text('Velan Metrology – Database Export', 40, 40);
     doc.text(`Exported Rows: ${rows.length}`, 40, 60);
@@ -4411,8 +4439,10 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
             {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
           </select>
           <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
-            <option value="">All Stages</option>
-            {uniqueStages.map(s=><option key={s} value={s}>{s}</option>)}
+            <option value="">All Stages (Done)</option>
+            <option value="READY">READY</option>
+            <option value="STOCK">STOCK</option>
+            <option value="STORES">STORES</option>
           </select>
           <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
             <option value="">All Types</option>
@@ -4484,7 +4514,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
         <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
           <table>
             <thead>
-              <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th><th>PENDING DAYS</th></tr>
+              <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th></tr>
             </thead>
             <tbody>{filtered.map((r,i)=>(
               <tr key={i}>
@@ -4495,9 +4525,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
                 <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
                 <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
                 <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
-                <td style={{color:(r.pendingDays||0)>21?'var(--danger)':(r.pendingDays||0)>7?'var(--warning)':'var(--success)'}}>
-                  {r.pendingDays??'—'}
-                </td>
+                
               </tr>
             ))}</tbody>
           </table>
