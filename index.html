@@ -4273,15 +4273,39 @@ const isDoneStage = s => {
   }, [data, filters, fromDate, toDate, dateType]);
   // --- KPI stats ---
   const kpiStats = React.useMemo(() => {
-    const total = filtered.length;
-    const uniquePO = new Set(filtered.map(r=>r.po)).size;
-    const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
-    const ready = filtered.filter(r=>r.currentStage==='READY' || r.currentStage==='STORES').length;
-    const wip = filtered.filter(r=>!['READY','STORES','STOCK'].includes(r.currentStage)).length;
-    const inhouse = filtered.filter(r=>r.inhouse==='INHOUSE').length;
-    const vendor = filtered.filter(r=>r.inhouse==='VENDOR').length;
-    return { total, uniquePO, uniqueSC, ready, wip, inhouse, vendor };
-  }, [filtered]);
+  const total = filtered.length;
+  const uniquePO = new Set(filtered.map(r=>r.po)).size;
+  const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
+  const ready = filtered.filter(r=>r.currentStage==='READY' || r.currentStage==='STORES').length;
+
+  // SC Received: unique SCs where poDate is within the selected date range
+  const scReceivedSet = new Set(
+    filtered.filter(r => {
+      if (!r.poDate) return false;
+      const d = r.poDate.slice(0,10);
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    }).map(r => r.sc)
+  );
+
+  // SC Completed: unique SCs where timestamp is within date range AND stage is done
+  const scCompletedSet = new Set(
+    filtered.filter(r => {
+      if (!r.timestamp) return false;
+      const d = r.timestamp.slice(0,10);
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return isDoneStage(r.currentStage);
+    }).map(r => r.sc)
+  );
+
+  return {
+    total, uniquePO, uniqueSC, ready,
+    scReceived: scReceivedSet.size,
+    scCompleted: scCompletedSet.size,
+  };
+}, [filtered, fromDate, toDate]);
 
   // --- Export handlers ---
   function exportJSON() {
@@ -4487,7 +4511,25 @@ const isDoneStage = s => {
           <div className="kpi-value">{kpiStats.ready}</div>
           <div className="kpi-sub">complete</div>
         </div>
-      </div>
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">SC Received</div>
+          <div className="kpi-value" style={{color:'var(--accent1)'}}>{kpiStats.scReceived}</div>
+          <div className="kpi-sub">
+            unique SCs received
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+            </div>
+            </div>
+            <div className="kpi-card" style={{flex:1,minWidth:180}}>
+              <div className="kpi-label">SC Completed</div>
+              <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
+              <div className="kpi-sub">
+                unique SCs finished
+                {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+                {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+                </div>
+                </div>
+                </div>
 
       {/* EXPORT BUTTONS */}
       <div style={{display:'flex',gap:10,marginBottom:18}}>
