@@ -4,7 +4,7 @@
   "description": "Velan Metrology Production Command Center — Google Sheets live backend + React frontend",
   "main": "server.js",
   "scripts": {
-    "start": "npx live-server --port=3000 --open=index.html",
+    "start": "node server.js",
     "dev": "npx live-server --port=3000 --open=index.html --watch=index.html"
   },
   "keywords": ["dashboard", "production", "metrology"],

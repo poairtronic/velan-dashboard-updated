@@ -23,8 +23,12 @@ const SHEETS_URL = process.env.SHEETS_URL || '';
 const CACHE_TTL  = Number(process.env.CACHE_TTL) || 60; // seconds
 
 // ── Persistent JSON data store ────────────────────────────────────────────────
+// RENDER DEPLOYMENT: The default path (__dirname/velan_db.json) is on an
+// ephemeral filesystem that resets on every deploy.
+// FIX: In Render dashboard → Environment → add:
+//   DB_FILE = /var/data/velan_db.json
+// and attach a Persistent Disk mounted at /var/data
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'velan_db.json');
-
 function loadDB() {
   try {
     if (fs.existsSync(DB_FILE)) {
@@ -65,7 +69,6 @@ function fetchRemote(targetUrl) {
       catch (e) { return reject(new Error('Invalid URL: ' + fetchUrl)); }
       const mod = parsedUrl.protocol === 'https:' ? https : http;
       const reqObj = mod.get(fetchUrl, { headers: { 'User-Agent': 'VelanDashboard/2.0' }, timeout: 25000 }, res => {
-      reqObj.on('timeout', () => { reqObj.destroy(); reject(new Error('Request timed out after 25s')); });
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           redirectCount++;
           // Resolve relative redirects
@@ -83,6 +86,7 @@ function fetchRemote(targetUrl) {
         res.on('end',  ()    => resolve(Buffer.concat(chunks).toString('utf8')));
         res.on('error', reject);
       }).on('error', reject);
+      reqObj.on('timeout', () => { reqObj.destroy(); reject(new Error('Request timed out after 25s')); });
     }
     doFetch(targetUrl);
   });

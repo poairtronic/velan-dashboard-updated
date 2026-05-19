@@ -603,9 +603,11 @@ function getSCLastTimestamp(items) {
 function useChart(ref, config, deps) {
   useEffect(() => {
     if(!ref.current) return;
+    const existing = Chart.getChart(ref.current);
+    if(existing) existing.destroy();
     const ctx = ref.current.getContext('2d');
     const chart = new Chart(ctx, config);
-    return () => chart.destroy();
+    return () => { try { chart.destroy(); } catch(_) {} };
   }, deps);
 }
 
@@ -1516,7 +1518,8 @@ function App() {
       if(filters.category && getProductCategory(row.type) !== filters.category) return false;
       if(filters.search) {
         const s = filters.search.toLowerCase();
-        if(!row.sc.toLowerCase().includes(s) && !row.product.toLowerCase().includes(s) && !row.po.toLowerCase().includes(s)) return false;
+        if(!String(row.sc||'').toLowerCase().includes(s) && 
+        !String(row.product||'').toLowerCase().includes(s) && !String(row.po||'').toLowerCase().includes(s)) return false;
       }
       return true;
     });
@@ -1578,7 +1581,7 @@ function App() {
     // ── MODULE 2: Stage-wise WIP (Lathe / FB / Stores) ──
     // Count items per stage
     const stageWIP = {};
-    liveData.forEach(row => {
+    filtered.forEach(row => {
       const stage = row.currentStage;
       if(!stageWIP[stage]) stageWIP[stage] = 0;
       stageWIP[stage]++;
@@ -1995,17 +1998,12 @@ function OverviewPage({kpis, data, filtered, liveData}) {
   const typeChartRef = useRef();
 
   const now = new Date();
-const today =
-  now.getFullYear() + '-' +
-  String(now.getMonth() + 1).padStart(2, '0') + '-' +
-  String(now.getDate()).padStart(2, '0');
-  
+  const todayStr =
+    now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
 
   // Use liveData for all calculations
-  const todayStr = (() => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-  })();
 
   // 1. Daily Set: POs where all SCs are completed (READY/STORES/STOCK) and completed today
   const poGroupsLive = {};
@@ -4133,7 +4131,9 @@ function MonthDayPage({ liveData }) {
               <span style={{fontSize:11,color:'var(--text-muted)'}}>{monthItems.length} items</span>
             </div>
             <div className="table-wrap">
-              <table>
+              {monthItems.length === 0
+                ? <div style={{color:'var(--text-muted)',textAlign:'center',padding:40}}>No items received in {MONTHS[selMonth]} {selYear}</div>
+                : <table>
                 <thead><tr><th>PO</th><th>SC</th><th>PRODUCT</th><th>PO DATE</th><th>STAGE</th><th>TIMESTAMP</th><th>STATUS</th></tr></thead>
                 <tbody>{monthItems.map((r,i)=>(
                   <tr key={i}>
@@ -4148,7 +4148,7 @@ function MonthDayPage({ liveData }) {
                     </span></td>
                   </tr>
                 ))}</tbody>
-              </table>
+              </table>}
             </div>
           </div>
         </div>
