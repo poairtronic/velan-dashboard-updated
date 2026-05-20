@@ -41,15 +41,24 @@ function loadDB() {
   }
   return [];
 }
-
 function saveDB(rows) {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(rows, null, 2), 'utf8');
+    if (!Array.isArray(rows)) {
+      console.error('[DB] Invalid rows format');
+      return;
+    }
+
+    fs.writeFileSync(
+      DB_FILE,
+      JSON.stringify(rows, null, 2),
+      'utf8'
+    );
+
+    console.log(`[DB] Saved ${rows.length} rows`);
   } catch (e) {
-    console.error('[DB] Failed to save velan_db.json:', e.message);
+    console.error('[DB] Failed to save DB:', e.message);
   }
 }
-
 // In-memory state
 let _db       = loadDB();   // permanent historical archive
 let _liveRows = loadDB();  // current operational snapshot (reset on restart)
@@ -157,6 +166,8 @@ const server = http.createServer(async (req, res) => {
       const payload = JSON.parse(body);
       const incoming = Array.isArray(payload.rows) ? payload.rows : [];
       _liveRows = incoming;
+      _db = incoming;
+      saveDB(_db);
       _lastSync = new Date().toLocaleString('en-IN');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
@@ -217,6 +228,7 @@ const server = http.createServer(async (req, res) => {
   // ── GET /api/sheets?url=<google-sheets-csv-url> ───────────────────────────
   if (pathname === '/api/sheets' && req.method === 'GET') {
     const sheetUrl = parsed.searchParams.get('url') || SHEETS_URL;
+    
 
     if (!sheetUrl) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
