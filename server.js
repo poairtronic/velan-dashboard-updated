@@ -52,7 +52,7 @@ function saveDB(rows) {
 
 // In-memory state
 let _db       = loadDB();   // permanent historical archive
-let _liveRows = [];         // current operational snapshot (reset on restart)
+let _liveRows = loadDB();  // current operational snapshot (reset on restart)
 let _lastSync = '';
 
 // ── In-memory Google Sheets cache ────────────────────────────────────────────
