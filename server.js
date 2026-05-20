@@ -60,10 +60,9 @@ function saveDB(rows) {
   }
 }
 // In-memory state
-let _db       = loadDB();   // permanent historical archive
-let _liveRows = loadDB();  // current operational snapshot (reset on restart)
+let _db       = loadDB();   // permanent historical archive — NEVER overwritten by live upload
+let _liveRows = [];         // current operational snapshot — replaced on every upload
 let _lastSync = '';
-
 // ── In-memory Google Sheets cache ────────────────────────────────────────────
 let _cache = { data: null, ts: 0, url: '' };
 
@@ -153,27 +152,51 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       rows:     _db,
-      liveRows: _liveRows,
+      liveRows: _liveRows.length > 0 ? _liveRows : _db,
       lastSync: _lastSync,
       total:    _db.length,
     }));
   }
 
-  // ── POST /api/data — replace live snapshot ────────────────────────────────
+  // ── POST /api/data — replace live snapshot AND accumulate into DB ─────────
   if (pathname === '/api/data' && req.method === 'POST') {
     try {
       const body    = await readBody(req);
       const payload = JSON.parse(body);
       const incoming = Array.isArray(payload.rows) ? payload.rows : [];
+
+      // 1. Replace the live snapshot (what all operational pages see)
       _liveRows = incoming;
-      _db = incoming;
+
+      // 2. Also merge incoming rows into the permanent DB (dedup by key)
+      //    This means every live upload automatically goes into the database too.
+      const makeKey = r =>
+        `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}||${r.timestamp||''}`;
+
+      const existingKeys = new Set(_db.map(makeKey));
+      let newRows = 0;
+
+      incoming.forEach(row => {
+        const k = makeKey(row);
+        if (!existingKeys.has(k)) {
+          _db.push(row);
+          existingKeys.add(k);
+          newRows++;
+        }
+      });
+
+      // 3. Save the updated DB to disk
       saveDB(_db);
       _lastSync = new Date().toLocaleString('en-IN');
+
+      console.log(`[POST /api/data] Live: ${_liveRows.length} rows | DB: ${_db.length} rows (+${newRows} new)`);
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
         success:   true,
         liveTotal: _liveRows.length,
         total:     _db.length,
+        newRows,
         lastSync:  _lastSync,
       }));
     } catch (err) {
@@ -182,7 +205,6 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
-
   // ── POST /api/import — append to permanent DB with dedup ─────────────────
   if (pathname === '/api/import' && req.method === 'POST') {
     try {

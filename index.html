@@ -310,7 +310,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 // ─── SAMPLE DATA (from PDF) ───────────────────────────────────────────────────
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const AIRPLUG_TYPES = ['APG','ARG'];
-const MASTER_TYPES  = ['SPG','SRG','SP','SRG'];
+const MASTER_TYPES  = ['SPG','SRG','SP'];
 const TARGET_DAYS   = 21;
 // ─── HOLIDAY & LEAVE CALENDAR ─────────────────────────────────────────────────
 // All public holidays from your company list (YYYY-MM-DD format)
@@ -861,7 +861,7 @@ function App() {
               setUploadStatus({
                 type: 'success',
                 msg: `✅ Saved ${rows.length} rows to live dashboard`,
-                detail: `Live: ${result.liveTotal} rows | Historical DB: ${result.total} rows.`,
+                detail: `Live: ${result.liveTotal} rows | DB: ${result.total} rows total (+${result.newRows || 0} new entries added to Database).`,
               });
             });
         }
@@ -1992,6 +1992,7 @@ function App() {
 function OverviewPage({kpis, data, filtered, liveData}) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showReadyDetails, setShowReadyDetails] = useState(false);
+  const [openPOIds, setOpenPOIds] = useState({});
   const stageChartRef = useRef();
   const donutRef = useRef();
   const typeChartRef = useRef();
@@ -2115,7 +2116,7 @@ function OverviewPage({kpis, data, filtered, liveData}) {
         ].map(cat => (
           <button
             key={cat.id}
-            onClick={() => setSelectedCategory(cat.id)}
+            onClick={() => { setSelectedCategory(cat.id); setOpenPOIds({}); }}
             style={{
               background:`linear-gradient(135deg,${cat.color1}15,${cat.color2}08)`,
               border:`1px solid ${cat.color1}40`,
@@ -2165,31 +2166,34 @@ function OverviewPage({kpis, data, filtered, liveData}) {
             {(selectedCategory==='daily'?dailyPOs:selectedCategory==='delayed'?delayedPOs:inProgressPOs).map((poGroup,poIdx) => (
               <div key={poIdx} style={{marginBottom:16,border:'1px solid var(--border)',borderRadius:8,overflow:'hidden'}}>
                 <div style={{background:'rgba(26,58,92,0.5)',padding:'12px 14px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}
-                  onClick={() => {
-                    const elem = document.getElementById(`po-detail-${poIdx}`);
-                    elem.style.display = elem.style.display==='none'?'block':'none';
-                  }}
+                  onClick={() => setOpenPOIds(prev => ({...prev, [poIdx]: !prev[poIdx]}))}
                 >
                   <div>
                     <div style={{fontFamily:'Share Tech Mono',fontSize:11,fontWeight:700,color:'var(--accent1)'}}>{poGroup.po}</div>
                     <div style={{fontSize:10,color:'var(--text-muted)',marginTop:4}}>{poGroup.count} items · {poGroup.scs.length} SCs</div>
                   </div>
-                  <div style={{fontSize:12}}>▼</div>
+                  <div style={{fontSize:12}}>{openPOIds[poIdx] ? '▲' : '▼'}</div>
                 </div>
-                <div id={`po-detail-${poIdx}`} style={{display:'none',padding:'12px 14px',borderTop:'1px solid var(--border)',background:'rgba(0,0,0,0.2)'}}>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8}}>SCs in this PO: {poGroup.scs.join(', ')}</div>
-                  <div style={{fontSize:10,color:'var(--text-muted)'}}>
-                    Items: {poGroup.items.map((i,idx) => (
-                      <div key={idx} style={{padding:'6px 0',borderBottom:idx<poGroup.items.length-1?'1px solid rgba(26,58,92,0.4)':'none'}}>
-                        <span style={{color:'var(--accent1)',fontFamily:'Share Tech Mono',fontSize:9}}>{i.sc}</span>
-                        {' · '}
-                        <span style={{fontSize:9}}>{i.product?.substring(0,40)}</span>
-                        {' · '}
-                        <span style={{color:'var(--text-muted)',fontSize:9}}>{i.currentStage}</span>
-                      </div>
-                    ))}
+                {openPOIds[poIdx] && (
+                  <div style={{padding:'12px 14px',borderTop:'1px solid var(--border)',background:'rgba(0,0,0,0.2)'}}>
+                    <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8}}>SCs in this PO: {poGroup.scs.join(', ')}</div>
+                    <div style={{fontSize:10,color:'var(--text-muted)'}}>
+                      {poGroup.items.map((i,idx) => (
+                        <div key={idx} style={{padding:'6px 0',borderBottom:idx<poGroup.items.length-1?'1px solid rgba(26,58,92,0.4)':'none'}}>
+                          <span style={{color:'var(--accent1)',fontFamily:'Share Tech Mono',fontSize:9}}>{i.sc}</span>
+                          {' · '}
+                          <span style={{fontSize:9}}>{i.product?.substring(0,40)}</span>
+                          {' · '}
+                          <span style={{color:'var(--text-muted)',fontSize:9}}>{i.currentStage}</span>
+                          {' · '}
+                          <span style={{color:(i.pendingDays||0)>21?'var(--danger)':(i.pendingDays||0)>7?'var(--warning)':'var(--success)',fontSize:9,fontWeight:700}}>
+                            {i.pendingDays != null ? `${i.pendingDays}d` : '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -2514,7 +2518,7 @@ function WIPPage({kpis, filtered}) {
                   <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage}</span></td>
                   <td style={{fontSize:10,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.status1}</td>
                   <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
-                  <td className="mono" style={{fontSize:10}}>{fmtDate(r.timestamp)}</td>
+                  <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                   <td>
                     <button onClick={() => setExpandedItem(expandedItem===i?null:i)} style={{background:'none',border:'none',color:'var(--accent1)',cursor:'pointer',fontSize:11}}>
                       {expandedItem===i?'▼':'▶'}
@@ -4594,9 +4598,33 @@ function KPICard({label,value,sub,color1,color2,badge,action}) {
     </div>
   );
 }
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('[ErrorBoundary]', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{padding:40,fontFamily:'Share Tech Mono,monospace',color:'#ff3d5a',background:'#050b14',minHeight:'100vh'}}>
+          <div style={{fontSize:20,marginBottom:16}}>⚠ Dashboard Error</div>
+          <div style={{fontSize:12,color:'#7ba7cc',marginBottom:12}}>An unexpected error occurred. Please refresh the page.</div>
+          <div style={{fontSize:11,color:'#3d6080',background:'rgba(255,61,90,0.08)',border:'1px solid rgba(255,61,90,0.2)',borderRadius:8,padding:16}}>
+            {String(this.state.error)}
+          </div>
+          <button onClick={() => this.setState({hasError:false,error:null})}
+            style={{marginTop:20,padding:'10px 20px',background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',color:'#00c9ff',borderRadius:8,cursor:'pointer',fontSize:12}}>
+            🔄 Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── MOUNT ────────────────────────────────────────────────────────────────────
-ReactDOM.render(<App/>, document.getElementById('root'));
+ReactDOM.render(<ErrorBoundary><App/></ErrorBoundary>, document.getElementById('root'));
 </script>
 </body>
 </html>
