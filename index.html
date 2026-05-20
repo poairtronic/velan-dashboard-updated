@@ -1491,7 +1491,7 @@ function App() {
       pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
       cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }))].filter(r => {
-      const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'');
+      const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'') + '||' + (r.timestamp||'');
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -4225,8 +4225,8 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
     return t;
   };
   const uniqueStages = React.useMemo(()=>
-    ['READY','STOCK','STORES']
-  ,[]);
+    [...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort()
+  ,[data]);
   const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
 
   // --- Date filter logic ---
@@ -4257,13 +4257,12 @@ const isDoneStage = s => {
   };
   const filtered = React.useMemo(() => {
     return data.filter(row => {
-      // Only show READY / STOCK / STORES (and all typo variants) — hide all WIP stages
-      if(!isDoneStage(row.currentStage)) return false;
+
       // Date filter
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
-      if(filters.stage && normStageDB(row.currentStage) !== filters.stage) return false;
+      if(filters.stage && (row.currentStage||'').trim() !== filters.stage) return false;
       if(filters.type && row.type !== filters.type) return false;
       if(filters.inhouse && row.inhouse !== filters.inhouse) return false;
       if(filters.category && getProductCategory && getProductCategory(row.type) !== filters.category) return false;
@@ -4279,7 +4278,7 @@ const isDoneStage = s => {
   const total = filtered.length;
   const uniquePO = new Set(filtered.map(r=>r.po)).size;
   const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
-  const ready = filtered.filter(r=>r.currentStage==='READY' || r.currentStage==='STORES').length;
+  const ready = filtered.filter(r=>isDoneStage(r.currentStage)).length;
 
   // SC Received: unique SCs where poDate is within the selected date range
   const scReceivedSet = new Set(
@@ -4466,7 +4465,7 @@ const isDoneStage = s => {
             {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
           </select>
           <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
-            <option value="">All Stages (Done)</option>
+            <option value="">All Stages</option>
             <option value="READY">READY</option>
             <option value="STOCK">STOCK</option>
             <option value="STORES">STORES</option>
@@ -4545,7 +4544,7 @@ const isDoneStage = s => {
       {/* DATA TABLE */}
       <div className="chart-card" style={{marginBottom:16}}>
         <div className="chart-title">All Historical Rows — {filtered.length} shown</div>
-        <div className="chart-sub">COMBINED LIVE + DB SNAPSHOT</div>
+        <div className="chart-sub">ALL STAGES (WIP + COMPLETED) — LIVE + DB COMBINED</div>
         <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
           <table>
             <thead>
