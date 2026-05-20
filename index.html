@@ -4225,7 +4225,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
     return t;
   };
   const uniqueStages = React.useMemo(()=>
-    ['READY','STOCK','STORES']
+    ['READY','STOCK','STORES','IN PROCESS']
   ,[]);
   const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
 
@@ -4257,13 +4257,15 @@ const isDoneStage = s => {
   };
   const filtered = React.useMemo(() => {
     return data.filter(row => {
-      // Only show completed items (READY / STOCK / STORES)
-      if(!isDoneStage(row.currentStage)) return false;
       // Date filter
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
-      if(filters.stage && (row.currentStage||'').trim() !== filters.stage) return false;
+      if(filters.stage === 'IN PROCESS') {
+        if(isDoneStage(row.currentStage)) return false;
+      } else if(filters.stage) {
+        if((row.currentStage||'').trim() !== filters.stage) return false;
+      }
       if(filters.type && row.type !== filters.type) return false;
       if(filters.inhouse && row.inhouse !== filters.inhouse) return false;
       if(filters.category && getProductCategory && getProductCategory(row.type) !== filters.category) return false;
@@ -4466,7 +4468,7 @@ const isDoneStage = s => {
             {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
           </select>
           <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
-            <option value="">All Done Stages</option>
+            <option value="">All Stages</option>
             <option value="READY">READY</option>
             <option value="STOCK">STOCK</option>
             <option value="STORES">STORES</option>
@@ -4557,7 +4559,7 @@ const isDoneStage = s => {
                 <td style={{fontSize:11}}>{r.po||'—'}</td>
                 <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
                 <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
-                <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                <td><span className="status-pill" style={{background:isDoneStage(r.currentStage)?getStageColor(r.currentStage)+'22':'rgba(123,167,204,0.15)',color:isDoneStage(r.currentStage)?getStageColor(r.currentStage):'#7ba7cc'}}>{isDoneStage(r.currentStage)?r.currentStage:'IN PROCESS'}</span></td>
                 <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
                 <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                 
