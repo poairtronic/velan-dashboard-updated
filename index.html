@@ -4540,11 +4540,7 @@ const isDoneStage = s => {
           <div className="kpi-value">{kpiStats.uniqueSC}</div>
           <div className="kpi-sub">job sets in range</div>
         </div>
-        <div className="kpi-card" style={{flex:1,minWidth:160}}>
-          <div className="kpi-label">Ready / Stores</div>
-          <div className="kpi-value">{kpiStats.readyItemsCount}</div>
-          <div className="kpi-sub">complete</div>
-        </div>
+        
         <div className="kpi-card" style={{flex:1,minWidth:160}}>
           <div className="kpi-label">SC Received</div>
           <div className="kpi-value" style={{color:'var(--accent1)'}}>{kpiStats.scReceived}</div>
@@ -4563,11 +4559,7 @@ const isDoneStage = s => {
             {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
           </div>
         </div>
-        <div className="kpi-card" style={{flex:1,minWidth:160}}>
-          <div className="kpi-label">SC Ready</div>
-          <div className="kpi-value" style={{color:'var(--accent3)'}}>{kpiStats.scReady}</div>
-          <div className="kpi-sub">all items done (READY / STORES / STOCK)</div>
-        </div>
+        
       </div>
 
       {/* EXPORT BUTTONS */}
@@ -4575,33 +4567,37 @@ const isDoneStage = s => {
         <button className="filter-btn" style={{background:'rgba(0,201,255,0.08)',color:'var(--accent1)',fontWeight:700}} onClick={exportJSON}>⬇ JSON</button>
         <button className="filter-btn" style={{background:'rgba(0,255,100,0.08)',color:'var(--success)',fontWeight:700}} onClick={exportCSV}>⬇ CSV</button>
         <button className="filter-btn" style={{background:'rgba(255,61,90,0.08)',color:'var(--danger)',fontWeight:700}} onClick={exportPDF}>⬇ PDF</button>
-        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT FILTERED ({filtered.length} rows):</span>
+        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT FILTERED ({filtered.filter(r=>isDoneStage(r.currentStage)).length} rows):</span>
       </div>
 
-      {/* DATA TABLE */}
-      <div className="chart-card" style={{marginBottom:16}}>
-        <div className="chart-title">All Historical Rows — {filtered.length} shown</div>
-        <div className="chart-sub">COMPLETED ITEMS ONLY (READY / STOCK / STORES) — LIVE + DB COMBINED</div>
-        <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
-          <table>
-            <thead>
-              <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th></tr>
-            </thead>
-            <tbody>{filtered.map((r,i)=>(
-              <tr key={i}>
-                <td className="mono text-accent">{r.sc||'—'}</td>
-                <td style={{fontSize:11}}>{r.po||'—'}</td>
-                <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
-                <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
-                <td><span className="status-pill" style={{background:isDoneStage(r.currentStage)?getStageColor(r.currentStage)+'22':'rgba(100,140,180,0.15)',color:isDoneStage(r.currentStage)?getStageColor(r.currentStage):'var(--text-secondary)'}}>{r.currentStage||'—'}</span></td>
-                <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
-                <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
-                
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      </div>
+      {/* DATA TABLE — READY / STOCK / STORES only */}
+      {(() => {
+        const tableRows = filtered.filter(r => isDoneStage(r.currentStage));
+        return (
+          <div className="chart-card" style={{marginBottom:16}}>
+            <div className="chart-title">Completed Items — {tableRows.length} shown</div>
+            <div className="chart-sub">READY / STOCK / STORES ONLY — LIVE + DB COMBINED</div>
+            <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
+              <table>
+                <thead>
+                  <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th></tr>
+                </thead>
+                <tbody>{tableRows.map((r,i)=>(
+                  <tr key={i}>
+                    <td className="mono text-accent">{r.sc||'—'}</td>
+                    <td style={{fontSize:11}}>{r.po||'—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
+                    <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                    <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                    <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                    <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
