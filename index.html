@@ -4257,8 +4257,6 @@ const isDoneStage = s => {
   };
   const filtered = React.useMemo(() => {
     return data.filter(row => {
-      // Database module only shows completed rows (READY / STORES / STOCK) — no WIP
-      if (!isDoneStage(row.currentStage)) return false;
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
@@ -4532,46 +4530,45 @@ const isDoneStage = s => {
 
       {/* KPI CARDS */}
       <div style={{display:'flex',gap:12,marginBottom:18,flexWrap:'wrap'}}>
-        <div className="kpi-card" style={{flex:1,minWidth:180}}>
-          <div className="kpi-label">Filtered Items</div>
-          <div className="kpi-value">{kpiStats.total}</div>
-          <div className="kpi-sub">all records</div>
-        </div>
-        
-        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+        <div className="kpi-card" style={{flex:1,minWidth:160}}>
           <div className="kpi-label">Purchase Orders</div>
           <div className="kpi-value">{kpiStats.uniquePO}</div>
           <div className="kpi-sub">unique POs in range</div>
         </div>
-        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+        <div className="kpi-card" style={{flex:1,minWidth:160}}>
           <div className="kpi-label">SC Sets</div>
           <div className="kpi-value">{kpiStats.uniqueSC}</div>
           <div className="kpi-sub">job sets in range</div>
         </div>
-        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+        <div className="kpi-card" style={{flex:1,minWidth:160}}>
           <div className="kpi-label">Ready / Stores</div>
-          <div className="kpi-value">{kpiStats.ready}</div>
+          <div className="kpi-value">{kpiStats.readyItemsCount}</div>
           <div className="kpi-sub">complete</div>
         </div>
-        <div className="kpi-card" style={{flex:1,minWidth:180}}>
+        <div className="kpi-card" style={{flex:1,minWidth:160}}>
           <div className="kpi-label">SC Received</div>
           <div className="kpi-value" style={{color:'var(--accent1)'}}>{kpiStats.scReceived}</div>
           <div className="kpi-sub">
             unique SCs received
             {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
             {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
-            </div>
-            </div>
-            <div className="kpi-card" style={{flex:1,minWidth:180}}>
-              <div className="kpi-label">SC Completed</div>
-              <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
-              <div className="kpi-sub">
-                unique SCs finished
-                {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
-                {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
-                </div>
-                </div>
-                </div>
+          </div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:160}}>
+          <div className="kpi-label">SC Completed</div>
+          <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
+          <div className="kpi-sub">
+            unique SCs finished
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{flex:1,minWidth:160}}>
+          <div className="kpi-label">SC Ready</div>
+          <div className="kpi-value" style={{color:'var(--accent3)'}}>{kpiStats.scReady}</div>
+          <div className="kpi-sub">all items done (READY / STORES / STOCK)</div>
+        </div>
+      </div>
 
       {/* EXPORT BUTTONS */}
       <div style={{display:'flex',gap:10,marginBottom:18}}>
@@ -4596,7 +4593,7 @@ const isDoneStage = s => {
                 <td style={{fontSize:11}}>{r.po||'—'}</td>
                 <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
                 <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
-                <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage}</span></td>
+                <td><span className="status-pill" style={{background:isDoneStage(r.currentStage)?getStageColor(r.currentStage)+'22':'rgba(100,140,180,0.15)',color:isDoneStage(r.currentStage)?getStageColor(r.currentStage):'var(--text-secondary)'}}>{r.currentStage||'—'}</span></td>
                 <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
                 <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                 
