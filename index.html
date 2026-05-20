@@ -4225,8 +4225,8 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
     return t;
   };
   const uniqueStages = React.useMemo(()=>
-    [...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort()
-  ,[data]);
+    ['READY','STOCK','STORES']
+  ,[]);
   const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
 
   // --- Date filter logic ---
@@ -4257,7 +4257,8 @@ const isDoneStage = s => {
   };
   const filtered = React.useMemo(() => {
     return data.filter(row => {
-
+      // Only show completed items (READY / STOCK / STORES)
+      if(!isDoneStage(row.currentStage)) return false;
       // Date filter
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
@@ -4465,7 +4466,7 @@ const isDoneStage = s => {
             {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
           </select>
           <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
-            <option value="">All Stages</option>
+            <option value="">All Done Stages</option>
             <option value="READY">READY</option>
             <option value="STOCK">STOCK</option>
             <option value="STORES">STORES</option>
@@ -4544,7 +4545,7 @@ const isDoneStage = s => {
       {/* DATA TABLE */}
       <div className="chart-card" style={{marginBottom:16}}>
         <div className="chart-title">All Historical Rows — {filtered.length} shown</div>
-        <div className="chart-sub">ALL STAGES (WIP + COMPLETED) — LIVE + DB COMBINED</div>
+        <div className="chart-sub">COMPLETED ITEMS ONLY (READY / STOCK / STORES) — LIVE + DB COMBINED</div>
         <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
           <table>
             <thead>
