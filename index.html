@@ -4225,7 +4225,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
     return t;
   };
   const uniqueStages = React.useMemo(()=>
-    ['READY','STOCK','STORES','IN PROCESS']
+    ['READY','STOCK','STORES']
   ,[]);
   const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
 
@@ -4257,13 +4257,12 @@ const isDoneStage = s => {
   };
   const filtered = React.useMemo(() => {
     return data.filter(row => {
-      // Date filter
+      // Database module only shows completed rows (READY / STORES / STOCK) — no WIP
+      if (!isDoneStage(row.currentStage)) return false;
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
-      if(filters.stage === 'IN PROCESS') {
-        if(isDoneStage(row.currentStage)) return false;
-      } else if(filters.stage) {
+      if(filters.stage) {
         if((row.currentStage||'').trim() !== filters.stage) return false;
       }
       if(filters.type && row.type !== filters.type) return false;
@@ -4278,40 +4277,67 @@ const isDoneStage = s => {
   }, [data, filters, fromDate, toDate, dateType]);
   // --- KPI stats ---
   const kpiStats = React.useMemo(() => {
-  const total = filtered.length;
-  const uniquePO = new Set(filtered.map(r=>r.po)).size;
-  const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
-  const ready = filtered.filter(r=>isDoneStage(r.currentStage)).length;
+    const total = filtered.length;
+    const uniquePO = new Set(filtered.map(r=>r.po)).size;
+    const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
+    const readyItemsCount = filtered.filter(r=>isDoneStage(r.currentStage)).length;
 
-  // SC Received: unique SCs where poDate is within the selected date range
-  const scReceivedSet = new Set(
-    filtered.filter(r => {
-      if (!r.poDate) return false;
-      const d = r.poDate.slice(0,10);
-      if (fromDate && d < fromDate) return false;
-      if (toDate && d > toDate) return false;
-      return true;
-    }).map(r => r.sc)
-  );
+    // SC Received: unique SCs where poDate falls within selected date range
+    const scReceivedSet = new Set(
+      data.filter(r => {
+        if (!r.poDate) return false;
+        const d = r.poDate.slice(0,10);
+        if (fromDate && d < fromDate) return false;
+        if (toDate && d > toDate) return false;
+        return true;
+      }).map(r => r.sc)
+    );
 
-  // SC Completed: unique SCs where timestamp is within date range AND stage is done
-  const scCompletedSet = new Set(
-    filtered.filter(r => {
-      if (!r.timestamp) return false;
-      const d = r.timestamp.slice(0,10);
-      if (fromDate && d < fromDate) return false;
-      if (toDate && d > toDate) return false;
-      return isDoneStage(r.currentStage);
-    }).map(r => r.sc)
-  );
+    // Build full SC -> items map from entire data
+    const allScItems = {};
+    data.forEach(r => {
+      if (!r.sc) return;
+      if (!allScItems[r.sc]) allScItems[r.sc] = [];
+      allScItems[r.sc].push(r);
+    });
 
-  return {
-    total, uniquePO, uniqueSC, ready,
-    scReceived: scReceivedSet.size,
-    scCompleted: scCompletedSet.size,
-  };
-}, [filtered, fromDate, toDate]);
+    // SC Completed: ALL items in SC are done AND at least one timestamp in range
+    const scCompletedSet = new Set(
+      Object.entries(allScItems)
+        .filter(([sc, items]) => {
+          if (!items.every(i => isDoneStage(i.currentStage))) return false;
+          return items.some(i => {
+            if (!i.timestamp) return false;
+            const d = i.timestamp.slice(0,10);
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+        })
+        .map(([sc]) => sc)
+    );
 
+    // SC Ready: unique SCs in filtered set where ALL items (full data) are done
+    const filteredScGroups = {};
+    filtered.forEach(r => {
+      if (!r.sc) return;
+      if (!filteredScGroups[r.sc]) filteredScGroups[r.sc] = [];
+      filteredScGroups[r.sc].push(r);
+    });
+    const scReadySet = new Set(
+      Object.keys(filteredScGroups).filter(sc => {
+        const allItems = allScItems[sc] || [];
+        return allItems.length > 0 && allItems.every(i => isDoneStage(i.currentStage));
+      })
+    );
+
+    return {
+      total, uniquePO, uniqueSC, readyItemsCount,
+      scReceived: scReceivedSet.size,
+      scCompleted: scCompletedSet.size,
+      scReady: scReadySet.size,
+    };
+  }, [filtered, data, fromDate, toDate]);
   // --- Export handlers ---
   function exportJSON() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], {type:'application/json'});
@@ -4335,43 +4361,53 @@ const isDoneStage = s => {
     URL.revokeObjectURL(url);
   }
   function exportPDF() {
-    // Use jsPDF and autoTable to export the filtered table
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-    // Table columns
+
+    // Only export READY / STORES / STOCK — no WIP
+    const exportRows = filtered.filter(r => isDoneStage(r.currentStage));
+
     const columns = [
-      { header: 'SC', dataKey: 'sc' },
-      { header: 'PO', dataKey: 'po' },
-      { header: 'PO DATE', dataKey: 'poDate' },
-      { header: 'PRODUCT', dataKey: 'product' },
-      { header: 'STAGE', dataKey: 'currentStage' },
-      { header: 'INHOUSE', dataKey: 'inhouse' },
+      { header: 'SC',        dataKey: 'sc' },
+      { header: 'PO',        dataKey: 'po' },
+      { header: 'PO DATE',   dataKey: 'poDate' },
+      { header: 'PRODUCT',   dataKey: 'product' },
+      { header: 'STAGE',     dataKey: 'currentStage' },
+      { header: 'INHOUSE',   dataKey: 'inhouse' },
       { header: 'TIMESTAMP', dataKey: 'timestamp' },
-      
     ];
-    // Table rows
-    const rows = filtered.map(r => ({
-      sc: r.sc || '',
-      po: r.po || '',
-      poDate: r.poDate ? fmtDate(r.poDate) : '',
-      product: r.product || '',
+
+    const rows = exportRows.map(r => ({
+      sc:           r.sc || '',
+      po:           r.po || '',
+      poDate:       r.poDate ? fmtDate(r.poDate) : '',
+      product:      r.product || '',
       currentStage: r.currentStage || '',
-      inhouse: r.inhouse || '',
-      timestamp: r.timestamp ? fmtTs(r.timestamp) : '',
-      
+      inhouse:      r.inhouse || '',
+      timestamp:    r.timestamp ? fmtTs(r.timestamp) : '',
     }));
-    doc.text('Velan Metrology – Database Export', 40, 40);
-    doc.text(`Exported Rows: ${rows.length}`, 40, 60);
+
+    doc.setFontSize(14);
+    doc.text('Velan Metrology \u2013 Database Export', 40, 36);
+    doc.setFontSize(9);
+    doc.setTextColor(80, 80, 80);
+    const dateRange = (fromDate || toDate) ? ` | Date range: ${fromDate||'-'} to ${toDate||'-'}` : '';
+    doc.text(`Exported Rows: ${rows.length}  (READY / STORES / STOCK only)${dateRange}`, 40, 52);
+    doc.text(
+      `Unique POs: ${kpiStats.uniquePO}   SC Sets: ${kpiStats.uniqueSC}   SC Received: ${kpiStats.scReceived}   SC Completed: ${kpiStats.scCompleted}   SC Ready: ${kpiStats.scReady}`,
+      40, 66
+    );
+
     doc.autoTable({
       columns,
       body: rows,
-      startY: 80,
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [0, 201, 255] },
-      theme: 'grid',
-      margin: { left: 40, right: 40 },
-      tableWidth: 'auto',
-      bodyStyles: { textColor: 20 },
+      startY: 82,
+      styles:      { fontSize: 8, cellPadding: 3 },
+      headStyles:  { fillColor: [0, 100, 180] },
+      theme:       'grid',
+      margin:      { left: 40, right: 40 },
+      tableWidth:  'auto',
+      bodyStyles:  { textColor: 20 },
     });
     doc.save('database_export.pdf');
   }
@@ -4497,6 +4533,12 @@ const isDoneStage = s => {
       {/* KPI CARDS */}
       <div style={{display:'flex',gap:12,marginBottom:18,flexWrap:'wrap'}}>
         <div className="kpi-card" style={{flex:1,minWidth:180}}>
+          <div className="kpi-label">Filtered Items</div>
+          <div className="kpi-value">{kpiStats.total}</div>
+          <div className="kpi-sub">all records</div>
+        </div>
+        
+        <div className="kpi-card" style={{flex:1,minWidth:180}}>
           <div className="kpi-label">Purchase Orders</div>
           <div className="kpi-value">{kpiStats.uniquePO}</div>
           <div className="kpi-sub">unique POs in range</div>
@@ -4554,7 +4596,7 @@ const isDoneStage = s => {
                 <td style={{fontSize:11}}>{r.po||'—'}</td>
                 <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
                 <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
-                <td><span className="status-pill" style={{background:isDoneStage(r.currentStage)?getStageColor(r.currentStage)+'22':'rgba(123,167,204,0.15)',color:isDoneStage(r.currentStage)?getStageColor(r.currentStage):'#7ba7cc'}}>{isDoneStage(r.currentStage)?r.currentStage:'IN PROCESS'}</span></td>
+                <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage}</span></td>
                 <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
                 <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                 
