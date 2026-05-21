@@ -841,6 +841,25 @@ function App() {
     }
     loadServerData();
   }, []);
+
+  // ── Auto-load LIVE_URL / HISTORY_URL from Render env vars ────────────────
+  useEffect(() => {
+    async function loadServerConfig() {
+      try {
+        const res = await fetch(`${apiBase}/api/config`);
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (cfg.liveUrl) {
+          setLiveConfig(prev => ({ ...prev, url: prev.url ? prev.url : cfg.liveUrl }));
+        }
+        if (cfg.historyUrl) {
+          setHistoryConfig(prev => ({ url: prev.url ? prev.url : cfg.historyUrl }));
+        }
+      } catch { /* safe to ignore */ }
+    }
+    loadServerConfig();
+  }, []);
+
   function saveRowsToServer(rows) {
     if (!rows || rows.length === 0) return;
     fetch(`${apiBase}/api/data`, {
@@ -958,6 +977,23 @@ function App() {
       importRowsToDb(normalized);
     } catch(err) {
       setImportState({ loading:false, lastMsg:'❌ Fetch error: ' + String(err) });
+    }
+  }
+
+  async function resetDB() {
+    if (!window.confirm('⚠️ DANGER: This will permanently DELETE ALL rows from the Neon database.\n\nThis CANNOT be undone.\n\nClick OK only if you want to clear history and start fresh.')) return;
+    setImportState({ loading:true, lastMsg:'⏳ Clearing database…' });
+    try {
+      const res = await fetch(`${apiBase}/api/data`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        setData([]);
+        setImportState({ loading:false, lastMsg:'✅ Database cleared. All history rows deleted. Re-import your 2K dataset using History Import above.' });
+      } else {
+        setImportState({ loading:false, lastMsg:'❌ Reset failed: ' + (json.error || 'Unknown error') });
+      }
+    } catch(err) {
+      setImportState({ loading:false, lastMsg:'❌ Reset error: ' + String(err) });
     }
   }
 
@@ -1973,7 +2009,7 @@ function App() {
           {/* PAGES */}
           {activeNav==='overview'  && <OverviewPage kpis={kpis} data={data} filtered={filtered} liveData={liveData}/>}
           {activeNav==='monthday'  && <MonthDayPage liveData={liveData}/>}
-          {activeNav==='database'  && <DatabasePage data={allDbData} historyRows={data} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
+          {activeNav==='database'  && <DatabasePage data={allDbData} historyRows={data} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState} onResetDB={resetDB}/>}
           {activeNav==='production'&& <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
           {activeNav==='wip'       && <WIPPage kpis={kpis} filtered={filtered}/>}
           {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
@@ -4211,7 +4247,7 @@ function MonthDayPage({ liveData }) {
 }
 
 // ─── DATABASE PAGE ─────────────────────────────────────────────────────────────
-function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSyncHistory, importState }) {
+function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSyncHistory, importState, onResetDB }) {
   // --- State for filters ---
   const [dateType, setDateType] = React.useState('poDate');
   const [fromDate, setFromDate] = React.useState('');
@@ -4473,7 +4509,15 @@ const isDoneStage = s => {
             >
               {importState?.loading ? '⏳ Importing…' : '📥 Import History to DB'}
             </button>
-            <button className="filter-btn" style={{padding:'10px'}} onClick={()=>setHistoryConfig({url:''})}>🧹 Clear</button>
+            <button className="filter-btn" style={{padding:'10px'}} onClick={()=>setHistoryConfig({url:''})}>🧹 Clear URL</button>
+            <button
+              className="filter-btn"
+              style={{padding:'10px 18px',background:'rgba(255,61,90,0.12)',border:'1px solid rgba(255,61,90,0.5)',color:'var(--danger)',fontWeight:700}}
+              onClick={onResetDB}
+              disabled={importState?.loading}
+            >
+              🗑 Reset Entire DB
+            </button>
           </div>
         </div>
         {importState?.lastMsg && (

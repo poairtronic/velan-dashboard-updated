@@ -25,8 +25,9 @@ const fs    = require('fs');
 const { Pool } = require('pg');
 
 const PORT       = process.env.PORT       || 10000;
-const SHEETS_URL = process.env.SHEETS_URL || '';
-const CACHE_TTL  = Number(process.env.CACHE_TTL) || 60; // seconds
+const LIVE_URL    = process.env.LIVE_URL    || process.env.SHEETS_URL || '';
+const HISTORY_URL = process.env.HISTORY_URL || '';
+const CACHE_TTL   = Number(process.env.CACHE_TTL) || 60; // seconds
 
 // ── Neon PostgreSQL connection ────────────────────────────────────────────────
 const pool = new Pool({
@@ -235,6 +236,22 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── POST /api/import — append to Neon DB with dedup ──────────────────────
+  // ── DELETE /api/data — wipe ALL rows from Neon DB ────────────────────────
+  if (pathname === '/api/data' && req.method === 'DELETE') {
+    try {
+      await pool.query('DELETE FROM velan_rows');
+      _db       = [];
+      _liveRows = [];
+      _lastSync = '';
+      console.log('[DELETE /api/data] All rows wiped from Neon DB');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: true, message: 'All rows deleted from database.' }));
+    } catch (err) {
+      console.error('[DELETE /api/data]', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+  }
   if (pathname === '/api/import' && req.method === 'POST') {
     try {
       const body     = await readBody(req);
@@ -304,6 +321,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── GET /api/health ───────────────────────────────────────────────────────
+  // ── GET /api/config — send env URLs to frontend ──────────────────────────
+  if (pathname === '/api/config' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      liveUrl:    LIVE_URL    || null,
+      historyUrl: HISTORY_URL || null,
+    }));
+  }
   if (pathname === '/api/health') {
     let dbStatus = 'ok';
     try { await pool.query('SELECT 1'); } catch (e) { dbStatus = 'error: ' + e.message; }
