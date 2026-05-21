@@ -1,68 +1,95 @@
 /**
  * Velan Metrology Dashboard — Backend Server
  * ──────────────────────────────────────────
+ * Storage: Neon PostgreSQL (replaces velan_db.json)
+ * No Persistent Disk needed. Works on Render free tier.
+ *
  * Endpoints:
  *   GET  /api/data          → return historical DB rows + live rows
- *   POST /api/data          → replace live operational snapshot
- *   POST /api/import        → append rows to permanent DB (dedup)
+ *   POST /api/data          → replace live snapshot AND save new rows to Neon
+ *   POST /api/import        → append rows to Neon DB (dedup)
  *   GET  /api/sheets?url=   → proxy-fetch Google Sheets CSV (bypasses CORS)
- *   GET  /api/health        → server status
+ *   GET  /api/health        → server + DB status
  *   GET  /                  → serves index.html
  *
+ * Required env var:  DATABASE_URL = your Neon connection string
+ * Optional env var:  SHEETS_URL, CACHE_TTL, PORT
+ *
  * Start:  node server.js
- * Port:   3000
  */
 
-const http   = require('http');
-const https  = require('https');
-const url    = require('url');
-const path   = require('path');
-const fs     = require('fs');
-const PORT = process.env.PORT || 10000;
+const http  = require('http');
+const https = require('https');
+const path  = require('path');
+const fs    = require('fs');
+const { Pool } = require('pg');
+
+const PORT       = process.env.PORT       || 10000;
 const SHEETS_URL = process.env.SHEETS_URL || '';
 const CACHE_TTL  = Number(process.env.CACHE_TTL) || 60; // seconds
 
-// ── Persistent JSON data store ────────────────────────────────────────────────
-// RENDER DEPLOYMENT: The default path (__dirname/velan_db.json) is on an
-// ephemeral filesystem that resets on every deploy.
-// FIX: In Render dashboard → Environment → add:
-//   DB_FILE = /var/data/velan_db.json
-// and attach a Persistent Disk mounted at /var/data
-const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'velan_db.json');
-function loadDB() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw    = fs.readFileSync(DB_FILE, 'utf8');
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    }
-  } catch (e) {
-    console.error('[DB] Failed to load velan_db.json:', e.message);
-  }
-  return [];
-}
-function saveDB(rows) {
-  try {
-    if (!Array.isArray(rows)) {
-      console.error('[DB] Invalid rows format');
-      return;
-    }
+// ── Neon PostgreSQL connection ────────────────────────────────────────────────
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 5,                  // max 5 concurrent connections (Neon free tier safe)
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 
-    fs.writeFileSync(
-      DB_FILE,
-      JSON.stringify(rows, null, 2),
-      'utf8'
-    );
-
-    console.log(`[DB] Saved ${rows.length} rows`);
-  } catch (e) {
-    console.error('[DB] Failed to save DB:', e.message);
-  }
+// ── Create table if it doesn't exist ─────────────────────────────────────────
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS velan_rows (
+      id       SERIAL PRIMARY KEY,
+      row_key  TEXT UNIQUE NOT NULL,
+      data     JSONB NOT NULL,
+      added_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  console.log('[DB] Neon table ready');
 }
-// In-memory state
-let _db       = loadDB();   // permanent historical archive — NEVER overwritten by live upload
-let _liveRows = [];         // current operational snapshot — replaced on every upload
+
+// ── Load all rows from Neon into memory ───────────────────────────────────────
+async function loadDB() {
+  const res = await pool.query('SELECT data FROM velan_rows ORDER BY id');
+  return res.rows.map(r => r.data);
+}
+
+// ── Insert only NEW rows into Neon (skips duplicates via row_key) ─────────────
+const makeKey = r =>
+  `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}||${r.timestamp||''}`;
+
+async function insertRows(rows) {
+  if (!rows.length) return 0;
+  const client = await pool.connect();
+  let inserted = 0;
+  try {
+    await client.query('BEGIN');
+    for (const row of rows) {
+      const res = await client.query(
+        `INSERT INTO velan_rows (row_key, data)
+         VALUES ($1, $2)
+         ON CONFLICT (row_key) DO NOTHING`,
+        [makeKey(row), JSON.stringify(row)]
+      );
+      if (res.rowCount > 0) inserted++;
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+  return inserted;
+}
+
+// ── In-memory state ───────────────────────────────────────────────────────────
+let _db       = [];   // full archive — loaded from Neon at startup
+let _liveRows = [];   // current operational snapshot — replaced on every upload
 let _lastSync = '';
+
 // ── In-memory Google Sheets cache ────────────────────────────────────────────
 let _cache = { data: null, ts: 0, url: '' };
 
@@ -76,25 +103,31 @@ function fetchRemote(targetUrl) {
       try { parsedUrl = new URL(fetchUrl); }
       catch (e) { return reject(new Error('Invalid URL: ' + fetchUrl)); }
       const mod = parsedUrl.protocol === 'https:' ? https : http;
-      const reqObj = mod.get(fetchUrl, { headers: { 'User-Agent': 'VelanDashboard/2.0' }, timeout: 25000 }, res => {
-        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-          redirectCount++;
-          // Resolve relative redirects
-          let nextUrl = res.headers.location;
-          if (nextUrl.startsWith('/')) {
-            nextUrl = `${parsedUrl.protocol}//${parsedUrl.host}${nextUrl}`;
+      const reqObj = mod.get(
+        fetchUrl,
+        { headers: { 'User-Agent': 'VelanDashboard/2.0' }, timeout: 25000 },
+        res => {
+          if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+            redirectCount++;
+            let nextUrl = res.headers.location;
+            if (nextUrl.startsWith('/')) {
+              nextUrl = `${parsedUrl.protocol}//${parsedUrl.host}${nextUrl}`;
+            }
+            return doFetch(nextUrl);
           }
-          return doFetch(nextUrl);
+          if (res.statusCode !== 200) {
+            return reject(new Error(`HTTP ${res.statusCode} from ${fetchUrl}`));
+          }
+          const chunks = [];
+          res.on('data', chunk => chunks.push(chunk));
+          res.on('end',  ()    => resolve(Buffer.concat(chunks).toString('utf8')));
+          res.on('error', reject);
         }
-        if (res.statusCode !== 200) {
-          return reject(new Error(`HTTP ${res.statusCode} from ${fetchUrl}`));
-        }
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('end',  ()    => resolve(Buffer.concat(chunks).toString('utf8')));
-        res.on('error', reject);
-      }).on('error', reject);
-      reqObj.on('timeout', () => { reqObj.destroy(); reject(new Error('Request timed out after 25s')); });
+      ).on('error', reject);
+      reqObj.on('timeout', () => {
+        reqObj.destroy();
+        reject(new Error('Request timed out after 25s'));
+      });
     }
     doFetch(targetUrl);
   });
@@ -158,45 +191,40 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  // ── POST /api/data — replace live snapshot AND accumulate into DB ─────────
+  // ── POST /api/data — replace live snapshot AND save new rows to Neon ──────
   if (pathname === '/api/data' && req.method === 'POST') {
     try {
-      const body    = await readBody(req);
-      const payload = JSON.parse(body);
+      const body     = await readBody(req);
+      const payload  = JSON.parse(body);
       const incoming = Array.isArray(payload.rows) ? payload.rows : [];
 
-      // 1. Replace the live snapshot (what all operational pages see)
+      // 1. Replace the live snapshot
       _liveRows = incoming;
 
-      // 2. Also merge incoming rows into the permanent DB (dedup by key)
-      //    This means every live upload automatically goes into the database too.
-      const makeKey = r =>
-        `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}||${r.timestamp||''}`;
-
+      // 2. Find new rows not already in _db (dedup in memory)
       const existingKeys = new Set(_db.map(makeKey));
-      let newRows = 0;
-
+      const newRows = [];
       incoming.forEach(row => {
         const k = makeKey(row);
         if (!existingKeys.has(k)) {
           _db.push(row);
           existingKeys.add(k);
-          newRows++;
+          newRows.push(row);
         }
       });
 
-      // 3. Save the updated DB to disk
-      saveDB(_db);
+      // 3. Save only new rows to Neon
+      const saved = await insertRows(newRows);
       _lastSync = new Date().toLocaleString('en-IN');
 
-      console.log(`[POST /api/data] Live: ${_liveRows.length} rows | DB: ${_db.length} rows (+${newRows} new)`);
+      console.log(`[POST /api/data] Live: ${_liveRows.length} | DB: ${_db.length} (+${saved} new to Neon)`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
         success:   true,
         liveTotal: _liveRows.length,
         total:     _db.length,
-        newRows,
+        newRows:   saved,
         lastSync:  _lastSync,
       }));
     } catch (err) {
@@ -205,32 +233,31 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
-  // ── POST /api/import — append to permanent DB with dedup ─────────────────
+
+  // ── POST /api/import — append to Neon DB with dedup ──────────────────────
   if (pathname === '/api/import' && req.method === 'POST') {
     try {
-      const body    = await readBody(req);
-      const payload = JSON.parse(body);
+      const body     = await readBody(req);
+      const payload  = JSON.parse(body);
       const incoming = Array.isArray(payload.rows) ? payload.rows : [];
 
-      const makeKey = r =>
-        `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}||${r.timestamp||''}`;
-
+      // Dedup against in-memory _db first
       const existingKeys = new Set(_db.map(makeKey));
-      let imported = 0, skipped = 0;
-
+      const newRows = [];
       incoming.forEach(row => {
         const k = makeKey(row);
         if (!existingKeys.has(k)) {
           _db.push(row);
           existingKeys.add(k);
-          imported++;
-        } else {
-          skipped++;
+          newRows.push(row);
         }
       });
 
-      saveDB(_db);
+      const imported = await insertRows(newRows);
+      const skipped  = incoming.length - newRows.length;
       _lastSync = new Date().toLocaleString('en-IN');
+
+      console.log(`[POST /api/import] Imported: ${imported} | Skipped: ${skipped} | DB: ${_db.length}`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
@@ -250,16 +277,13 @@ const server = http.createServer(async (req, res) => {
   // ── GET /api/sheets?url=<google-sheets-csv-url> ───────────────────────────
   if (pathname === '/api/sheets' && req.method === 'GET') {
     const sheetUrl = parsed.searchParams.get('url') || SHEETS_URL;
-    
-
     if (!sheetUrl) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
-        error: 'No sheet URL provided. Pass ?url=<google-sheets-csv-url> or set SHEETS_URL env var.',
-        hint:  'Example: /api/sheets?url=https://docs.google.com/spreadsheets/d/SHEET_ID/export?format=csv'
+        error: 'No sheet URL provided. Pass ?url=<url> or set SHEETS_URL env var.',
+        hint:  'Publish to web → Entire Document → CSV → copy the /pub?output=csv link',
       }));
     }
-
     try {
       const result = await getSheetData(sheetUrl);
       res.writeHead(200, {
@@ -274,13 +298,15 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({
         error:  'Failed to fetch Google Sheet.',
         detail: err.message,
-        hint:   'Make sure the sheet is shared as "Anyone with the link can view"',
+        hint:   'File → Share → Publish to web → Entire Document → CSV',
       }));
     }
   }
 
   // ── GET /api/health ───────────────────────────────────────────────────────
   if (pathname === '/api/health') {
+    let dbStatus = 'ok';
+    try { await pool.query('SELECT 1'); } catch (e) { dbStatus = 'error: ' + e.message; }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       status:   'ok',
@@ -288,14 +314,14 @@ const server = http.createServer(async (req, res) => {
       dbRows:   _db.length,
       liveRows: _liveRows.length,
       lastSync: _lastSync || 'never',
+      dbStatus,
+      storage:  'neon-postgresql',
       cacheAge: _cache.ts ? Math.round((Date.now() - _cache.ts) / 1000) : null,
-      sheetUrl: (SHEETS_URL || 'not set').substring(0, 60),
     }));
   }
 
   // ── Static files ──────────────────────────────────────────────────────────
   const staticFile = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
-  // Security: prevent path traversal outside __dirname
   if (!staticFile.startsWith(__dirname)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
@@ -327,33 +353,51 @@ const server = http.createServer(async (req, res) => {
   res.end('Not found');
 });
 
-server.listen(PORT, () => {
-  console.log(`\n┌─────────────────────────────────────────────────┐`);
-  console.log(`│  Velan Metrology Dashboard — Backend Server     │`);
-  console.log(`│  http://localhost:${PORT}                          │`);
-  console.log(`│  Data:   http://localhost:${PORT}/api/data          │`);
-  console.log(`│  Import: http://localhost:${PORT}/api/import        │`);
-  console.log(`│  Sheets: http://localhost:${PORT}/api/sheets        │`);
-  console.log(`│  Health: http://localhost:${PORT}/api/health        │`);
-  console.log(`└─────────────────────────────────────────────────┘\n`);
-  console.log(`  DB file:  ${DB_FILE}`);
-  console.log(`  DB rows:  ${_db.length} rows loaded from disk`);
-  if (SHEETS_URL) {
-    console.log(`  SHEETS_URL = ${SHEETS_URL.substring(0, 70)}`);
-  } else {
-    console.log(`  ⚠  No SHEETS_URL set. Use dashboard UI or pass ?url= to /api/sheets`);
+// ── Startup: init Neon table → load rows → start listening ───────────────────
+async function startup() {
+  if (!process.env.DATABASE_URL) {
+    console.error('\n[FATAL] DATABASE_URL is not set.');
+    console.error('  → Go to Render → Environment → Add: DATABASE_URL = <your Neon connection string>\n');
+    process.exit(1);
   }
+  console.log('\n[DB] Connecting to Neon PostgreSQL…');
+  await initDB();
+  _db = await loadDB();
+  console.log(`[DB] Loaded ${_db.length} rows from Neon`);
+
+  server.listen(PORT, () => {
+    console.log(`\n┌─────────────────────────────────────────────────┐`);
+    console.log(`│  Velan Metrology Dashboard — Backend Server     │`);
+    console.log(`│  http://localhost:${PORT}                          │`);
+    console.log(`│  Data:   http://localhost:${PORT}/api/data          │`);
+    console.log(`│  Import: http://localhost:${PORT}/api/import        │`);
+    console.log(`│  Sheets: http://localhost:${PORT}/api/sheets        │`);
+    console.log(`│  Health: http://localhost:${PORT}/api/health        │`);
+    console.log(`└─────────────────────────────────────────────────┘`);
+    console.log(`  Storage: Neon PostgreSQL (no local file needed)`);
+    console.log(`  DB rows: ${_db.length} rows loaded`);
+    if (SHEETS_URL) {
+      console.log(`  SHEETS_URL = ${SHEETS_URL.substring(0, 70)}`);
+    } else {
+      console.log(`  ⚠  No SHEETS_URL set. Paste URL in dashboard Upload tab.`);
+    }
+    console.log('');
+  });
+}
+
+startup().catch(err => {
+  console.error('[STARTUP FAILED]', err.message);
+  process.exit(1);
 });
 
-// ── Graceful shutdown ────────────────────────────────────────────────────────
-function gracefulShutdown(signal) {
-  console.log(`\n[Server] ${signal} received — saving DB and shutting down...`);
-  saveDB(_db);
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+async function gracefulShutdown(signal) {
+  console.log(`\n[Server] ${signal} received — closing Neon pool…`);
+  await pool.end();
   server.close(() => {
     console.log('[Server] Closed. Goodbye.');
     process.exit(0);
   });
-  // Force exit after 5 seconds if connections hang
   setTimeout(() => process.exit(1), 5000);
 }
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

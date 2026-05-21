@@ -1,7 +1,7 @@
 {
   "name": "velan-metrology-dashboard",
   "version": "2.0.0",
-  "description": "Velan Metrology Production Command Center — Google Sheets live backend + React frontend",
+  "description": "Velan Metrology Production Command Center — Neon PostgreSQL + Google Sheets + React",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,6 +10,9 @@
   "keywords": ["dashboard", "production", "metrology"],
   "author": "Velan Metrology",
   "license": "ISC",
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
   "devDependencies": {
     "live-server": "^1.2.2"
   }

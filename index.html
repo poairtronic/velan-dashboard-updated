@@ -1454,7 +1454,7 @@ function App() {
       setUploadStatus({
         type:'error',
         msg:'Live sync failed.',
-        detail:`${String(err)}\n\n💡 For Google Sheets: File → Share → "Anyone with the link can view"\n   Then paste the sheet URL here — any format works (edit, view, or CSV export link).`,
+        detail:`${String(err)}\n\n💡 For Google Sheets: File → Share → Publish to web → Entire Document → CSV → Publish\n   Copy the /pub?output=csv link and paste it above.`,
       });
     }
   }
@@ -3886,16 +3886,16 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
               type="text"
               value={liveConfig?.url || ''}
               onChange={e=>setLiveConfig(prev=>({...prev,url:e.target.value}))}
-              placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit  ← paste any Google Sheets URL"
+              placeholder="https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?output=csv  ← paste Publish to web CSV link"
               style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'9px 12px',fontSize:11,marginBottom:10,fontFamily:'Share Tech Mono,monospace'}}
             />
 
             <div style={{background:'rgba(0,0,0,0.2)',borderRadius:6,padding:'8px 12px',marginBottom:10,fontSize:10,color:'var(--text-muted)',lineHeight:1.8}}>
-              <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to connect Google Sheets:</div>
-              <div>1. In Google Sheets → <strong style={{color:'var(--accent1)'}}>File → Share → Share with others</strong></div>
-              <div>2. Set to <strong style={{color:'var(--success)'}}>"Anyone with the link can view"</strong></div>
-              <div>3. Copy the URL from the browser address bar and paste above</div>
-              <div style={{marginTop:4,color:'var(--accent3)'}}>✓ Edit links, View links, and CSV export links all work automatically</div>
+              <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to get the Live Google Sheets CSV link:</div>
+<div>1. Open your Google Sheet → <strong style={{color:'var(--accent1)'}}>File → Share → Publish to web</strong></div>
+<div>2. Select <strong style={{color:'var(--success)'}}>Entire Document</strong> → set format to <strong style={{color:'var(--success)'}}>CSV (.csv)</strong></div>
+<div>3. Click <strong style={{color:'var(--accent5)'}}>Publish</strong> → Copy the link and paste above</div>
+<div style={{marginTop:4,color:'var(--accent3)'}}>✓ Link ends with /pub?output=csv — paste it directly, no changes needed</div>
             </div>
 
             <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
@@ -3943,7 +3943,7 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
           <div style={{marginTop:12,padding:'10px 14px',background:'rgba(0,201,255,0.05)',border:'1px solid rgba(0,201,255,0.15)',borderRadius:8}}>
             <div style={{fontSize:10,letterSpacing:2,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>SUPPORTED DATA SOURCES</div>
             <ul style={{color:'var(--text-secondary)',fontSize:11,paddingLeft:16,lineHeight:1.9}}>
-              <li><span className="mono text-accent">Google Sheets</span> — Paste any share/edit/view URL. Set sheet to "Anyone with link can view". Backend proxy handles CORS automatically.</li>
+              <li><span className="mono text-accent">Google Sheets (Publish to web)</span> — File → Share → Publish to web → Entire Document → CSV → Copy link. Backend proxy handles CORS automatically.</li>
               <li><span className="mono text-accent">Excel (.xlsx/.xls)</span> — Drag & drop your Velan production workbook. Merged cells, PO fill-down, SNO/SC structure all parse correctly.</li>
               <li><span className="mono text-accent">CSV / JSON</span> — Direct file upload or URL. Flexible column name detection.</li>
               <li><span className="mono text-accent">No "type" column needed</span> — product type auto-detected from name prefix (APG, SRG, ARG, SP, etc.)</li>
@@ -4007,13 +4007,14 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
             type="text"
             value={historyConfig?.url || ''}
             onChange={e=>setHistoryConfig(prev=>({...prev,url:e.target.value}))}
-            placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/export?format=csv"
+            placeholder="https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?output=csv  ← Publish to web CSV link"
             style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid rgba(100,120,255,0.4)',borderRadius:6,color:'var(--text-primary)',padding:'9px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}
           />
           <div style={{background:'rgba(0,0,0,0.2)',borderRadius:6,padding:'8px 12px',fontSize:10,color:'var(--text-muted)',lineHeight:1.8}}>
-            <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to get the CSV URL:</div>
-            <div>1. Open your History Google Sheet → <strong style={{color:'var(--accent1)'}}>File → Share → Anyone with link can view</strong></div>
-            <div>2. Then use URL format: <span style={{fontFamily:'Share Tech Mono',color:'var(--accent3)'}}>…/export?format=csv</span></div>
+            <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to get the History Google Sheets CSV link:</div>
+<div>1. Open your History Google Sheet → <strong style={{color:'var(--accent1)'}}>File → Share → Publish to web</strong></div>
+<div>2. Select <strong style={{color:'var(--success)'}}>Entire Document</strong> → format: <strong style={{color:'var(--success)'}}>CSV (.csv)</strong> → Click <strong style={{color:'var(--accent5)'}}>Publish</strong></div>
+<div>3. Copy the generated link (ends with <span style={{fontFamily:'Share Tech Mono',color:'var(--accent3)'}}>/pub?output=csv</span>) and paste above</div>
           </div>
           <div style={{display:'flex',gap:10}}>
             <button
