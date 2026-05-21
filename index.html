@@ -2057,11 +2057,20 @@ function OverviewPage({kpis, data, filtered, liveData}) {
   });
   const dailySetItems = dailySetPOs.flatMap(([_, items]) => items);
 
-  // 2. Delayed PO: items with pendingDays > 21
-  const delayedPOItems = liveData.filter(i => (i.pendingDays ?? 0) > 21);
+  // 2. Delayed PO: not completed AND poDate > 21 working days ago
+  const delayedPOItems = liveData.filter(i => {
+    if (['READY','STORES','STOCK'].includes(i.currentStage)) return false;
+    if (!i.poDate) return false;
+    const days = workingDaysBetween(i.poDate, todayStr);
+    return days !== null && days > 21;
+  });
 
-  // 3. In Progress: not completed and pendingDays <= 21
-  const inProgressItems = liveData.filter(i => !['READY','STORES','STOCK'].includes(i.currentStage) && (i.pendingDays ?? 0) <= 21);
+  // 3. In Progress: not completed AND within 21 working days from PO date
+  const inProgressItems = liveData.filter(i => {
+    if (['READY','STORES','STOCK'].includes(i.currentStage)) return false;
+    const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
+    return days === null || days <= 21;
+  });
 
   // Group items by PO for modal display
   function groupByPO(items) {
