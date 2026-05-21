@@ -401,11 +401,8 @@ async function startup() {
     console.log(`└─────────────────────────────────────────────────┘`);
     console.log(`  Storage: Neon PostgreSQL (no local file needed)`);
     console.log(`  DB rows: ${_db.length} rows loaded`);
-    if (SHEETS_URL) {
-      console.log(`  SHEETS_URL = ${SHEETS_URL.substring(0, 70)}`);
-    } else {
-      console.log(`  ⚠  No SHEETS_URL set. Paste URL in dashboard Upload tab.`);
-    }
+    console.log(`  LIVE_URL:    ${LIVE_URL    ? LIVE_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
+    console.log(`  HISTORY_URL: ${HISTORY_URL ? HISTORY_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
     console.log('');
   });
 }
