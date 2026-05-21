@@ -236,7 +236,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── POST /api/import — append to Neon DB with dedup ──────────────────────
-  // ── DELETE /api/data — wipe ALL rows from Neon DB ────────────────────────
+ 
   if (pathname === '/api/data' && req.method === 'DELETE') {
     try {
       await pool.query('DELETE FROM velan_rows');
@@ -293,7 +293,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── GET /api/sheets?url=<google-sheets-csv-url> ───────────────────────────
   if (pathname === '/api/sheets' && req.method === 'GET') {
-    const sheetUrl = parsed.searchParams.get('url') || SHEETS_URL;
+    const sheetUrl = parsed.searchParams.get('url') || LIVE_URL;
     if (!sheetUrl) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
