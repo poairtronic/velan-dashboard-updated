@@ -2160,7 +2160,7 @@ function OverviewPage({kpis, data, filtered, liveData}) {
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
         {[
           {id:'daily',label:'DAILY SET',value:dailySetItems.length,sub:'items created today',color1:'#00c9ff',color2:'#0fa8e0',data:dailyPOs},
-          {id:'delayed',label:'DELAYED PO',value:delayedPOItems.length,sub:'items in delayed POs',color1:'#ff3d5a',color2:'#ff6b35',data:delayedPOs},
+          {id:'delayed',label:'DELAYED SC',value:delayedPOItems.length,sub:'items in delayed POs',color1:'#ff3d5a',color2:'#ff6b35',data:delayedPOs},
           {id:'inprogress',label:'INPROGRESS',value:inProgressItems.length,sub:'items in production',color1:'#ffd60a',color2:'#b24bff',data:inProgressPOs},
         ].map(cat => (
           <button
