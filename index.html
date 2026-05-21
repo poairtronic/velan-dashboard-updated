@@ -1981,7 +1981,7 @@ function App() {
           {activeNav==='po'        && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
           {activeNav==='sc'        && <SCPage kpis={kpis} scGroups={scGroups}/>}
           {activeNav==='vendor'    && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
-          {activeNav==='upload'    && <UploadPage onUpload={handleFileUpload} data={data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
+          {activeNav==='upload'    && <UploadPage onUpload={handleFileUpload} data={liveRows.length > 0 ? liveRows : data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
         </div>
       </div>
     </div>
@@ -2045,6 +2045,10 @@ function OverviewPage({kpis, data, filtered, liveData}) {
   const dailyPOs = groupByPO(dailySetItems);
   const delayedPOs = groupByPO(delayedPOItems);
   const inProgressPOs = groupByPO(inProgressItems);
+
+  // FIXED: define readyPOs so the "View ready details" modal works
+  const readyItems = liveData.filter(i => ['READY','STORES','STOCK'].includes(i.currentStage));
+  const readyPOs = groupByPO(readyItems);
 
   const stages = Object.entries(kpis.stageCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
 
@@ -4276,6 +4280,12 @@ const isDoneStage = s => {
   // --- KPI stats ---
   const kpiStats = React.useMemo(() => {
     const total = filtered.length;
+
+    // Total PO and SC counts from ENTIRE data (no date filter) — full picture
+    const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
+    const totalSCCount = new Set(data.filter(r=>r.sc).map(r=>r.sc)).size;
+
+    // Filtered PO and SC counts (respects date/search filters)
     const uniquePO = new Set(filtered.map(r=>r.po)).size;
     const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
     const readyItemsCount = filtered.filter(r=>isDoneStage(r.currentStage)).length;
@@ -4331,6 +4341,7 @@ const isDoneStage = s => {
 
     return {
       total, uniquePO, uniqueSC, readyItemsCount,
+      totalPOCount, totalSCCount,
       scReceived: scReceivedSet.size,
       scCompleted: scCompletedSet.size,
       scReady: scReadySet.size,
@@ -4435,6 +4446,9 @@ const isDoneStage = s => {
           {(historyRows||[]).length > 0 && (
             <span style={{background:'rgba(100,120,255,0.15)',border:'1px solid rgba(100,120,255,0.4)',color:'var(--accent3)',borderRadius:20,padding:'4px 14px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
               🗂 {(historyRows||[]).length} history rows in DB
+              {((historyRows||[]).length !== (data||[]).length) && (
+                <span style={{marginLeft:8,opacity:0.7}}>· {(data||[]).length} total (incl. live)</span>
+              )}
             </span>
           )}
         </div>
@@ -4503,9 +4517,9 @@ const isDoneStage = s => {
           </select>
           <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
             <option value="">All Stages</option>
-            <option value="READY">READY</option>
-            <option value="STOCK">STOCK</option>
-            <option value="STORES">STORES</option>
+            {[...new Set(data.map(r=>r.currentStage))].filter(Boolean).sort().map(s=>(
+              <option key={s} value={s}>{s}</option>
+            ))}
           </select>
           <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
             <option value="">All Types</option>
@@ -4529,37 +4543,42 @@ const isDoneStage = s => {
       </div>
 
       {/* KPI CARDS */}
-      <div style={{display:'flex',gap:12,marginBottom:18,flexWrap:'wrap'}}>
-        <div className="kpi-card" style={{flex:1,minWidth:160}}>
-          <div className="kpi-label">Purchase Orders</div>
-          <div className="kpi-value">{kpiStats.uniquePO}</div>
-          <div className="kpi-sub">unique POs in range</div>
-        </div>
-        <div className="kpi-card" style={{flex:1,minWidth:160}}>
-          <div className="kpi-label">SC Sets</div>
-          <div className="kpi-value">{kpiStats.uniqueSC}</div>
-          <div className="kpi-sub">job sets in range</div>
-        </div>
-        
-        <div className="kpi-card" style={{flex:1,minWidth:160}}>
-          <div className="kpi-label">SC Received</div>
-          <div className="kpi-value" style={{color:'var(--accent1)'}}>{kpiStats.scReceived}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:12,marginBottom:18}}>
+        <div className="kpi-card" style={{'--c1':'#00c9ff','--c2':'#0fa8e0'}}>
+          <div className="kpi-label">TOTAL POs</div>
+          <div className="kpi-value">{kpiStats.totalPOCount}</div>
           <div className="kpi-sub">
-            unique SCs received
-            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
-            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+            all POs in database
+            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--accent1)'}}>{kpiStats.uniquePO} in selected range</span>}
           </div>
         </div>
-        <div className="kpi-card" style={{flex:1,minWidth:160}}>
-          <div className="kpi-label">SC Completed</div>
+        <div className="kpi-card" style={{'--c1':'#b24bff','--c2':'#00c9ff'}}>
+          <div className="kpi-label">TOTAL SCs</div>
+          <div className="kpi-value">{kpiStats.totalSCCount}</div>
+          <div className="kpi-sub">
+            all job sets in database
+            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--accent1)'}}>{kpiStats.uniqueSC} in selected range</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#ffd60a','--c2':'#ff6b35'}}>
+          <div className="kpi-label">SC RECEIVED</div>
+          <div className="kpi-value" style={{color:'var(--accent5)'}}>{kpiStats.scReceived}</div>
+          <div className="kpi-sub">
+            SCs with PO date in range
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#00e676','--c2':'#00c9ff'}}>
+          <div className="kpi-label">SC COMPLETED</div>
           <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
           <div className="kpi-sub">
-            unique SCs finished
-            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
-            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+            all items READY/STOCK/STORES
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>completed in range</span>}
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
           </div>
         </div>
-        
       </div>
 
       {/* EXPORT BUTTONS */}
@@ -4567,16 +4586,30 @@ const isDoneStage = s => {
         <button className="filter-btn" style={{background:'rgba(0,201,255,0.08)',color:'var(--accent1)',fontWeight:700}} onClick={exportJSON}>⬇ JSON</button>
         <button className="filter-btn" style={{background:'rgba(0,255,100,0.08)',color:'var(--success)',fontWeight:700}} onClick={exportCSV}>⬇ CSV</button>
         <button className="filter-btn" style={{background:'rgba(255,61,90,0.08)',color:'var(--danger)',fontWeight:700}} onClick={exportPDF}>⬇ PDF</button>
-        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT FILTERED ({filtered.filter(r=>isDoneStage(r.currentStage)).length} rows):</span>
+        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT COMPLETED ITEMS ({filtered.filter(r=>isDoneStage(r.currentStage)).length} rows — READY / STOCK / STORES only):</span>
       </div>
 
-      {/* DATA TABLE — READY / STOCK / STORES only */}
+      {/* DATA TABLE — READY / STOCK / STORES only (completed items) */}
       {(() => {
         const tableRows = filtered.filter(r => isDoneStage(r.currentStage));
+        const totalInFilter = filtered.length;
+        const wipCount = totalInFilter - tableRows.length;
         return (
           <div className="chart-card" style={{marginBottom:16}}>
-            <div className="chart-title">Completed Items — {tableRows.length} shown</div>
-            <div className="chart-sub">READY / STOCK / STORES ONLY — LIVE + DB COMBINED</div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:4}}>
+              <div>
+                <div className="chart-title">Completed Items — {tableRows.length} shown</div>
+                <div className="chart-sub">READY / STOCK / STORES ONLY · {wipCount} in-process items hidden from table · HISTORY + LIVE COMBINED</div>
+              </div>
+              <div style={{display:'flex',gap:8,flexShrink:0}}>
+                <span style={{background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.3)',color:'var(--success)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
+                  ✓ {tableRows.length} DONE
+                </span>
+                <span style={{background:'rgba(255,184,54,0.12)',border:'1px solid rgba(255,184,54,0.3)',color:'var(--warning)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
+                  ⏳ {wipCount} WIP
+                </span>
+              </div>
+            </div>
             <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
               <table>
                 <thead>
