@@ -2229,15 +2229,20 @@ function OverviewPage({kpis, data, filtered, liveData}) {
                     <div style={{fontSize:10,color:'var(--text-muted)'}}>
                       {poGroup.items.map((i,idx) => (
                         <div key={idx} style={{padding:'6px 0',borderBottom:idx<poGroup.items.length-1?'1px solid rgba(26,58,92,0.4)':'none'}}>
-                          <span style={{color:'var(--accent1)',fontFamily:'Share Tech Mono',fontSize:9}}>{i.sc}</span>
+                          <span style={{color:'var(--accent1)',fontFamily:'Share Tech Mono',fontSize:9}}>{i.po}</span>
                           {' · '}
                           <span style={{fontSize:9}}>{i.product?.substring(0,40)}</span>
                           {' · '}
                           <span style={{color:'var(--text-muted)',fontSize:9}}>{i.currentStage}</span>
                           {' · '}
-                          <span style={{color:(i.pendingDays||0)>21?'var(--danger)':(i.pendingDays||0)>7?'var(--warning)':'var(--success)',fontSize:9,fontWeight:700}}>
-                            {i.pendingDays != null ? `${i.pendingDays}d` : '—'}
-                          </span>
+                          {(() => {
+                            const poAge = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
+                            return (
+                              <span style={{color:poAge>21?'var(--danger)':poAge>7?'var(--warning)':'var(--success)',fontSize:9,fontWeight:700}}>
+                                {poAge != null ? `${poAge}d` : '—'}
+                              </span>
+                            );
+                          })()}
                         </div>
                       ))}
                     </div>
