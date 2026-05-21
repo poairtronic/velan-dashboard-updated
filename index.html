@@ -4376,12 +4376,48 @@ const isDoneStage = s => {
       })
     );
 
+    // SC Set prefix: strip trailing letters (e.g. "24050001A" → "24050001")
+    const getScPrefix = sc => String(sc).trim().replace(/-\d+$/, '');
+
+    // SC Sets Received: unique SC set prefixes where at least one SC has PO date in range
+    const scSetsReceivedSet = new Set(
+      [...scReceivedSet].map(sc => getScPrefix(sc)).filter(Boolean)
+    );
+
+    // SC Sets Completed: unique SC set prefixes where ALL SCs with that prefix
+    // have every item done AND at least one timestamp in range
+    const allPrefixes = [...new Set(
+      data.filter(r => r.sc).map(r => getScPrefix(r.sc)).filter(Boolean)
+    )];
+    const scSetsCompletedSet = new Set(
+      allPrefixes.filter(prefix => {
+        const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
+        if (prefixSCs.length === 0) return false;
+        const allDone = prefixSCs.every(sc =>
+          (allScItems[sc] || []).length > 0 &&
+          (allScItems[sc] || []).every(i => isDoneStage(i.currentStage))
+        );
+        if (!allDone) return false;
+        return prefixSCs.some(sc =>
+          (allScItems[sc] || []).some(i => {
+            if (!i.timestamp) return false;
+            const d = i.timestamp.slice(0,10);
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          })
+        );
+      })
+    );
+
     return {
       total, uniquePO, uniqueSC, readyItemsCount,
       totalPOCount, totalSCCount,
       scReceived: scReceivedSet.size,
       scCompleted: scCompletedSet.size,
       scReady: scReadySet.size,
+      scSetsReceived: scSetsReceivedSet.size,
+      scSetsCompleted: scSetsCompletedSet.size,
     };
   }, [filtered, data, fromDate, toDate]);
   // --- Export handlers ---
@@ -4588,7 +4624,7 @@ const isDoneStage = s => {
       </div>
 
       {/* KPI CARDS */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:12,marginBottom:18}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12,marginBottom:18}}>
         <div className="kpi-card" style={{'--c1':'#00c9ff','--c2':'#0fa8e0'}}>
           <div className="kpi-label">TOTAL POs</div>
           <div className="kpi-value">{kpiStats.totalPOCount}</div>
@@ -4622,6 +4658,24 @@ const isDoneStage = s => {
             all items READY/STOCK/STORES
             {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>completed in range</span>}
             {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#ff6b35','--c2':'#ffd60a'}}>
+          <div className="kpi-label">SC SETS RECEIVED</div>
+          <div className="kpi-value" style={{color:'var(--accent4)'}}>{kpiStats.scSetsReceived}</div>
+          <div className="kpi-sub">
+            unique SC set prefixes
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
+            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>with PO date in range</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#00ff9d','--c2':'#00e676'}}>
+          <div className="kpi-label">SC SETS COMPLETED</div>
+          <div className="kpi-value" style={{color:'var(--accent3)'}}>{kpiStats.scSetsCompleted}</div>
+          <div className="kpi-sub">
+            unique SC set prefixes
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all done · all dates</span>}
+            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all items done · ts in range</span>}
           </div>
         </div>
       </div>
