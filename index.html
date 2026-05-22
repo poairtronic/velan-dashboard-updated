@@ -4360,22 +4360,15 @@ const isDoneStage = s => {
       allScItems[r.sc].push(r);
     });
 
-    // SC Completed: ALL items in SC are done AND at least one timestamp in range
+    // SC Completed: ALL items in SC are done (no date range filter)
     const scCompletedSet = new Set(
       Object.entries(allScItems)
         .filter(([sc, items]) => {
           if (!items.every(i => isDoneStage(i.currentStage))) return false;
-          return items.some(i => {
-            if (!i.timestamp) return false;
-            const d = i.timestamp.slice(0,10);
-            if (fromDate && d < fromDate) return false;
-            if (toDate && d > toDate) return false;
-            return true;
-          });
+          return true;
         })
         .map(([sc]) => sc)
     );
-
     // SC Ready: unique SCs in filtered set where ALL items (full data) are done
     const filteredScGroups = {};
     filtered.forEach(r => {
