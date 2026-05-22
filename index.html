@@ -4360,17 +4360,30 @@ const isDoneStage = s => {
       allScItems[r.sc].push(r);
     });
 
-    // SC Completed: SCs in the filtered (date-range) data where ALL items (full DB) are done
+    // SC Completed: for each SC in filtered, get the LATEST row per unique product.
+    // History rows (old WIP stages) are ignored — only the latest state per product counts.
+    // If ALL latest product rows are READY/STOCK/STORES → SC is completed.
     const filteredScGroups = {};
     filtered.forEach(r => {
       if (!r.sc) return;
       if (!filteredScGroups[r.sc]) filteredScGroups[r.sc] = [];
       filteredScGroups[r.sc].push(r);
     });
+    // Helper: given rows for one SC, return the latest row per unique product
+    const getLatestPerProduct = rows => {
+      const latestMap = {};
+      rows.forEach(r => {
+        const key = (r.product || '__none__').trim();
+        if (!latestMap[key] || (r.timestamp && (!latestMap[key].timestamp || r.timestamp > latestMap[key].timestamp))) {
+          latestMap[key] = r;
+        }
+      });
+      return Object.values(latestMap);
+    };
     const scCompletedSet = new Set(
       Object.keys(filteredScGroups).filter(sc => {
-        const items = filteredScGroups[sc];
-        return items.length > 0 && items.every(i => isDoneStage(i.currentStage));
+        const latestRows = getLatestPerProduct(filteredScGroups[sc]);
+        return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
       })
     );
     const scReadySet = scCompletedSet;
@@ -4748,19 +4761,30 @@ const isDoneStage = s => {
               </thead>
               <tbody>
                 {(() => {
-                  const completedSCs = Object.entries(filtered.filter(r => isDoneStage(r.currentStage)).reduce((acc, r) => {
-                    if(!acc[r.sc]) acc[r.sc] = [];
-                    acc[r.sc].push(r);
-                    return acc;
-                  }, {}));
-                  return completedSCs.map(([sc, items], i) => (
-                    <tr key={i} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(0,201,255,0.02)':'transparent'}}>
-                      <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono',fontWeight:700}}>{sc}</td>
-                      <td style={{padding:'10px',fontSize:11}}>{items[0]?.po || '—'}</td>
-                      <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{items[0]?.product || '—'}</td>
-                      <td style={{padding:'10px'}}><span style={{background:'var(--success)22',color:'var(--success)',padding:'2px 6px',borderRadius:4,fontSize:10}}>{items[0]?.currentStage || '—'}</span></td>
-                      <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>{items[0]?.timestamp || '—'}</td>
-                    </tr>
+                  // Group filtered by SC, then for each SC get latest row per product
+                  const scGroups = {};
+                  filtered.forEach(r => {
+                    if (!r.sc) return;
+                    if (!scGroups[r.sc]) scGroups[r.sc] = {};
+                    const key = (r.product || '__none__').trim();
+                    if (!scGroups[r.sc][key] || (r.timestamp && (!scGroups[r.sc][key].timestamp || r.timestamp > scGroups[r.sc][key].timestamp))) {
+                      scGroups[r.sc][key] = r;
+                    }
+                  });
+                  // Only show SCs where ALL latest product rows are done
+                  const completedSCs = Object.entries(scGroups)
+                    .map(([sc, prodMap]) => [sc, Object.values(prodMap)])
+                    .filter(([, latestRows]) => latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage)));
+                  return completedSCs.map(([sc, latestRows], i) => (
+                    latestRows.map((r, j) => (
+                      <tr key={sc+'-'+j} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(0,201,255,0.02)':'transparent'}}>
+                        <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono',fontWeight:700}}>{j===0 ? sc : ''}</td>
+                        <td style={{padding:'10px',fontSize:11}}>{r.po || '—'}</td>
+                        <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product || '—'}</td>
+                        <td style={{padding:'10px'}}><span style={{background:'var(--success)22',color:'var(--success)',padding:'2px 6px',borderRadius:4,fontSize:10}}>{r.currentStage || '—'}</span></td>
+                        <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>{r.timestamp || '—'}</td>
+                      </tr>
+                    ))
                   ));
                 })()}
               </tbody>
