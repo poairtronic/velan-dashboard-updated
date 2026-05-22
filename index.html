@@ -4688,24 +4688,6 @@ const isDoneStage = s => {
             {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
           </div>
         </div>
-        <div className="kpi-card" style={{'--c1':'#ff6b35','--c2':'#ffd60a'}}>
-          <div className="kpi-label">SC SETS RECEIVED</div>
-          <div className="kpi-value" style={{color:'var(--accent4)'}}>{kpiStats.scSetsReceived}</div>
-          <div className="kpi-sub">
-            unique SC set prefixes
-            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
-            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>with PO date in range</span>}
-          </div>
-        </div>
-        <div className="kpi-card" style={{'--c1':'#00ff9d','--c2':'#00e676'}}>
-          <div className="kpi-label">SC SETS COMPLETED</div>
-          <div className="kpi-value" style={{color:'var(--accent3)'}}>{kpiStats.scSetsCompletedTotal}</div>
-          <div className="kpi-sub">
-            unique SC set prefixes
-            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all completed · all dates</span>}
-            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>total completed (all history + live)</span>}
-          </div>
-        </div>
       </div>
 
       {/* EXPORT BUTTONS */}
