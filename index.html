@@ -4267,7 +4267,7 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
   const [fromDate, setFromDate] = React.useState('');
   const [toDate, setToDate] = React.useState('');
   const [filters, setFilters] = React.useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
-
+  const [selectedKPI, setSelectedKPI] = React.useState(null);
   // --- Unique options ---
   const uniquePOs = React.useMemo(()=>[...new Set(data.map(r=>r.po))].sort(),[data]);
   const DONE_STAGES = /^(READY|STOCK|STORES?)$/i;
@@ -4672,7 +4672,7 @@ const isDoneStage = s => {
             {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
           </div>
         </div>
-        <div className="kpi-card" style={{'--c1':'#00e676','--c2':'#00c9ff'}}>
+        <div className="kpi-card" style={{'--c1':'#00e676','--c2':'#00c9ff', cursor:'pointer'}} onClick={() => setSelectedKPI('scCompleted')}>
           <div className="kpi-label">SC COMPLETED</div>
           <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
           <div className="kpi-sub">
@@ -4690,8 +4690,7 @@ const isDoneStage = s => {
         <button className="filter-btn" style={{background:'rgba(255,61,90,0.08)',color:'var(--danger)',fontWeight:700}} onClick={exportPDF}>⬇ PDF</button>
         <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT COMPLETED ITEMS ({filtered.filter(r=>isDoneStage(r.currentStage)).length} rows — READY / STOCK / STORES only):</span>
       </div>
-
-      {/* DATA TABLE — READY / STOCK / STORES only (completed items) */}
+{/* DATA TABLE — READY / STOCK / STORES only (completed items) */}
       {(() => {
         const tableRows = filtered.filter(r => isDoneStage(r.currentStage));
         const totalInFilter = filtered.length;
@@ -4733,6 +4732,50 @@ const isDoneStage = s => {
           </div>
         );
       })()}
+
+      {/* DETAIL MODAL - Show completed SCs details */}
+      {selectedKPI === 'scCompleted' && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+          <div style={{background:'var(--bg-card)',border:'2px solid var(--accent3)',borderRadius:12,padding:24,maxWidth:800,maxHeight:'80vh',overflow:'auto',width:'90%'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div>
+                <div style={{fontSize:18,fontWeight:700,color:'var(--accent3)',marginBottom:4}}>SC COMPLETED ({kpiStats.scCompleted})</div>
+                <div style={{fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>All items READY/STOCK/STORES</div>
+              </div>
+              <button onClick={() => setSelectedKPI(null)} style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}>CLOSE</button>
+            </div>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>SC</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>PO</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>PRODUCT</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>STAGE</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>TIMESTAMP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const completedSCs = Object.entries(filtered.filter(r => isDoneStage(r.currentStage)).reduce((acc, r) => {
+                    if(!acc[r.sc]) acc[r.sc] = [];
+                    acc[r.sc].push(r);
+                    return acc;
+                  }, {}));
+                  return completedSCs.map(([sc, items], i) => (
+                    <tr key={i} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(0,201,255,0.02)':'transparent'}}>
+                      <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono',fontWeight:700}}>{sc}</td>
+                      <td style={{padding:'10px',fontSize:11}}>{items[0]?.po || '—'}</td>
+                      <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{items[0]?.product || '—'}</td>
+                      <td style={{padding:'10px'}}><span style={{background:'var(--success)22',color:'var(--success)',padding:'2px 6px',borderRadius:4,fontSize:10}}>{items[0]?.currentStage || '—'}</span></td>
+                      <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>{items[0]?.timestamp || '—'}</td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
