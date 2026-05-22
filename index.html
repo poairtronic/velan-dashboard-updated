@@ -4369,8 +4369,8 @@ const isDoneStage = s => {
     });
     const scCompletedSet = new Set(
       Object.keys(filteredScGroups).filter(sc => {
-        const allItems = allScItems[sc] || [];
-        return allItems.length > 0 && allItems.every(i => isDoneStage(i.currentStage));
+        const items = filteredScGroups[sc];
+        return items.length > 0 && items.every(i => isDoneStage(i.currentStage));
       })
     );
     const scReadySet = scCompletedSet;
