@@ -4038,58 +4038,6 @@ function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, 
           </div>
         </div>
       </div>
-{/* ── HISTORY SHEET UPLOAD MODULE ─────────────────────────────────── */}
-      <div className="chart-card" style={{marginBottom:16,background:'rgba(10,15,40,0.95)',border:'1px solid rgba(100,120,255,0.3)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
-          <span style={{fontSize:20}}>🗃</span>
-          <div>
-            <div className="chart-title" style={{marginBottom:0,color:'var(--accent3)'}}>History Data Upload</div>
-            <div className="chart-sub">IMPORT PAST RECORDS FROM GOOGLE SHEETS CSV — VISIBLE ONLY IN DATABASE PAGE</div>
-          </div>
-        </div>
-        <div style={{padding:'10px 14px',background:'rgba(100,120,255,0.06)',border:'1px solid rgba(100,120,255,0.15)',borderRadius:8,marginBottom:12,fontSize:10,color:'var(--text-muted)',lineHeight:1.8}}>
-          <span style={{color:'var(--accent3)',fontWeight:700}}>ℹ How this works: </span>
-          Paste your History Google Sheet CSV link below. Click <strong style={{color:'var(--accent3)'}}>Import to Database</strong> to permanently save all historical records. These rows are <strong style={{color:'#ffd700'}}>only shown in the Database page</strong> — they do not affect the live production dashboard.
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          <div style={{fontSize:11,fontWeight:700,color:'var(--accent3)',letterSpacing:1}}>📊 HISTORY GOOGLE SHEET (CSV EXPORT URL)</div>
-          <input
-            type="text"
-            value={historyConfig?.url || ''}
-            onChange={e=>setHistoryConfig(prev=>({...prev,url:e.target.value}))}
-            placeholder="https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?output=csv  ← Publish to web CSV link"
-            style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid rgba(100,120,255,0.4)',borderRadius:6,color:'var(--text-primary)',padding:'9px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}
-          />
-          <div style={{background:'rgba(0,0,0,0.2)',borderRadius:6,padding:'8px 12px',fontSize:10,color:'var(--text-muted)',lineHeight:1.8}}>
-            <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to get the History Google Sheets CSV link:</div>
-<div>1. Open your History Google Sheet → <strong style={{color:'var(--accent1)'}}>File → Share → Publish to web</strong></div>
-<div>2. Select <strong style={{color:'var(--success)'}}>Entire Document</strong> → format: <strong style={{color:'var(--success)'}}>CSV (.csv)</strong> → Click <strong style={{color:'var(--accent5)'}}>Publish</strong></div>
-<div>3. Copy the generated link (ends with <span style={{fontFamily:'Share Tech Mono',color:'var(--accent3)'}}>/pub?output=csv</span>) and paste above</div>
-          </div>
-          <div style={{display:'flex',gap:10}}>
-            <button
-              className="filter-btn"
-              style={{flex:2,padding:'11px',background:importState?.loading?'rgba(100,120,255,0.08)':'rgba(100,120,255,0.15)',border:'1px solid rgba(100,120,255,0.5)',color:'var(--accent3)',fontWeight:700,fontSize:12}}
-              onClick={onSyncHistory}
-              disabled={importState?.loading}
-            >
-              {importState?.loading ? '⏳ Importing…' : '📥 Import to Database'}
-            </button>
-            <button className="filter-btn" style={{flex:1,padding:'11px'}} onClick={()=>setHistoryConfig({url:''})}>🧹 Clear URL</button>
-          </div>
-          {importState?.lastMsg && (
-            <div style={{
-              background:importState.lastMsg.startsWith('✅')?'rgba(0,230,118,0.08)':importState.lastMsg.startsWith('❌')?'rgba(255,61,90,0.08)':'rgba(0,201,255,0.08)',
-              border:`1px solid ${importState.lastMsg.startsWith('✅')?'rgba(0,230,118,0.3)':importState.lastMsg.startsWith('❌')?'rgba(255,61,90,0.3)':'rgba(0,201,255,0.3)'}`,
-              borderRadius:8,padding:'10px 14px',
-              color:importState.lastMsg.startsWith('✅')?'var(--success)':importState.lastMsg.startsWith('❌')?'var(--danger)':'var(--accent1)',
-              fontSize:11,fontFamily:'Share Tech Mono,monospace'
-            }}>
-              {importState.lastMsg}
-            </div>
-          )}
-        </div>
-      </div>
       <div className="chart-card">
         <div className="chart-title">Current Data Preview — {data.length} rows loaded</div>
         <div className="chart-sub">FIRST 50 ROWS OF ACTIVE DATASET</div>
@@ -4710,9 +4658,6 @@ const isDoneStage = s => {
               <div style={{display:'flex',gap:8,flexShrink:0}}>
                 <span style={{background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.3)',color:'var(--success)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
                   ✓ {tableRows.length} DONE
-                </span>
-                <span style={{background:'rgba(255,184,54,0.12)',border:'1px solid rgba(255,184,54,0.3)',color:'var(--warning)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
-                  ⏳ {wipCount} WIP
                 </span>
               </div>
             </div>
