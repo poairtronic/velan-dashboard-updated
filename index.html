@@ -4361,14 +4361,13 @@ const isDoneStage = s => {
     });
 
     // SC Completed: ALL items in SC are done (no date range filter)
-    const scCompletedSet = new Set(
-      Object.entries(allScItems)
-        .filter(([sc, items]) => {
-          if (!items.every(i => isDoneStage(i.currentStage))) return false;
-          return true;
-        })
-        .map(([sc]) => sc)
-    );
+    
+const scCompletedSet = new Set(
+  [...scReceivedSet].filter(sc => {
+    const allItems = allScItems[sc] || [];
+    return allItems.length > 0 && allItems.every(i => isDoneStage(i.currentStage));
+  })
+);
     // SC Ready: unique SCs in filtered set where ALL items (full data) are done
     const filteredScGroups = {};
     filtered.forEach(r => {
