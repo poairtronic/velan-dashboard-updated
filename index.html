@@ -4423,6 +4423,19 @@ const isDoneStage = s => {
         );
       })
     );
+    // SC Sets Completed TOTAL: ALL completed sets from history + live (NO date filter)
+    const scSetsCompletedTotal = new Set(
+      allPrefixes.filter(prefix => {
+        const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
+        if (prefixSCs.length === 0) return false;
+        // Only check: are ALL items done? Don't filter by date.
+        const allDone = prefixSCs.every(sc =>
+          (allScItems[sc] || []).length > 0 &&
+          (allScItems[sc] || []).every(i => isDoneStage(i.currentStage))
+        );
+        return allDone;
+      })
+    );
 
     return {
       total, uniquePO, uniqueSC, readyItemsCount,
@@ -4432,6 +4445,7 @@ const isDoneStage = s => {
       scReady: scReadySet.size,
       scSetsReceived: scSetsReceivedSet.size,
       scSetsCompleted: scSetsCompletedSet.size,
+      scSetsCompletedTotal: scSetsCompletedTotal.size,
     };
   }, [filtered, data, fromDate, toDate]);
   // --- Export handlers ---
@@ -4685,11 +4699,11 @@ const isDoneStage = s => {
         </div>
         <div className="kpi-card" style={{'--c1':'#00ff9d','--c2':'#00e676'}}>
           <div className="kpi-label">SC SETS COMPLETED</div>
-          <div className="kpi-value" style={{color:'var(--accent3)'}}>{kpiStats.scSetsCompleted}</div>
+          <div className="kpi-value" style={{color:'var(--accent3)'}}>{kpiStats.scSetsCompletedTotal}</div>
           <div className="kpi-sub">
             unique SC set prefixes
-            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all done · all dates</span>}
-            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all items done · ts in range</span>}
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all completed · all dates</span>}
+            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>total completed (all history + live)</span>}
           </div>
         </div>
       </div>
