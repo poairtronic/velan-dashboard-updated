@@ -4360,28 +4360,20 @@ const isDoneStage = s => {
       allScItems[r.sc].push(r);
     });
 
-    // SC Completed: ALL items in SC are done (no date range filter)
-    
-const scCompletedSet = new Set(
-  [...scReceivedSet].filter(sc => {
-    const allItems = allScItems[sc] || [];
-    return allItems.length > 0 && allItems.every(i => isDoneStage(i.currentStage));
-  })
-);
-    // SC Ready: unique SCs in filtered set where ALL items (full data) are done
+    // SC Completed: SCs in the filtered (date-range) data where ALL items (full DB) are done
     const filteredScGroups = {};
     filtered.forEach(r => {
       if (!r.sc) return;
       if (!filteredScGroups[r.sc]) filteredScGroups[r.sc] = [];
       filteredScGroups[r.sc].push(r);
     });
-    const scReadySet = new Set(
+    const scCompletedSet = new Set(
       Object.keys(filteredScGroups).filter(sc => {
         const allItems = allScItems[sc] || [];
         return allItems.length > 0 && allItems.every(i => isDoneStage(i.currentStage));
       })
     );
-
+    const scReadySet = scCompletedSet;
     // SC Set prefix: strip trailing letters (e.g. "24050001A" → "24050001")
     const getScPrefix = sc => String(sc).trim().replace(/-\d+$/, '');
 
@@ -4676,7 +4668,8 @@ const scCompletedSet = new Set(
           <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
           <div className="kpi-sub">
             all items READY/STOCK/STORES
-            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>completed in range</span>}
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
             {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
           </div>
         </div>
