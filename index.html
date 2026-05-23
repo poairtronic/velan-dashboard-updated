@@ -2459,11 +2459,11 @@ function OverviewPage({kpis, data, filtered, liveData}) {
         <div className="chart-title">⚠ Bottleneck POs (Highest Lead Time)</div>
         <div className="chart-sub">ORDERED BY DAYS — TARGET: 21 DAYS</div>
         <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:8}}>
-          {kpis.bottleneck.slice(0,10).map(b=>(
+          {kpis.bottleneck.filter(b=>!b.done).slice(0,10).map(b=>(
             <div key={b.po} style={{background:'var(--bg-secondary)',border:`1px solid ${(b.days||0)>21?'var(--danger)':'var(--border)'}`,borderRadius:8,padding:'10px 14px',minWidth:140}}>
               <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-muted)'}}>{b.po}</div>
               <div style={{fontFamily:'Rajdhani',fontSize:22,fontWeight:700,color:(b.days||0)>21?'var(--danger)':'var(--success)'}}>{b.days??'—'}<span style={{fontSize:12,color:'var(--text-muted)'}}> days</span></div>
-              <div style={{fontSize:10,color:'var(--text-muted)'}}>{b.done?'✔ Done':'⏳ In progress'}</div>
+              <div style={{fontSize:10,color:'var(--text-muted)'}}>⏳ In progress</div>
             </div>
           ))}
         </div>
