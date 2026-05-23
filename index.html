@@ -4344,7 +4344,7 @@ const isDoneStage = s => {
     return 'STORES';
   };
   const filtered = React.useMemo(() => {
-    return data.filter(row => {
+    const result = data.filter(row => {
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
@@ -4359,6 +4359,13 @@ const isDoneStage = s => {
         if(!String(row.sc||'').toLowerCase().includes(s) && !String(row.product||'').toLowerCase().includes(s) && !String(row.po||'').toLowerCase().includes(s)) return false;
       }
       return true;
+    });
+    
+    // SORT BY PO RECEIVED DATE (ASCENDING)
+    return result.sort((a, b) => {
+      const dateA = a.poDate ? new Date(a.poDate).getTime() : 0;
+      const dateB = b.poDate ? new Date(b.poDate).getTime() : 0;
+      return dateA - dateB;
     });
   }, [data, filters, fromDate, toDate, dateType]);
   // --- KPI stats ---
