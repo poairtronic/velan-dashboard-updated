@@ -2134,8 +2134,8 @@ function App() {
 
         {/* CONTENT */}
         <div className="content">
-          {/* FILTER BAR: Only show in non-database modules */}
-          {activeNav!=="database" && (
+          {/* FILTER BAR: Only show in non-database and non-upload modules */}
+          {activeNav!=="database" && activeNav!=="upload" && (
             <div className="filter-bar">
               <div className="filter-label">FILTERS</div>
               <select className="filter-select" value={filters.po} onChange={e=>setFilters(f=>({...f,po:e.target.value}))}>
