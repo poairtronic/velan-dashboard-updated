@@ -3098,6 +3098,7 @@ function POPage({kpis, poGroups, scGroups}) {
   const leadsRef = useRef();
   const [tab, setTab]           = useState('all');
   const [selectedPO, setSelectedPO] = useState(null);
+  const [search, setSearch]     = useState('');
 
   // Build PO → SC mapping from scGroups (full data, already correct)
   const poSCMap = {};
@@ -3115,9 +3116,18 @@ function POPage({kpis, poGroups, scGroups}) {
     return { ...pg, scs, done, lastTs, days };
   });
 
-  const displayed = tab==='complete' ? poRows.filter(p=>p.done)
-                  : tab==='wip'      ? poRows.filter(p=>!p.done)
-                  : poRows;
+  const tabFiltered = tab==='complete' ? poRows.filter(p=>p.done)
+                    : tab==='wip'      ? poRows.filter(p=>!p.done)
+                    : poRows;
+
+  const displayed = search.trim()
+    ? tabFiltered.filter(p => {
+        const s = search.trim().toLowerCase();
+        return String(p.po||'').toLowerCase().includes(s) ||
+               p.scs.some(sg => String(sg.sc||'').toLowerCase().includes(s)) ||
+               p.items.some(item => String(item.product||'').toLowerCase().includes(s));
+      })
+    : tabFiltered;
 
   const completePOs   = poRows.filter(p=>p.done).length;
   const inProgressPOs = poRows.filter(p=>!p.done).length;
@@ -3175,8 +3185,24 @@ function POPage({kpis, poGroups, scGroups}) {
 
       {/* PO Sets Table */}
       <div className="table-card">
-        <div className="table-header">
+        <div className="table-header" style={{flexWrap:'wrap',gap:10}}>
           <div className="chart-title">PO Sets — {displayed.length} entries</div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginLeft:'auto'}}>
+            <input
+              className="filter-input"
+              placeholder="Search PO / SC / Product..."
+              value={search}
+              onChange={e=>{setSearch(e.target.value);setSelectedPO(null);}}
+              style={{minWidth:220,padding:'5px 12px'}}
+            />
+            {search && (
+              <button
+                onClick={()=>{setSearch('');setSelectedPO(null);}}
+                className="filter-btn reset"
+                style={{padding:'5px 10px'}}
+              >✕ Clear</button>
+            )}
+          </div>
         </div>
         <div className="table-wrap">
           <table>
@@ -3306,9 +3332,20 @@ function POPage({kpis, poGroups, scGroups}) {
 function SCPage({kpis, scGroups}) {
   const [tab, setTab] = useState('all');
   const [selectedSC, setSelectedSC] = useState(null);
-  const displayed = tab==='complete' ? scGroups.filter(g=>isSCComplete(g.items))
-                  : tab==='wip'      ? scGroups.filter(g=>!isSCComplete(g.items))
-                  : scGroups;
+  const [search, setSearch] = useState('');
+
+  const tabFiltered = tab==='complete' ? scGroups.filter(g=>isSCComplete(g.items))
+                    : tab==='wip'      ? scGroups.filter(g=>!isSCComplete(g.items))
+                    : scGroups;
+
+  const displayed = search.trim()
+    ? tabFiltered.filter(sg => {
+        const s = search.trim().toLowerCase();
+        return String(sg.sc||'').toLowerCase().includes(s) ||
+               String(sg.po||'').toLowerCase().includes(s) ||
+               sg.items.some(item => String(item.product||'').toLowerCase().includes(s));
+      })
+    : tabFiltered;
 
   return (
     <div>
@@ -3324,7 +3361,25 @@ function SCPage({kpis, scGroups}) {
         ))}
       </div>
       <div className="table-card">
-        <div className="table-header"><div className="chart-title">SC Sets — {displayed.length} entries</div></div>
+        <div className="table-header" style={{flexWrap:'wrap',gap:10}}>
+          <div className="chart-title">SC Sets — {displayed.length} entries</div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginLeft:'auto'}}>
+            <input
+              className="filter-input"
+              placeholder="Search SC / PO / Product..."
+              value={search}
+              onChange={e=>{setSearch(e.target.value);setSelectedSC(null);}}
+              style={{minWidth:220,padding:'5px 12px'}}
+            />
+            {search && (
+              <button
+                onClick={()=>{setSearch('');setSelectedSC(null);}}
+                className="filter-btn reset"
+                style={{padding:'5px 10px'}}
+              >✕ Clear</button>
+            )}
+          </div>
+        </div>
         <div className="table-wrap">
           <table>
             <thead><tr><th>SC NO</th><th>PO</th><th>PO DATE</th><th>ITEMS</th><th>LAST TIMESTAMP</th><th>DAYS TAKEN</th><th>SET STATUS</th></tr></thead>
