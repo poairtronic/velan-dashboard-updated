@@ -1107,8 +1107,11 @@ function App() {
       'SDV':'SDV','BLV':'BLV','FBV':'FBV','HTV':'HTV','HCV':'HCV',
     };
     const corrected = aliases[s] || s;
-    if (corrected.includes('READY')) return 'READY';
-    if (corrected.includes('STORE')) return 'STORES';
+    // STOCK must be checked BEFORE STORE substring test — STOCK contains no 'STORE'
+    // but guard explicitly so future edits don't break this.
+    if (corrected === 'STOCK' || corrected === 'STOCKK') return 'STOCK';
+    if (corrected === 'READY' || corrected.includes('READY')) return 'READY';
+    if (corrected === 'STORES' || corrected.includes('STORE')) return 'STORES';
     return corrected.replace(/\s+/g, '');
   }
 
@@ -1122,16 +1125,22 @@ function App() {
     const t = String(text || '').toUpperCase().trim();
     if(!t) return '';
 
-    const knownStages = [
-      'READY','STORES','STOCK','LATHE','M1','FB','HT','SZ','BLK','CG','SG','SD','HO',
-      'CA','WC','VA','QC','DCPLI','FBV','BLV','SDV','HOV','HTV','HCV','RM'
-    ];
-
-    // Explicit "MOVE TO <stage>" pattern
+    // Explicit "MOVE TO <stage>" pattern — highest priority
     const moveMatch = t.match(/MOVE\s*TO\s*([A-Z0-9]+)/);
     if(moveMatch && moveMatch[1]) return normalizeStage(moveMatch[1]);
 
-    // Any known stage mentioned in text
+    // Check terminal/completion stages first with exact word boundaries to avoid
+    // "STORES" matching as "READY" or "STOCK" being confused with "STORES".
+    // Order: STOCK → STORES/STORE → READY (most specific first)
+    if(/\bSTOCK\b/.test(t)) return 'STOCK';
+    if(/\bSTORES?\b/.test(t)) return 'STORES';
+    if(/\bREADY\b/.test(t)) return 'READY';
+
+    // Other known production stages
+    const knownStages = [
+      'LATHE','M1','FB','HT','SZ','BLK','CG','SG','SD','HO',
+      'CA','WC','VA','QC','DCPLI','FBV','BLV','SDV','HOV','HTV','HCV','RM'
+    ];
     for(const stage of knownStages) {
       if(t.includes(stage)) return normalizeStage(stage);
     }
@@ -4369,10 +4378,15 @@ function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSy
 const isDoneStage = s => {
     if(!s) return false;
     const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
-    if(/^STOCK[K]?$/.test(t)) return true;
-    if(/^R[EAD]{2,4}Y$/.test(t) || t==='READY') return true;
-    if(/^ST[OERATS]{2,6}$/.test(t) || t.startsWith('ST') && t.length>=5) return true;
-    return ['READY','STOCK','STOCKK','STORES','STOIRES','STORS','STOTES','STOTRES','STRES','STROES','STROIES','STRORES'].includes(t);
+    // Exact canonical matches (post-normalizeStage these are the only values)
+    if(t === 'READY') return true;
+    if(t === 'STORES') return true;
+    if(t === 'STOCK') return true;
+    // Tolerate minor typos that normalizeStage may not have caught
+    if(/^STOCK{1,2}$/.test(t)) return true;
+    if(/^READ{1,2}Y$/.test(t)) return true;
+    if(t === 'STORE') return true; // singular alias
+    return false;
   };
   const normStageDB = s => {
     if(!s) return '';
@@ -4466,10 +4480,10 @@ const isDoneStage = s => {
       return Object.values(latestMap);
     };
     const scCompletedSet = new Set(
-      Object.keys(filteredScGroups).filter(sc => {
-        // Use FULL dataset rows for this SC to check completion accurately.
-        // filteredScGroups only has rows matching the stage filter, so checking it
-        // directly gives wrong results (e.g. filter=STORES makes every SC look complete).
+      Object.keys(allScItems).filter(sc => {
+        // Use FULL dataset rows for this SC — check if every latest product is done.
+        // Do NOT restrict to filteredScGroups: a READY item might have no poDate/timestamp
+        // in the selected range, causing it to vanish from filtered and be missed.
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProduct(allRowsForSC);
         return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
@@ -4485,7 +4499,8 @@ const isDoneStage = s => {
     );
 
     // SC Sets Completed: unique SC set prefixes where ALL SCs with that prefix
-    // have every item done AND at least one timestamp in range
+    // have every LATEST item done AND at least one timestamp in range.
+    // Use getLatestPerProduct so old WIP history rows don't block completion.
     const allPrefixes = [...new Set(
       data.filter(r => r.sc).map(r => getScPrefix(r.sc)).filter(Boolean)
     )];
@@ -4493,10 +4508,10 @@ const isDoneStage = s => {
       allPrefixes.filter(prefix => {
         const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
         if (prefixSCs.length === 0) return false;
-        const allDone = prefixSCs.every(sc =>
-          (allScItems[sc] || []).length > 0 &&
-          (allScItems[sc] || []).every(i => isDoneStage(i.currentStage))
-        );
+        const allDone = prefixSCs.every(sc => {
+          const latest = getLatestPerProduct(allScItems[sc] || []);
+          return latest.length > 0 && latest.every(i => isDoneStage(i.currentStage));
+        });
         if (!allDone) return false;
         return prefixSCs.some(sc =>
           (allScItems[sc] || []).some(i => {
@@ -4510,16 +4525,15 @@ const isDoneStage = s => {
       })
     );
     // SC Sets Completed TOTAL: ALL completed sets from history + live (NO date filter)
+    // Use getLatestPerProduct so old WIP history rows don't block completion.
     const scSetsCompletedTotal = new Set(
       allPrefixes.filter(prefix => {
         const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
         if (prefixSCs.length === 0) return false;
-        // Only check: are ALL items done? Don't filter by date.
-        const allDone = prefixSCs.every(sc =>
-          (allScItems[sc] || []).length > 0 &&
-          (allScItems[sc] || []).every(i => isDoneStage(i.currentStage))
-        );
-        return allDone;
+        return prefixSCs.every(sc => {
+          const latest = getLatestPerProduct(allScItems[sc] || []);
+          return latest.length > 0 && latest.every(i => isDoneStage(i.currentStage));
+        });
       })
     );
 
