@@ -4449,24 +4449,18 @@ const isDoneStage = s => {
   const kpiStats = React.useMemo(() => {
     const total = filtered.length;
 
-    // Total PO and SC counts from ENTIRE data (no date filter) — full picture
-    const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
-    const totalSCCount = new Set(data.filter(r=>r.sc).map(r=>r.sc)).size;
+    // Total PO and SC counts - from filtered data to respect all filters
+    const totalPOCount = new Set(filtered.filter(r=>r.po).map(r=>r.po)).size;
+    const totalSCCount = new Set(filtered.filter(r=>r.sc).map(r=>r.sc)).size;
 
     // Filtered PO and SC counts (respects date/search filters)
     const uniquePO = new Set(filtered.map(r=>r.po)).size;
     const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
     const readyItemsCount = filtered.filter(r=>isDoneStage(r.currentStage)).length;
 
-    // SC Received: unique SCs where poDate falls within selected date range
+    // SC Received: SCs where poDate falls within selected date range AND respects other filters
     const scReceivedSet = new Set(
-      data.filter(r => {
-        if (!r.poDate) return false;
-        const d = r.poDate.slice(0,10);
-        if (fromDate && d < fromDate) return false;
-        if (toDate && d > toDate) return false;
-        return true;
-      }).map(r => r.sc)
+      filtered.filter(r => r.poDate).map(r => r.sc).filter(Boolean)
     );
 
     // Build full SC -> items map from entire data
@@ -4504,15 +4498,21 @@ const isDoneStage = s => {
     };
 
     // Determine which SCs to evaluate for completion:
-    // - If search/PO filter is active → only check SCs visible in filtered view
-    // - If only date filter → check all SCs in full data (READY items often lack timestamps)
+    // - Always check against the filtered view to respect all active filters
+    // - Include date filters, search, PO, stage, type, category, inhouse filters
     const scsToCheck = hasNonDateFilter
-      ? Object.keys(filteredScGroups)   // respect search/PO filter
-      : Object.keys(allScItems);        // date-only: check all SCs
+      ? Object.keys(filteredScGroups)   // respect all filters including search/PO/etc
+      : Object.keys(allScItems).filter(sc => {
+        // For date-only filters: check if this SC appears in filtered results
+        return filteredScGroups[sc] !== undefined;
+      });
 
     const scCompletedSet = new Set(
       scsToCheck.filter(sc => {
-        const allRowsForSC = allScItems[sc] || [];
+        // Use filtered rows if available, otherwise use all rows
+        const allRowsForSC = (hasNonDateFilter || filteredScGroups[sc]) 
+          ? (filteredScGroups[sc] || [])
+          : (allScItems[sc] || []);
         const latestRows = getLatestPerProduct(allRowsForSC);
         return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
       })
