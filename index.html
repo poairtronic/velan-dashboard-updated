@@ -4420,6 +4420,31 @@ const isDoneStage = s => {
       return dateA - dateB;
     });
   }, [data, filters, fromDate, toDate, dateType]);
+
+  // ── Component-level helpers shared by kpiStats AND the modal ──────────────
+  // allScItemsModal: full SC→rows map (entire data, no filters) for completion checks
+  const allScItemsModal = React.useMemo(() => {
+    const m = {};
+    data.forEach(r => {
+      if (!r.sc) return;
+      if (!m[r.sc]) m[r.sc] = [];
+      m[r.sc].push(r);
+    });
+    return m;
+  }, [data]);
+  // filteredScGroupsModal: SC→rows map restricted to current filtered view
+  const filteredScGroupsModal = React.useMemo(() => {
+    const m = {};
+    filtered.forEach(r => {
+      if (!r.sc) return;
+      if (!m[r.sc]) m[r.sc] = [];
+      m[r.sc].push(r);
+    });
+    return m;
+  }, [filtered]);
+  // hasNonDateFilter: true when any filter besides date is active (PO, search, type…)
+  const hasNonDateFilter = !!(filters.po || filters.search || filters.type || filters.inhouse || filters.category || filters.stage);
+
   // --- KPI stats ---
   const kpiStats = React.useMemo(() => {
     const total = filtered.length;
@@ -4445,45 +4470,48 @@ const isDoneStage = s => {
     );
 
     // Build full SC -> items map from entire data
-    const allScItems = {};
-    data.forEach(r => {
-      if (!r.sc) return;
-      if (!allScItems[r.sc]) allScItems[r.sc] = [];
-      allScItems[r.sc].push(r);
-    });
+    const allScItems = allScItemsModal;
 
-    // SC Completed: for each SC in filtered, get the LATEST row per unique product.
+    // SC Completed: for each SC, get the LATEST row per unique product.
     // History rows (old WIP stages) are ignored — only the latest state per product counts.
     // If ALL latest product rows are READY/STOCK/STORES → SC is completed.
-    const filteredScGroups = {};
-    filtered.forEach(r => {
-      if (!r.sc) return;
-      if (!filteredScGroups[r.sc]) filteredScGroups[r.sc] = [];
-      filteredScGroups[r.sc].push(r);
-    });
+    const filteredScGroups = filteredScGroupsModal;
     // Helper: given rows for one SC, return the latest row per unique product.
-    // Priority: (1) _isLive (current Excel upload) over DB history, then (2) later timestamp.
-    // This ensures READY items from the current Excel win over old WIP rows in the DB
-    // even when the READY row has no timestamp yet.
+    // Priority order:
+    //   1. A DONE stage (READY/STOCK/STORES) beats any WIP stage — always.
+    //   2. Among DONE stages: _isLive (current Excel) beats DB history.
+    //   3. Among same source + same done/wip category: later timestamp wins.
+    //   4. Among WIP rows when no DONE row exists: _isLive beats DB, then timestamp.
     const getLatestPerProduct = rows => {
       const latestMap = {};
       rows.forEach(r => {
         const key = (r.product || '__none__').trim();
         const ex = latestMap[key];
         if (!ex) { latestMap[key] = r; return; }
-        // Current-Excel rows (_isLive) always beat DB-history rows
+        const rDone = isDoneStage(r.currentStage);
+        const exDone = isDoneStage(ex.currentStage);
+        // Rule 1: DONE always beats WIP
+        if (rDone && !exDone) { latestMap[key] = r; return; }
+        if (!rDone && exDone) return;
+        // Both DONE or both WIP — apply secondary rules
+        // Rule 2: _isLive beats DB history
         if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
         if (!r._isLive && ex._isLive) return;
-        // Same source: prefer later timestamp; if new has no timestamp keep existing
+        // Rule 3: later timestamp wins
         if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
       });
       return Object.values(latestMap);
     };
+
+    // Determine which SCs to evaluate for completion:
+    // - If search/PO filter is active → only check SCs visible in filtered view
+    // - If only date filter → check all SCs in full data (READY items often lack timestamps)
+    const scsToCheck = hasNonDateFilter
+      ? Object.keys(filteredScGroups)   // respect search/PO filter
+      : Object.keys(allScItems);        // date-only: check all SCs
+
     const scCompletedSet = new Set(
-      Object.keys(allScItems).filter(sc => {
-        // Use FULL dataset rows for this SC — check if every latest product is done.
-        // Do NOT restrict to filteredScGroups: a READY item might have no poDate/timestamp
-        // in the selected range, causing it to vanish from filtered and be missed.
+      scsToCheck.filter(sc => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProduct(allRowsForSC);
         return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
@@ -4547,7 +4575,7 @@ const isDoneStage = s => {
       scSetsCompleted: scSetsCompletedSet.size,
       scSetsCompletedTotal: scSetsCompletedTotal.size,
     };
-  }, [filtered, data, fromDate, toDate]);
+  }, [filtered, data, fromDate, toDate, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
   // --- Export handlers ---
   function exportJSON() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], {type:'application/json'});
@@ -4829,19 +4857,51 @@ const isDoneStage = s => {
         <button className="filter-btn" style={{background:'rgba(0,201,255,0.08)',color:'var(--accent1)',fontWeight:700}} onClick={exportJSON}>⬇ JSON</button>
         <button className="filter-btn" style={{background:'rgba(0,255,100,0.08)',color:'var(--success)',fontWeight:700}} onClick={exportCSV}>⬇ CSV</button>
         <button className="filter-btn" style={{background:'rgba(255,61,90,0.08)',color:'var(--danger)',fontWeight:700}} onClick={exportPDF}>⬇ PDF</button>
-        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT COMPLETED ITEMS ({filtered.filter(r=>isDoneStage(r.currentStage)).length} rows — READY / STOCK / STORES only):</span>
+        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT COMPLETED ITEMS ({(() => {
+          const dm = {};
+          filtered.forEach(r => {
+            const k = (r.sc||'')+'||'+(r.product||'').trim();
+            const ex = dm[k];
+            if(!ex){dm[k]=r;return;}
+            const rD=isDoneStage(r.currentStage),eD=isDoneStage(ex.currentStage);
+            if(rD&&!eD){dm[k]=r;return;}if(!rD&&eD)return;
+            if(r._isLive&&!ex._isLive){dm[k]=r;return;}if(!r._isLive&&ex._isLive)return;
+            if(r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))dm[k]=r;
+          });
+          return Object.values(dm).filter(r=>isDoneStage(r.currentStage)).length;
+        })()} rows — READY / STOCK / STORES only):</span>
       </div>
-{/* DATA TABLE — READY / STOCK / STORES only (completed items) */}
+{/* DATA TABLE — READY / STOCK / STORES only (completed items, deduplicated) */}
       {(() => {
-        const tableRows = filtered.filter(r => isDoneStage(r.currentStage));
-        const totalInFilter = filtered.length;
-        const wipCount = totalInFilter - tableRows.length;
+        // Deduplicate: for each SC+product in filtered, pick the latest/best row
+        // using the same DONE-beats-WIP + _isLive + timestamp rules.
+        // This ensures READY history rows appear instead of old WIP rows.
+        const dedupeMap = {};
+        filtered.forEach(r => {
+          const key = (r.sc||'') + '||' + (r.product||'__none__').trim();
+          const ex = dedupeMap[key];
+          if (!ex) { dedupeMap[key] = r; return; }
+          const rDone = isDoneStage(r.currentStage);
+          const exDone = isDoneStage(ex.currentStage);
+          if (rDone && !exDone) { dedupeMap[key] = r; return; }
+          if (!rDone && exDone) return;
+          if (r._isLive && !ex._isLive) { dedupeMap[key] = r; return; }
+          if (!r._isLive && ex._isLive) return;
+          if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dedupeMap[key] = r;
+        });
+        const deduped = Object.values(dedupeMap).sort((a,b) => {
+          const da = a.poDate ? new Date(a.poDate).getTime() : 0;
+          const db = b.poDate ? new Date(b.poDate).getTime() : 0;
+          return da - db;
+        });
+        const tableRows = deduped.filter(r => isDoneStage(r.currentStage));
+        const wipCount = deduped.length - tableRows.length;
         return (
           <div className="chart-card" style={{marginBottom:16}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:4}}>
               <div>
                 <div className="chart-title">Completed Items — {tableRows.length} shown</div>
-                <div className="chart-sub">READY / STOCK / STORES ONLY · {wipCount} in-process items hidden from table · HISTORY + LIVE COMBINED</div>
+                <div className="chart-sub">READY / STOCK / STORES ONLY · {wipCount} in-process items hidden · HISTORY + LIVE COMBINED · LATEST STATE PER PRODUCT</div>
               </div>
               <div style={{display:'flex',gap:8,flexShrink:0}}>
                 <span style={{background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.3)',color:'var(--success)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
@@ -4860,7 +4920,10 @@ const isDoneStage = s => {
                     <td style={{fontSize:11}}>{r.po||'—'}</td>
                     <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
                     <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
-                    <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                    <td><span className="status-pill" style={{
+                      background: r.currentStage==='READY' ? 'rgba(0,230,118,0.15)' : r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' : 'rgba(255,214,10,0.15)',
+                      color: r.currentStage==='READY' ? 'var(--success)' : r.currentStage==='STORES' ? 'var(--accent1)' : 'var(--warning)'
+                    }}>{r.currentStage||'—'}</span></td>
                     <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
                     <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
                   </tr>
@@ -4894,28 +4957,54 @@ const isDoneStage = s => {
               </thead>
               <tbody>
                 {(() => {
-                  // Group filtered by SC, then for each SC get latest row per product
-                  const scGroups = {};
-                  filtered.forEach(r => {
-                    if (!r.sc) return;
-                    if (!scGroups[r.sc]) scGroups[r.sc] = {};
-                    const key = (r.product || '__none__').trim();
-                    if (!scGroups[r.sc][key] || (r.timestamp && (!scGroups[r.sc][key].timestamp || r.timestamp > scGroups[r.sc][key].timestamp))) {
-                      scGroups[r.sc][key] = r;
-                    }
-                  });
-                  // Only show SCs where ALL latest product rows are done
-                  const completedSCs = Object.entries(scGroups)
-                    .map(([sc, prodMap]) => [sc, Object.values(prodMap)])
+                  // Build per-SC latest-product map using full allScItems data
+                  // (same getLatestPerProduct logic as kpiStats — DONE beats WIP)
+                  const scsInView = hasNonDateFilter
+                    ? Object.keys(filteredScGroupsModal)
+                    : Object.keys(allScItemsModal);
+
+                  const completedSCs = scsInView
+                    .map(sc => {
+                      const allRows = allScItemsModal[sc] || [];
+                      const latestMap = {};
+                      allRows.forEach(r => {
+                        const key = (r.product || '__none__').trim();
+                        const ex = latestMap[key];
+                        if (!ex) { latestMap[key] = r; return; }
+                        const rDone = isDoneStage(r.currentStage);
+                        const exDone = isDoneStage(ex.currentStage);
+                        if (rDone && !exDone) { latestMap[key] = r; return; }
+                        if (!rDone && exDone) return;
+                        if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+                        if (!r._isLive && ex._isLive) return;
+                        if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+                      });
+                      return [sc, Object.values(latestMap)];
+                    })
                     .filter(([, latestRows]) => latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage)));
+
+                  if (completedSCs.length === 0) {
+                    return (
+                      <tr><td colSpan="5" style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:12}}>
+                        No completed SC sets found for the current filters.
+                      </td></tr>
+                    );
+                  }
+
                   return completedSCs.map(([sc, latestRows], i) => (
                     latestRows.map((r, j) => (
                       <tr key={sc+'-'+j} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(0,201,255,0.02)':'transparent'}}>
                         <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono',fontWeight:700}}>{j===0 ? sc : ''}</td>
                         <td style={{padding:'10px',fontSize:11}}>{r.po || '—'}</td>
                         <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product || '—'}</td>
-                        <td style={{padding:'10px'}}><span style={{background:'var(--success)22',color:'var(--success)',padding:'2px 6px',borderRadius:4,fontSize:10}}>{r.currentStage || '—'}</span></td>
-                        <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>{r.timestamp || '—'}</td>
+                        <td style={{padding:'10px'}}>
+                          <span style={{
+                            background: r.currentStage==='READY' ? 'rgba(0,230,118,0.15)' : r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' : 'rgba(255,214,10,0.15)',
+                            color: r.currentStage==='READY' ? 'var(--success)' : r.currentStage==='STORES' ? 'var(--accent1)' : 'var(--warning)',
+                            padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700
+                          }}>{r.currentStage || '—'}</span>
+                        </td>
+                        <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>{r.timestamp ? r.timestamp.slice(0,10) : '—'}</td>
                       </tr>
                     ))
                   ));
