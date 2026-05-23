@@ -4957,17 +4957,18 @@ const isDoneStage = s => {
               </thead>
               <tbody>
                 {(() => {
-                  // Build per-SC latest-product map using full allScItems data
-                  // (same getLatestPerProduct logic as kpiStats — DONE beats WIP)
-                  const scsInView = hasNonDateFilter
-                    ? Object.keys(filteredScGroupsModal)
-                    : Object.keys(allScItemsModal);
+                  // Use filtered SCs to respect all active filters
+                  // Only show SCs that appear in the filtered results
+                  const scsInView = Object.keys(filteredScGroupsModal);
 
                   const completedSCs = scsInView
                     .map(sc => {
-                      const allRows = allScItemsModal[sc] || [];
+                      // Use FILTERED rows, not all rows from the SC
+                      const filteredRows = filteredScGroupsModal[sc] || [];
+                      if (filteredRows.length === 0) return null;
+                      
                       const latestMap = {};
-                      allRows.forEach(r => {
+                      filteredRows.forEach(r => {
                         const key = (r.product || '__none__').trim();
                         const ex = latestMap[key];
                         if (!ex) { latestMap[key] = r; return; }
@@ -4979,9 +4980,11 @@ const isDoneStage = s => {
                         if (!r._isLive && ex._isLive) return;
                         if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
                       });
-                      return [sc, Object.values(latestMap)];
+                      const latestRows = Object.values(latestMap);
+                      return latestRows.length > 0 ? [sc, latestRows] : null;
                     })
-                    .filter(([, latestRows]) => latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage)));
+                    .filter(item => item !== null)
+                    .filter(([, latestRows]) => latestRows.every(r => isDoneStage(r.currentStage)));
 
                   if (completedSCs.length === 0) {
                     return (
