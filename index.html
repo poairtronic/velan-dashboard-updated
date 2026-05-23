@@ -2010,7 +2010,7 @@ function App() {
     {id:'database',label:'Database',icon:'🗄'},
     {id:'production',label:'Production',icon:'⚙'},
     {id:'wip',label:'Stage / WIP',icon:'⟳'},
-    {id:'cycleTime',label:'Cycle Time',icon:'⏱'},
+    {id:'cycletime',label:'Cycle Time',icon:'⏱'},
     {id:'bottleneck',label:'Bottleneck',icon:'🔴'},
     {id:'po',label:'PO Analysis',icon:'📋'},
     {id:'sc',label:'SC Sets',icon:'📦'},
@@ -4422,7 +4422,11 @@ const isDoneStage = s => {
     };
     const scCompletedSet = new Set(
       Object.keys(filteredScGroups).filter(sc => {
-        const latestRows = getLatestPerProduct(filteredScGroups[sc]);
+        // Use FULL dataset rows for this SC to check completion accurately.
+        // filteredScGroups only has rows matching the stage filter, so checking it
+        // directly gives wrong results (e.g. filter=STORES makes every SC look complete).
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProduct(allRowsForSC);
         return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
       })
     );
