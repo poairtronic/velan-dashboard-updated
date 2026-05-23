@@ -979,6 +979,91 @@ function App() {
       setImportState({ loading:false, lastMsg:'❌ Fetch error: ' + String(err) });
     }
   }
+   // ── NEW: Handle file uploads for history/backup (CROSS-DEVICE SUPPORT) ────
+  function handleHistoryFileUpload(file) {
+    if(!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const reader = new FileReader();
+    setImportState({loading:true, lastMsg:`⏳ Reading "${file.name}"…`});
+ 
+    const processRows = (rows) => {
+      if (!rows || rows.length === 0) {
+        setImportState({loading:false, lastMsg:'❌ No valid rows found in file.'});
+        return;
+      }
+      const normalized = rows.map(raw => {
+        const product = String(raw.product || raw['Product Name'] || '').trim();
+        const status1 = String(raw.status1 || '').trim();
+        const status2 = String(raw.status2 || '').trim();
+        const opStage = String(raw.currentStage || '').trim();
+        const poRaw   = String(raw.po || '').trim();
+        const poDate  = toIsoDateString(raw.poDate);
+        const po      = toIsoDateString(poRaw) ? '' : poRaw;
+        return {
+          ...raw,
+          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
+          po, poDate, product,
+          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
+          status1, status2,
+          inhouse: normalizeInhouse(raw.inhouse),
+          currentStage: resolveLatestStage({ opStage, status1, status2 }),
+          timestamp: normalizeTimestamp(raw.timestamp),
+        };
+      }).filter(r => r.sc || r.po);
+      importRowsToDb(normalized);
+    };
+ 
+    if(ext === 'json') {
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const rows = Array.isArray(parsed) ? parsed : [parsed];
+          rows.forEach(r => { if(!r.type) r.type = inferType(r.product||r['Product Name']||''); });
+          processRows(rows);
+        } catch(err) { 
+          setImportState({loading:false, lastMsg:'❌ Invalid JSON: ' + String(err)}); 
+        }
+      };
+      reader.readAsText(file);
+ 
+    } else if(['xlsx','xls'].includes(ext)) {
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, raw:false});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const parsedRows = parseWorksheet(ws);
+          processRows(parsedRows);
+        } catch(err) { 
+          setImportState({loading:false, lastMsg:'❌ Failed to read Excel: ' + String(err)}); 
+        }
+      };
+      reader.readAsArrayBuffer(file);
+ 
+    } else if(ext === 'csv') {
+      reader.onload = e => {
+        try {
+          const rawAoA = parseRawCsv(e.target.result);
+          const rows = parseRowsFromHeaderAoA(rawAoA);
+          processRows(rows);
+        } catch(err) { 
+          setImportState({loading:false, lastMsg:'❌ Failed to parse CSV: ' + String(err)}); 
+        }
+      };
+      reader.readAsText(file);
+ 
+    } else {
+      setImportState({loading:false, lastMsg:`❌ Unsupported: .${ext} (Use .xlsx, .xls, .csv, .json)`});
+    }
+  }
+ 
+  function handleHistoryDragDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleHistoryFileUpload(files[0]);
+    }
+  }
 
   async function resetDB() {
     if (!window.confirm('⚠️ DANGER: This will permanently DELETE ALL rows from the Neon database.\n\nThis CANNOT be undone.\n\nClick OK only if you want to clear history and start fresh.')) return;
@@ -2009,10 +2094,10 @@ function App() {
           {/* PAGES */}
           {activeNav==='overview'  && <OverviewPage kpis={kpis} data={data} filtered={filtered} liveData={liveData}/>}
           {activeNav==='monthday'  && <MonthDayPage liveData={liveData}/>}
-          {activeNav==='database'  && <DatabasePage data={allDbData} historyRows={data} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState} onResetDB={resetDB}/>}
+          {activeNav==='database'  && <DatabasePage data={allDbData} historyRows={data} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} onUploadHistoryFile={handleHistoryFileUpload} importState={importState} onResetDB={resetDB}/>}
           {activeNav==='production'&& <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
           {activeNav==='wip'       && <WIPPage kpis={kpis} filtered={filtered}/>}
-          {activeNav==='cycletime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
+          {activeNav==='cycleTime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
           {activeNav==='bottleneck'&& <BottleneckPage kpis={kpis} filtered={filtered}/>}
           {activeNav==='po'        && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
           {activeNav==='sc'        && <SCPage kpis={kpis} scGroups={scGroups}/>}
@@ -4209,7 +4294,7 @@ function MonthDayPage({ liveData }) {
 }
 
 // ─── DATABASE PAGE ─────────────────────────────────────────────────────────────
-function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSyncHistory, importState, onResetDB }) {
+function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSyncHistory, importState, onResetDB, onUploadHistoryFile }) {
   // --- State for filters ---
   const [dateType, setDateType] = React.useState('poDate');
   const [fromDate, setFromDate] = React.useState('');
@@ -4486,7 +4571,7 @@ const isDoneStage = s => {
             <span style={{fontSize:20}}>🗃</span>
             <div>
               <div className="chart-title" style={{marginBottom:0,color:'var(--accent3)'}}>History Archive Import</div>
-              <div className="chart-sub">IMPORT PAST RECORDS FROM GOOGLE SHEETS CSV — PERMANENTLY STORED IN DATABASE</div>
+              <div className="chart-sub">IMPORT PAST RECORDS — PERMANENTLY STORED IN DATABASE</div>
             </div>
           </div>
           {(historyRows||[]).length > 0 && (
@@ -4498,9 +4583,34 @@ const isDoneStage = s => {
             </span>
           )}
         </div>
-        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+ 
+        {/* OPTION 1: Upload File from Device */}
+        <div style={{marginBottom:16,padding:16,background:'rgba(15,110,86,0.08)',border:'2px dashed rgba(0,230,118,0.4)',borderRadius:8,textAlign:'center',cursor:'pointer'}} 
+          onDragOver={e=>{e.preventDefault();e.target.style.borderColor='rgba(0,230,118,0.8)'}}
+          onDragLeave={e=>{e.target.style.borderColor='rgba(0,230,118,0.4)'}}
+          onDrop={e=>{e.preventDefault();handleHistoryDragDrop(e);}}
+          onClick={()=>document.getElementById('historyFileInput')?.click()}
+        >
+          <div style={{fontSize:24,marginBottom:8}}>📤</div>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--success)',marginBottom:4,letterSpacing:1}}>
+            DRAG & DROP BACKUP FILE HERE
+          </div>
+          <div style={{fontSize:10,color:'var(--text-muted)'}}>
+            or click to browse — supports .xlsx, .xls, .csv, .json
+          </div>
+          <input
+            id="historyFileInput"
+            type="file"
+            accept=".xlsx,.xls,.csv,.json"
+            style={{display:'none'}}
+            onChange={e=>handleHistoryFileUpload(e.target.files?.[0])}
+          />
+        </div>
+ 
+        {/* OPTION 2: Paste Google Sheets URL */}
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'flex-end'}}>
           <div style={{flex:2,minWidth:280}}>
-            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6,letterSpacing:1}}>HISTORY SHEET CSV URL</div>
+            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6,letterSpacing:1}}>OR PASTE GOOGLE SHEETS CSV URL</div>
             <input
               type="text"
               value={historyConfig?.url || ''}
@@ -4516,19 +4626,13 @@ const isDoneStage = s => {
               onClick={onSyncHistory}
               disabled={importState?.loading}
             >
-              {importState?.loading ? '⏳ Importing…' : '📥 Import History to DB'}
+              {importState?.loading ? '⏳ Importing…' : '📥 Import from URL'}
             </button>
-            <button className="filter-btn" style={{padding:'10px'}} onClick={()=>setHistoryConfig({url:''})}>🧹 Clear URL</button>
-            <button
-              className="filter-btn"
-              style={{padding:'10px 18px',background:'rgba(255,61,90,0.12)',border:'1px solid rgba(255,61,90,0.5)',color:'var(--danger)',fontWeight:700}}
-              onClick={onResetDB}
-              disabled={importState?.loading}
-            >
-              🗑 Reset Entire DB
-            </button>
+            <button className="filter-btn" style={{padding:'10px'}} onClick={()=>setHistoryConfig({url:''})}>🧹 Clear</button>
           </div>
         </div>
+ 
+        {/* Status Message */}
         {importState?.lastMsg && (
           <div style={{
             marginTop:10,
@@ -4541,8 +4645,22 @@ const isDoneStage = s => {
             {importState.lastMsg}
           </div>
         )}
-        <div style={{marginTop:10,fontSize:10,color:'var(--text-muted)',lineHeight:1.7,padding:'8px 12px',background:'rgba(100,120,255,0.04)',border:'1px solid rgba(100,120,255,0.1)',borderRadius:7}}>
-          <strong style={{color:'var(--accent3)'}}>ℹ Database-only:</strong> Imported history rows are stored permanently in <span style={{fontFamily:'Share Tech Mono'}}>velan_db.json</span> and visible <strong>only on this page</strong>. They do not appear in Production, Stage/WIP, or any other module. Duplicates are automatically skipped.
+ 
+        {/* Database Reset Button */}
+        <div style={{marginTop:12,display:'flex',justifyContent:'flex-end'}}>
+          <button
+            className="filter-btn"
+            style={{padding:'10px 18px',background:'rgba(255,61,90,0.12)',border:'1px solid rgba(255,61,90,0.5)',color:'var(--danger)',fontWeight:700}}
+            onClick={onResetDB}
+            disabled={importState?.loading}
+          >
+            🗑 Reset Entire DB (WARNING)
+          </button>
+        </div>
+ 
+        {/* Info Box */}
+        <div style={{marginTop:12,fontSize:10,color:'var(--text-muted)',lineHeight:1.7,padding:'8px 12px',background:'rgba(100,120,255,0.04)',border:'1px solid rgba(100,120,255,0.1)',borderRadius:7}}>
+          <strong style={{color:'var(--accent3)'}}>ℹ Database-only:</strong> Imported history rows are stored permanently in Neon PostgreSQL and visible <strong>only on this page</strong>. They do not appear in Production, Stage/WIP, or any other module. Duplicates are automatically skipped.
         </div>
       </div>
 
