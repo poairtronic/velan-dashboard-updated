@@ -2936,6 +2936,7 @@ function CycleTimePage({kpis, filtered}) {
 function BottleneckPage({kpis, filtered}) {
   const scoreRef   = useRef();
   const queueRef   = useRef();
+  const [timeSearch, setTimeSearch] = useState('');
 
   const stages = kpis.bottleneckStages.filter(s=>s.count>0);
   const maxScore = stages.length>0 ? stages[0].score : 1;
@@ -3065,21 +3066,31 @@ function BottleneckPage({kpis, filtered}) {
       {top && (
         <div className="table-card" style={{marginTop:0}}>
           <div className="table-header"><div className="chart-title">🔴 Items Currently Stuck in {top.stage}</div></div>
+          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
+            <label style={{fontSize:12,color:'var(--text-secondary)',fontWeight:500}}>Filter by Days:</label>
+            <input type="text" placeholder="Type # of days (e.g., 2, 3)" value={timeSearch} onChange={e=>setTimeSearch(e.target.value)} style={{padding:'6px 10px',background:'rgba(255,255,255,0.05)',border:'1px solid var(--border)',borderRadius:4,color:'var(--text-primary)',fontSize:12,width:200}}/>
+          </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>SC</th><th>PO</th><th>PRODUCT</th><th>TYPE</th><th>STATUS 1</th><th>INHOUSE</th><th>TIMESTAMP</th></tr></thead>
+              <thead><tr><th>SC</th><th>PO</th><th>PRODUCT</th><th>TYPE</th><th>STATUS 1</th><th>DAYS</th><th>INHOUSE</th><th>TIMESTAMP</th></tr></thead>
               <tbody>
-                {filtered.filter(r=>r.currentStage===top.stage).map((r,i)=>(
-                  <tr key={i}>
-                    <td className="mono text-accent">{r.sc||'—'}</td>
-                    <td style={{fontSize:11}}>{r.po}</td>
-                    <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
-                    <td><span className="status-pill badge-blue">{r.type||'—'}</span></td>
-                    <td style={{fontSize:10,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.status1}</td>
-                    <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
-                    <td className="mono" style={{fontSize:10}}>{r.timestamp?.substring(0,10)}</td>
-                  </tr>
-                ))}
+                {filtered.filter(r=>r.currentStage===top.stage).map((r,i)=>{
+                  const today = new Date().toISOString().substring(0,10);
+                  const days = Math.ceil(daysBetween(r.timestamp?.substring(0,10), today));
+                  const matchesSearch = !timeSearch.trim() || String(days) === timeSearch.trim();
+                  return matchesSearch ? (
+                    <tr key={i}>
+                      <td className="mono text-accent">{r.sc||'—'}</td>
+                      <td style={{fontSize:11}}>{r.po}</td>
+                      <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                      <td><span className="status-pill badge-blue">{r.type||'—'}</span></td>
+                      <td style={{fontSize:10,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.status1}</td>
+                      <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:days>5?'var(--danger)':days>2?'var(--warning)':'var(--text-secondary)'}}>{days}d</td>
+                      <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                      <td className="mono" style={{fontSize:10}}>{r.timestamp?.substring(0,10)}</td>
+                    </tr>
+                  ) : null;
+                })}
               </tbody>
             </table>
           </div>
