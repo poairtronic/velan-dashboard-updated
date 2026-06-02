@@ -1926,7 +1926,7 @@ function App() {
     // Score = queue_size × avg_duration_in_stage
     // Both measures use DATE-only data
     const bottleneckStages = Object.entries(stageCounts)
-      .filter(([s]) => !['READY','STORES','STOCK'].includes(s))
+      .filter(([s]) => !['READY','STORES','STOCK','EXSTOCK'].includes(s))
       .map(([stage, count]) => {
         const ct = stageCycleTimes.find(c=>c.stage===stage);
         const duration = ct ? ct.duration : 1;
@@ -3010,7 +3010,7 @@ function BottleneckPage({kpis, filtered}) {
         <KPICard label="TOP BOTTLENECK" value={top?.stage||'—'} sub={`${top?.count||0} items · ${Math.round((top?.duration||0)*10)/10}d avg`} color1="#ff3d5a" color2="#ff6b35" badge={{text:'CRITICAL',cls:'badge-red'}}/>
         <KPICard label="2ND BOTTLENECK" value={stages[1]?.stage||'—'} sub={`${stages[1]?.count||0} items queued`} color1="#ffd60a" color2="#ff6b35" badge={{text:'HIGH',cls:'badge-yellow'}}/>
         <KPICard label="3RD BOTTLENECK" value={stages[2]?.stage||'—'} sub={`${stages[2]?.count||0} items queued`} color1="#ffd60a" color2="#ff6b35" badge={{text:'MEDIUM',cls:'badge-yellow'}}/>
-        <KPICard label="TOTAL BLOCKED" value={stages.reduce((s,x)=>s+x.count,0)} sub="items in non-output stages" color1="#ff3d5a" color2="#b24bff"/>
+        <KPICard label="TOTAL ITEMS" value={stages.reduce((s,x)=>s+x.count,0)} sub="items in non-output stages" color1="#ff3d5a" color2="#b24bff"/>
         <KPICard label="STAGES MONITORED" value={stages.length} sub="active WIP stages" color1="#00c9ff" color2="#0fa8e0"/>
         <KPICard label="VENDOR BOTTLENECK" value={filtered.filter(r=>r.inhouse==='VENDOR').length} sub="items waiting at vendors" color1="#b24bff" color2="#ff6b35"/>
       </div>
