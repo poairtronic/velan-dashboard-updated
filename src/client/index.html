@@ -2985,106 +2985,85 @@ function BottleneckPage({kpis, filtered}) {
   const stages = kpis.bottleneckStages.filter(s=>s.count>0);
   const maxScore = stages.length>0 ? stages[0].score : 1;
 
-  // ── EXPORT HELPERS ──────────────────────────────────────────────────────────
-  function getExportRows() {
-    // Build the flat table used for all export formats
-    return stages.map((s, i) => ({
-      Rank: i + 1,
-      Stage: s.stage,
-      'Queue (Items)': s.count,
-      'Avg Days in Stage': Math.round(s.duration * 10) / 10,
-      'Bottleneck Score': Math.round(s.score * 10) / 10,
-      Severity: i === 0 ? 'CRITICAL' : i < 3 ? 'HIGH' : i < 6 ? 'MEDIUM' : 'LOW',
-    }));
+  // ── EXPORT HELPERS — export "Items Currently Stuck" table only ─────────────
+  function getStuckRows() {
+    if (!top) return [];
+    const today = new Date().toISOString().substring(0,10);
+    return filtered
+      .filter(r => r.currentStage === top.stage)
+      .map(r => {
+        const days = Math.ceil(daysBetween(r.timestamp?.substring(0,10), today) || 0);
+        return {
+          SC: r.sc || '—',
+          PO: r.po || '—',
+          Product: r.product || '—',
+          Type: r.type || '—',
+          'Status 1': r.status1 || '',
+          'Days Stuck': days,
+          Inhouse: r.inhouse || '',
+          Timestamp: r.timestamp?.substring(0,10) || '',
+        };
+      });
   }
 
   function exportExcel() {
-    const rows = getExportRows();
+    const rows = getStuckRows();
+    if (!rows.length) return;
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:6},{wch:12},{wch:14},{wch:20},{wch:18},{wch:10}];
+    ws['!cols'] = [{wch:10},{wch:24},{wch:36},{wch:10},{wch:28},{wch:12},{wch:10},{wch:14}];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Bottleneck');
-    // Stuck-items sheet
-    const stuckRows = filtered.filter(r => kpis.topBottleneck && r.currentStage === kpis.topBottleneck.stage)
-      .map(r => {
-        const today = new Date().toISOString().substring(0,10);
-        const days = Math.ceil(workingDaysBetween(r.timestamp?.substring(0,10), today) || 0);
-        return { SC: r.sc, PO: r.po, Product: r.product, Type: r.type, Status1: r.status1, Days: days, Inhouse: r.inhouse, Timestamp: r.timestamp?.substring(0,10) };
-      });
-    if (stuckRows.length > 0) {
-      const ws2 = XLSX.utils.json_to_sheet(stuckRows);
-      XLSX.utils.book_append_sheet(wb, ws2, 'StuckItems');
-    }
+    XLSX.utils.book_append_sheet(wb, ws, `Stuck_${top?.stage||'items'}`);
     const d = new Date();
-    XLSX.writeFile(wb, `bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`);
+    XLSX.writeFile(wb, `stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`);
   }
 
   function exportCSV() {
-    const rows = getExportRows();
-    if (rows.length === 0) return;
+    const rows = getStuckRows();
+    if (!rows.length) return;
     const headers = Object.keys(rows[0]);
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => JSON.stringify(r[h]??'')).join(','))].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
     const d = new Date();
-    a.download = `bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.href = url;
+    a.download = `stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   function exportJSON() {
-    const rows = getExportRows();
-    const payload = {
-      exportDate: new Date().toISOString(),
-      topBottleneck: kpis.topBottleneck,
-      stages: rows,
-      stuckItems: filtered.filter(r => kpis.topBottleneck && r.currentStage === kpis.topBottleneck.stage),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const rows = getStuckRows();
+    const blob = new Blob([JSON.stringify({stage: top?.stage, exportDate: new Date().toISOString(), items: rows}, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
     const d = new Date();
-    a.download = `bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+    a.href = url;
+    a.download = `stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   function exportPDF() {
+    const rows = getStuckRows();
+    if (!rows.length) return;
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape' });
-    const rows = getExportRows();
+    const doc = new jsPDF({orientation:'landscape'});
     const d = new Date();
-    const dateStr = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
-
-    doc.setFontSize(16);
-    doc.setTextColor(40);
-    doc.text('Bottleneck Analysis Report', 14, 16);
-    doc.setFontSize(9);
-    doc.setTextColor(100);
-    doc.text(`Velan Metrology · Generated: ${dateStr}`, 14, 22);
-
-    if (kpis.topBottleneck) {
-      doc.setFontSize(11);
-      doc.setTextColor(200, 50, 50);
-      doc.text(`Top Bottleneck: ${kpis.topBottleneck.stage}  |  ${kpis.topBottleneck.count} items  |  Score: ${Math.round(kpis.topBottleneck.score)}`, 14, 30);
-    }
-
+    doc.setFontSize(14); doc.setTextColor(40);
+    doc.text(`Items Stuck in ${top?.stage||'—'}`, 14, 14);
+    doc.setFontSize(9); doc.setTextColor(120);
+    doc.text(`Velan Metrology · ${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()} · ${rows.length} items`, 14, 20);
     doc.autoTable({
-      startY: 36,
-      head: [['Rank','Stage','Queue','Avg Days','Score','Severity']],
-      body: rows.map(r => [r.Rank, r.Stage, r['Queue (Items)'], r['Avg Days in Stage'], r['Bottleneck Score'], r.Severity]),
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [13, 31, 53] },
-      alternateRowStyles: { fillColor: [240, 245, 255] },
+      startY: 26,
+      head:[['SC','PO','Product','Type','Status 1','Days','Inhouse','Timestamp']],
+      body: rows.map(r=>[r.SC, r.PO, r.Product, r.Type, r['Status 1'], r['Days Stuck'], r.Inhouse, r.Timestamp]),
+      styles:{fontSize:9},
+      headStyles:{fillColor:[13,31,53]},
+      alternateRowStyles:{fillColor:[240,245,255]},
+      columnStyles:{5:{halign:'center'}, 6:{halign:'center'}},
     });
-
-    doc.save(`bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
+    doc.save(`stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
   }
 
   useChart(scoreRef, {
@@ -3133,16 +3112,7 @@ function BottleneckPage({kpis, filtered}) {
 
   return (
     <div>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,flexWrap:'wrap'}}>
-        <div className="section-title" style={{margin:0}}>🔴 Bottleneck <span>Detection</span><div className="section-line"/></div>
-        {/* ── EXPORT BUTTONS (Issue 3 fix) ── */}
-        <div style={{marginLeft:'auto',display:'flex',gap:8}}>
-          <button onClick={exportExcel} style={{background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',color:'var(--success)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ EXCEL</button>
-          <button onClick={exportCSV} style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.35)',color:'var(--accent1)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ CSV</button>
-          <button onClick={exportPDF} style={{background:'rgba(255,61,90,0.1)',border:'1px solid rgba(255,61,90,0.35)',color:'var(--danger)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ PDF</button>
-          <button onClick={exportJSON} style={{background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.35)',color:'var(--accent5)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ JSON</button>
-        </div>
-      </div>
+      <div className="section-title">🔴 Bottleneck <span>Detection</span><div className="section-line"/></div>
 
       {top && (
         <div style={{background:'rgba(255,61,90,0.1)',border:'2px solid rgba(255,61,90,0.5)',borderRadius:12,padding:'18px 22px',marginBottom:20,display:'flex',alignItems:'center',gap:24}}>
@@ -3220,7 +3190,16 @@ function BottleneckPage({kpis, filtered}) {
       {/* Items stuck in top bottleneck */}
       {top && (
         <div className="table-card" style={{marginTop:0}}>
-          <div className="table-header"><div className="chart-title">🔴 Items Currently Stuck in {top.stage}</div></div>
+          <div className="table-header">
+            <div className="chart-title">🔴 Items Currently Stuck in {top.stage}</div>
+            {/* Export buttons — right next to the table title */}
+            <div style={{display:'flex',gap:6,marginLeft:'auto'}}>
+              <button onClick={exportExcel} title="Export to Excel" style={{background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',color:'var(--success)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ XLS</button>
+              <button onClick={exportCSV}   title="Export to CSV"   style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.35)',color:'var(--accent1)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ CSV</button>
+              <button onClick={exportPDF}   title="Export to PDF"   style={{background:'rgba(255,61,90,0.1)',border:'1px solid rgba(255,61,90,0.35)',color:'var(--danger)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ PDF</button>
+              <button onClick={exportJSON}  title="Export to JSON"  style={{background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.35)',color:'var(--accent5)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ JSON</button>
+            </div>
+          </div>
           <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
             <label style={{fontSize:12,color:'var(--text-secondary)',fontWeight:500}}>Filter by Days:</label>
             <input type="text" placeholder="Type # of days (e.g., 2, 3)" value={timeSearch} onChange={e=>setTimeSearch(e.target.value)} style={{padding:'6px 10px',background:'rgba(255,255,255,0.05)',border:'1px solid var(--border)',borderRadius:4,color:'var(--text-primary)',fontSize:12,width:200}}/>
