@@ -4798,6 +4798,57 @@ const isDoneStage = s => {
       })
     );
 
+    // ── SC COMPLETED + VA ─────────────────────────────────────────────────────
+    // NEW metric: READY + STOCK + STORES + VA
+    // The original scCompletedSet (READY/STOCK/STORES) is NOT modified.
+    // This is a separate, isolated calculation using a wider done-stage check.
+    const isDoneOrVAStage = s => {
+      if (!s) return false;
+      const t = String(s).trim().toUpperCase().replace(/\s+/g, '');
+      if (t === 'READY')  return true;
+      if (t === 'STORES') return true;
+      if (t === 'STOCK')  return true;
+      if (t === 'STORE')  return true;
+      if (/^STOCK[K]?$/.test(t)) return true;
+      if (/^READ{1,2}Y$/.test(t)) return true;
+      if (t === 'VA')     return true;  // <-- VA included ONLY here
+      return false;
+    };
+
+    // Build scCompletedPlusVASet using the same getLatestPerProduct logic
+    const scCompletedPlusVASet = new Set(
+      scsToCheck.filter(sc => {
+        const allRowsForSC = (hasNonDateFilter || filteredScGroups[sc])
+          ? (filteredScGroups[sc] || [])
+          : (allScItems[sc] || []);
+        const latestRows = getLatestPerProduct(allRowsForSC);
+        return latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage));
+      })
+    );
+
+    // Breakdown counts for the +VA popup (stage-level item counts from filtered rows)
+    // These count individual items (rows), not SC sets, for the breakdown display
+    const vaBreakdown = (() => {
+      const counts = { READY: 0, STOCK: 0, STORES: 0, VA: 0 };
+      // Count items from SCs that are in scCompletedPlusVASet
+      scsToCheck.forEach(sc => {
+        const allRowsForSC = (hasNonDateFilter || filteredScGroups[sc])
+          ? (filteredScGroups[sc] || [])
+          : (allScItems[sc] || []);
+        const latestRows = getLatestPerProduct(allRowsForSC);
+        if (latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage))) {
+          latestRows.forEach(r => {
+            const st = String(r.currentStage || '').trim().toUpperCase();
+            if (st === 'READY')  counts.READY++;
+            else if (st === 'STOCK')  counts.STOCK++;
+            else if (st === 'STORES' || st === 'STORE') counts.STORES++;
+            else if (st === 'VA')   counts.VA++;
+          });
+        }
+      });
+      return counts;
+    })();
+
     return {
       total, uniquePO, uniqueSC, readyItemsCount,
       totalPOCount, totalSCCount,
@@ -4807,6 +4858,9 @@ const isDoneStage = s => {
       scSetsReceived: scSetsReceivedSet.size,
       scSetsCompleted: scSetsCompletedSet.size,
       scSetsCompletedTotal: scSetsCompletedTotal.size,
+      // NEW — isolated from scCompleted; VA only appears here
+      scCompletedPlusVA: scCompletedPlusVASet.size,
+      vaBreakdown,
     };
   }, [filtered, data, fromDate, toDate, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
   // --- Export handlers ---
@@ -5082,6 +5136,19 @@ const isDoneStage = s => {
             {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
             {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
           </div>
+          {/* NEW: +VA View — separate modal, does NOT modify SC COMPLETED above */}
+          <button
+            onClick={e => { e.stopPropagation(); setSelectedKPI('scCompletedPlusVA'); }}
+            style={{
+              marginTop:10, padding:'4px 10px',
+              border:'1px solid rgba(255,107,53,0.5)',
+              background:'rgba(255,107,53,0.1)',
+              color:'var(--accent4)', borderRadius:6,
+              fontSize:10, fontWeight:700, cursor:'pointer',
+              fontFamily:'Share Tech Mono,monospace', letterSpacing:0.5,
+            }}
+            title="View SC Completed including VA stage"
+          >+VA View ({kpiStats.scCompletedPlusVA})</button>
         </div>
       </div>
 
@@ -5250,10 +5317,176 @@ const isDoneStage = s => {
           </div>
         </div>
       )}
+      {/* DETAIL MODAL — SC COMPLETED + VA BREAKDOWN */}
+      {selectedKPI === 'scCompletedPlusVA' && (() => {
+        // Export helpers scoped to this modal
+        function exportModalJSON() {
+          const blob = new Blob([JSON.stringify(completedPlusVARows, null, 2)], {type:'application/json'});
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+          a.download = 'sc_completed_plus_va.json'; a.click();
+        }
+        function exportModalCSV() {
+          const header = ['sc','po','product','currentStage','inhouse','timestamp'];
+          const rows = completedPlusVARows.map(r => header.map(h => `"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+          const blob = new Blob([[header.join(','), ...rows].join('\n')], {type:'text/csv'});
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+          a.download = 'sc_completed_plus_va.csv'; a.click();
+        }
+        function exportModalPDF() {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
+          doc.setFontSize(14);
+          doc.text('Velan Metrology \u2013 SC COMPLETED + VA', 40, 36);
+          doc.setFontSize(9); doc.setTextColor(80,80,80);
+          doc.text(
+            `READY: ${kpiStats.vaBreakdown.READY}  STOCK: ${kpiStats.vaBreakdown.STOCK}  STORES: ${kpiStats.vaBreakdown.STORES}  SC COMPLETED: ${kpiStats.scCompleted}  VA: ${kpiStats.vaBreakdown.VA}  SC COMPLETED+VA: ${kpiStats.scCompletedPlusVA}`,
+            40, 52
+          );
+          doc.autoTable({
+            columns:[
+              {header:'SC',dataKey:'sc'},{header:'PO',dataKey:'po'},
+              {header:'PRODUCT',dataKey:'product'},{header:'STAGE',dataKey:'currentStage'},
+              {header:'INHOUSE',dataKey:'inhouse'},{header:'TIMESTAMP',dataKey:'timestamp'},
+            ],
+            body: completedPlusVARows.map(r=>({
+              sc:r.sc||'', po:r.po||'', product:r.product||'',
+              currentStage:r.currentStage||'', inhouse:r.inhouse||'',
+              timestamp:r.timestamp ? fmtTs(r.timestamp) : '',
+            })),
+            startY:68, styles:{fontSize:8,cellPadding:3},
+            headStyles:{fillColor:[255,107,53]}, theme:'grid',
+            margin:{left:40,right:40},
+          });
+          doc.save('sc_completed_plus_va.pdf');
+        }
+
+        // Build the row list for the popup from filteredScGroupsModal
+        // Includes all SCs where every latest item is in READY/STOCK/STORES/VA
+        const isDoneOrVA = s => {
+          if (!s) return false;
+          const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+          return ['READY','STOCK','STORES','STORE','VA'].includes(t) || /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+        };
+        const getLatestPP = rows => {
+          const m = {};
+          rows.forEach(r => {
+            const key = (r.product||'__none__').trim();
+            const ex = m[key];
+            if (!ex) { m[key]=r; return; }
+            const rD=isDoneOrVA(r.currentStage), eD=isDoneOrVA(ex.currentStage);
+            if (rD&&!eD){m[key]=r;return;} if(!rD&&eD)return;
+            if (r._isLive&&!ex._isLive){m[key]=r;return;} if(!r._isLive&&ex._isLive)return;
+            if (r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))m[key]=r;
+          });
+          return Object.values(m);
+        };
+        const scsInView = Object.keys(filteredScGroupsModal);
+        const completedPlusVASCs = scsInView
+          .map(sc => {
+            const rows = filteredScGroupsModal[sc] || [];
+            if (rows.length === 0) return null;
+            const latest = getLatestPP(rows);
+            if (latest.length > 0 && latest.every(r => isDoneOrVA(r.currentStage))) return [sc, latest];
+            return null;
+          })
+          .filter(Boolean);
+
+        // Flat row list for exports
+        const completedPlusVARows = completedPlusVASCs.flatMap(([, rows]) => rows);
+
+        return (
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+            <div style={{background:'var(--bg-card)',border:'2px solid var(--accent4)',borderRadius:12,padding:24,maxWidth:860,maxHeight:'85vh',overflow:'auto',width:'92%'}}>
+              {/* Header */}
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16,gap:12}}>
+                <div>
+                  <div style={{fontSize:18,fontWeight:700,color:'var(--accent4)',marginBottom:6,fontFamily:'Rajdhani,sans-serif',letterSpacing:1}}>
+                    SC COMPLETED + VA BREAKDOWN
+                  </div>
+                  <div style={{display:'flex',gap:18,flexWrap:'wrap',marginBottom:4}}>
+                    {[
+                      {label:'READY',  val:kpiStats.vaBreakdown.READY,  c:'var(--success)'},
+                      {label:'STOCK',  val:kpiStats.vaBreakdown.STOCK,  c:'var(--warning)'},
+                      {label:'STORES', val:kpiStats.vaBreakdown.STORES, c:'var(--accent1)'},
+                    ].map(s=>(
+                      <span key={s.label} style={{fontSize:12,fontFamily:'Share Tech Mono,monospace'}}>
+                        <span style={{color:'var(--text-muted)'}}>{s.label}: </span>
+                        <span style={{color:s.c,fontWeight:700}}>{s.val}</span>
+                      </span>
+                    ))}
+                    <span style={{fontSize:12,fontFamily:'Share Tech Mono,monospace',borderLeft:'1px solid var(--border)',paddingLeft:18}}>
+                      <span style={{color:'var(--text-muted)'}}>SC COMPLETED: </span>
+                      <span style={{color:'var(--success)',fontWeight:700}}>{kpiStats.scCompleted}</span>
+                    </span>
+                    <span style={{fontSize:12,fontFamily:'Share Tech Mono,monospace'}}>
+                      <span style={{color:'var(--text-muted)'}}>VA: </span>
+                      <span style={{color:'var(--accent4)',fontWeight:700}}>{kpiStats.vaBreakdown.VA}</span>
+                    </span>
+                    <span style={{fontSize:12,fontFamily:'Share Tech Mono,monospace',borderLeft:'1px solid var(--border)',paddingLeft:18}}>
+                      <span style={{color:'var(--text-muted)'}}>SC COMPLETED + VA: </span>
+                      <span style={{color:'var(--accent4)',fontWeight:700}}>{kpiStats.scCompletedPlusVA}</span>
+                    </span>
+                  </div>
+                  <div style={{fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
+                    {completedPlusVASCs.length} sets · includes READY / STOCK / STORES / VA
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,flexShrink:0,flexWrap:'wrap'}}>
+                  <button onClick={exportModalJSON} style={{padding:'5px 11px',border:'1px solid rgba(0,201,255,0.4)',background:'rgba(0,201,255,0.08)',color:'var(--accent1)',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>⬇ JSON</button>
+                  <button onClick={exportModalCSV}  style={{padding:'5px 11px',border:'1px solid rgba(0,230,118,0.4)',background:'rgba(0,230,118,0.08)',color:'var(--success)',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>⬇ CSV</button>
+                  <button onClick={exportModalPDF}  style={{padding:'5px 11px',border:'1px solid rgba(255,61,90,0.4)',background:'rgba(255,61,90,0.08)',color:'var(--danger)',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>⬇ PDF</button>
+                  <button onClick={() => setSelectedKPI(null)} style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'5px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}>CLOSE</button>
+                </div>
+              </div>
+
+              {/* Item Table */}
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                <thead>
+                  <tr style={{borderBottom:'2px solid var(--border)'}}>
+                    {['SC','PO','PRODUCT','STAGE','TIMESTAMP'].map(h=>(
+                      <th key={h} style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',fontSize:10}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {completedPlusVASCs.length === 0 ? (
+                    <tr><td colSpan="5" style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:12}}>
+                      No SC+VA completed sets found for the current filters.
+                    </td></tr>
+                  ) : completedPlusVASCs.map(([sc, latestRows], i) =>
+                    latestRows.map((r, j) => (
+                      <tr key={sc+'-'+j} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(255,107,53,0.02)':'transparent'}}>
+                        <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>{j===0 ? sc : ''}</td>
+                        <td style={{padding:'10px',fontSize:11}}>{r.po||'—'}</td>
+                        <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                        <td style={{padding:'10px'}}>
+                          <span style={{
+                            background:
+                              r.currentStage==='READY'  ? 'rgba(0,230,118,0.15)' :
+                              r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' :
+                              r.currentStage==='VA'     ? 'rgba(255,107,53,0.15)' :
+                                                          'rgba(255,214,10,0.15)',
+                            color:
+                              r.currentStage==='READY'  ? 'var(--success)'  :
+                              r.currentStage==='STORES' ? 'var(--accent1)'  :
+                              r.currentStage==='VA'     ? 'var(--accent4)'  :
+                                                          'var(--warning)',
+                            padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,
+                          }}>{r.currentStage||'—'}</span>
+                        </td>
+                        <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>{r.timestamp ? r.timestamp.slice(0,10) : '—'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
-// ─── KPI CARD ──────────────────────────────────────────────────────────────────
 function KPICard({label,value,sub,color1,color2,badge,action}) {
   return (
     <div className="kpi-card" style={{'--c1':color1,'--c2':color2}}>
