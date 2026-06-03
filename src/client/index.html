@@ -4730,6 +4730,27 @@ const isDoneStage = s => {
       return Object.values(latestMap);
     };
 
+    // VA-aware variant: treats VA as a terminal "done" stage (equal priority to READY/STORES/STOCK).
+    // Used ONLY for scCompletedPlusVASet — scCompletedSet still uses getLatestPerProduct above.
+    const getLatestPerProductForVA = rows => {
+      const latestMap = {};
+      rows.forEach(r => {
+        const key = (r.product || '__none__').trim();
+        const ex = latestMap[key];
+        if (!ex) { latestMap[key] = r; return; }
+        const rDone = isDoneOrVAStage(r.currentStage);   // VA counts as terminal here
+        const exDone = isDoneOrVAStage(ex.currentStage);
+        // Rule 1: terminal state always beats WIP
+        if (rDone && !exDone) { latestMap[key] = r; return; }
+        if (!rDone && exDone) return;
+        // Both terminal or both WIP — secondary rules
+        if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+        if (!r._isLive && ex._isLive) return;
+        if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+      });
+      return Object.values(latestMap);
+    };
+
     // Determine which SCs to evaluate for completion:
     // - Always check against the filtered view to respect all active filters
     // - Include date filters, search, PO, stage, type, category, inhouse filters
@@ -4815,13 +4836,15 @@ const isDoneStage = s => {
       return false;
     };
 
-    // Build scCompletedPlusVASet using the same getLatestPerProduct logic
+    // Build scCompletedPlusVASet:
+    // - Scope: same scsToCheck (respects date/PO/search filters for WHICH SCs are in scope)
+    // - Source: always allScItems (ALL rows for the SC, not just filtered rows),
+    //   so VA rows are never hidden by the date window or stage filter.
+    // - Priority: getLatestPerProductForVA (VA is treated as a terminal state, not WIP)
     const scCompletedPlusVASet = new Set(
       scsToCheck.filter(sc => {
-        const allRowsForSC = (hasNonDateFilter || filteredScGroups[sc])
-          ? (filteredScGroups[sc] || [])
-          : (allScItems[sc] || []);
-        const latestRows = getLatestPerProduct(allRowsForSC);
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProductForVA(allRowsForSC);
         return latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage));
       })
     );
@@ -4830,12 +4853,11 @@ const isDoneStage = s => {
     // These count individual items (rows), not SC sets, for the breakdown display
     const vaBreakdown = (() => {
       const counts = { READY: 0, STOCK: 0, STORES: 0, VA: 0 };
-      // Count items from SCs that are in scCompletedPlusVASet
       scsToCheck.forEach(sc => {
-        const allRowsForSC = (hasNonDateFilter || filteredScGroups[sc])
-          ? (filteredScGroups[sc] || [])
-          : (allScItems[sc] || []);
-        const latestRows = getLatestPerProduct(allRowsForSC);
+        // Use all rows for this SC (not just filtered) so VA rows outside the date
+        // window are still counted in the breakdown display
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage))) {
           latestRows.forEach(r => {
             const st = String(r.currentStage || '').trim().toUpperCase();
@@ -5380,10 +5402,16 @@ const isDoneStage = s => {
           });
           return Object.values(m);
         };
+        // Use allScItemsModal (all rows, no date filter) so VA rows outside the
+        // date window are still visible in the popup table. scsToCheck already
+        // scopes WHICH SCs are in view; here we just need ALL rows for those SCs.
         const scsInView = Object.keys(filteredScGroupsModal);
         const completedPlusVASCs = scsInView
           .map(sc => {
-            const rows = filteredScGroupsModal[sc] || [];
+            // Pull from allScItemsModal so VA rows aren't hidden by the date filter
+            const rows = (allScItemsModal[sc] || []).length > 0
+              ? allScItemsModal[sc]
+              : (filteredScGroupsModal[sc] || []);
             if (rows.length === 0) return null;
             const latest = getLatestPP(rows);
             if (latest.length > 0 && latest.every(r => isDoneOrVA(r.currentStage))) return [sc, latest];
