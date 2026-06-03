@@ -3077,7 +3077,7 @@ function BottleneckPage({kpis, filtered}) {
                 {filtered.filter(r=>r.currentStage===top.stage).map((r,i)=>{
                   const today = new Date().toISOString().substring(0,10);
                   const days = Math.ceil(daysBetween(r.timestamp?.substring(0,10), today));
-                  const matchesSearch = !timeSearch.trim() || String(days) === timeSearch.trim();
+                  const matchesSearch = !timeSearch.trim() || days >= parseInt(timeSearch.trim(), 10);
                   return matchesSearch ? (
                     <tr key={i}>
                       <td className="mono text-accent">{r.sc||'—'}</td>
