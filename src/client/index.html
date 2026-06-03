@@ -1148,25 +1148,23 @@ function App() {
   }
 
   function resolveLatestStage({opStage, status1, status2}) {
-    // Priority rule: the OP column (opStage) is the primary source of truth
-    // for the current stage of the item — it is a direct cell value, not free text.
-    // Status fields are secondary (they often contain the PREVIOUS operation text
-    // like "FB DONE" or "QC COMPLETE" which would be misidentified as the current stage).
+    // ─── FIX (Issues 1 & 4): OP column is the SOLE source of truth for stage.
     //
-    // Exception: if status2 contains an EXPLICIT "MOVE TO <stage>" instruction,
-    // that overrides the OP column since it's a deliberate routing action.
-    const moveToFromStatus2 = (() => {
-      const t = String(status2 || '').toUpperCase().trim();
-      const m = t.match(/MOVE\s*TO\s*([A-Z0-9]+)/);
-      return m ? normalizeStage(m[1]) : '';
-    })();
-    if (moveToFromStatus2) return moveToFromStatus2;
+    // ROOT CAUSE of CGV→CGV+CG split (Issue 4):
+    //   status2 text like "CG DONE, MOVE TO FB" was matching the "MOVE TO" regex,
+    //   returning "FB" or "CG" and OVERRIDING the OP value "CGV".  This caused items
+    //   with OP=CGV to be mis-classified as CG, splitting 17 CGV items into 12+5.
+    //
+    // FIX: "MOVE TO" in status2 only fires when OP is empty/unresolvable.
+    //   Step 1 — try OP column first (exact stage value, most reliable).
+    //   Step 2 — if OP is empty, then and only then parse status2/status1 free text.
 
-    // OP column is primary — use it if it resolves to a known stage
+    // Step 1: OP column is primary — use it if it resolves to a known stage
     const fromOp = normalizeStage(opStage);
     if (fromOp) return fromOp;
 
-    // OP column empty/unresolved — fall back to free-text status fields
+    // Step 2: OP column empty/unresolved — fall back to free-text status fields
+    // (This includes "MOVE TO <stage>" extraction from status2)
     return (
       extractStageFromStatusText(status2) ||
       extractStageFromStatusText(status1) ||
@@ -2941,6 +2939,108 @@ function BottleneckPage({kpis, filtered}) {
   const stages = kpis.bottleneckStages.filter(s=>s.count>0);
   const maxScore = stages.length>0 ? stages[0].score : 1;
 
+  // ── EXPORT HELPERS ──────────────────────────────────────────────────────────
+  function getExportRows() {
+    // Build the flat table used for all export formats
+    return stages.map((s, i) => ({
+      Rank: i + 1,
+      Stage: s.stage,
+      'Queue (Items)': s.count,
+      'Avg Days in Stage': Math.round(s.duration * 10) / 10,
+      'Bottleneck Score': Math.round(s.score * 10) / 10,
+      Severity: i === 0 ? 'CRITICAL' : i < 3 ? 'HIGH' : i < 6 ? 'MEDIUM' : 'LOW',
+    }));
+  }
+
+  function exportExcel() {
+    const rows = getExportRows();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:6},{wch:12},{wch:14},{wch:20},{wch:18},{wch:10}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Bottleneck');
+    // Stuck-items sheet
+    const stuckRows = filtered.filter(r => kpis.topBottleneck && r.currentStage === kpis.topBottleneck.stage)
+      .map(r => {
+        const today = new Date().toISOString().substring(0,10);
+        const days = Math.ceil(workingDaysBetween(r.timestamp?.substring(0,10), today) || 0);
+        return { SC: r.sc, PO: r.po, Product: r.product, Type: r.type, Status1: r.status1, Days: days, Inhouse: r.inhouse, Timestamp: r.timestamp?.substring(0,10) };
+      });
+    if (stuckRows.length > 0) {
+      const ws2 = XLSX.utils.json_to_sheet(stuckRows);
+      XLSX.utils.book_append_sheet(wb, ws2, 'StuckItems');
+    }
+    const d = new Date();
+    XLSX.writeFile(wb, `bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`);
+  }
+
+  function exportCSV() {
+    const rows = getExportRows();
+    if (rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportJSON() {
+    const rows = getExportRows();
+    const payload = {
+      exportDate: new Date().toISOString(),
+      topBottleneck: kpis.topBottleneck,
+      stages: rows,
+      stuckItems: filtered.filter(r => kpis.topBottleneck && r.currentStage === kpis.topBottleneck.stage),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const rows = getExportRows();
+    const d = new Date();
+    const dateStr = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+
+    doc.setFontSize(16);
+    doc.setTextColor(40);
+    doc.text('Bottleneck Analysis Report', 14, 16);
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Velan Metrology · Generated: ${dateStr}`, 14, 22);
+
+    if (kpis.topBottleneck) {
+      doc.setFontSize(11);
+      doc.setTextColor(200, 50, 50);
+      doc.text(`Top Bottleneck: ${kpis.topBottleneck.stage}  |  ${kpis.topBottleneck.count} items  |  Score: ${Math.round(kpis.topBottleneck.score)}`, 14, 30);
+    }
+
+    doc.autoTable({
+      startY: 36,
+      head: [['Rank','Stage','Queue','Avg Days','Score','Severity']],
+      body: rows.map(r => [r.Rank, r.Stage, r['Queue (Items)'], r['Avg Days in Stage'], r['Bottleneck Score'], r.Severity]),
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [13, 31, 53] },
+      alternateRowStyles: { fillColor: [240, 245, 255] },
+    });
+
+    doc.save(`bottleneck_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
+  }
+
   useChart(scoreRef, {
     type:'bar',
     data:{
@@ -2987,7 +3087,16 @@ function BottleneckPage({kpis, filtered}) {
 
   return (
     <div>
-      <div className="section-title">🔴 Bottleneck <span>Detection</span><div className="section-line"/></div>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,flexWrap:'wrap'}}>
+        <div className="section-title" style={{margin:0}}>🔴 Bottleneck <span>Detection</span><div className="section-line"/></div>
+        {/* ── EXPORT BUTTONS (Issue 3 fix) ── */}
+        <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+          <button onClick={exportExcel} style={{background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',color:'var(--success)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ EXCEL</button>
+          <button onClick={exportCSV} style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.35)',color:'var(--accent1)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ CSV</button>
+          <button onClick={exportPDF} style={{background:'rgba(255,61,90,0.1)',border:'1px solid rgba(255,61,90,0.35)',color:'var(--danger)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ PDF</button>
+          <button onClick={exportJSON} style={{background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.35)',color:'var(--accent5)',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:11,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ JSON</button>
+        </div>
+      </div>
 
       {top && (
         <div style={{background:'rgba(255,61,90,0.1)',border:'2px solid rgba(255,61,90,0.5)',borderRadius:12,padding:'18px 22px',marginBottom:20,display:'flex',alignItems:'center',gap:24}}>
@@ -3594,8 +3703,11 @@ function VendorPage({kpis, data, setActiveNav}) {
               <div key={i} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid rgba(26,58,92,0.4)'}}>
                 <div style={{width:90,fontFamily:'Share Tech Mono',fontSize:11,color:'var(--accent1)',fontWeight:700}}>{v.code}</div>
                 <div style={{flex:0.25}}>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Avg Process Time</div>
-                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:'var(--accent4)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</div>
+                  {/* FIX Issue 2: avgFromPO = working days PO-date→last timestamp,
+                      same formula as Bottleneck module's stageCycleTimes.avgToReach.
+                      Old code used (today − timestamp) which conflated aging with cycle time. */}
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Avg Cycle (PO→Stage)</div>
+                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:'var(--accent4)'}}>{v.avgFromPO!=null?`${v.avgFromPO}d`:'—'}</div>
                 </div>
                 <div style={{flex:0.25}}>
                   <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Completion Rate</div>
@@ -3631,7 +3743,7 @@ function VendorPage({kpis, data, setActiveNav}) {
               <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--danger)'}}>{kpis.topVendorBottleneck.vendor}</div>
             </div>
             <div>
-              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Avg Pending Days</div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Avg Cycle (PO→Stage)</div>
               <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--accent4)'}}>{kpis.topVendorBottleneck.avgPending}d</div>
             </div>
             <div>
