@@ -1922,12 +1922,25 @@ function App() {
 
     // ── FEATURE 7: Bottleneck Detection ─────────────────────────────────────
     // Score = queue_size × avg_duration_in_stage
-    // Both measures use DATE-only data
+    // For INHOUSE stages: duration = avg timestamp-to-timestamp transition (stageCycleTimes)
+    // For VENDOR stages:  duration = avgPending (today − timestamp, working days)
+    //   ← This is the FIX for the 3d vs 4d contradiction: vendor stages now use
+    //     the same formula (today−timestamp) as the Vendor Evaluation module.
+    const vendorAvgPendingMap = {};
+    Object.values(vendorStats).forEach(s => {
+      vendorAvgPendingMap[s.vendor] = s.avgPending;
+    });
     const bottleneckStages = Object.entries(stageCounts)
       .filter(([s]) => !['READY','STORES','STOCK','EXSTOCK'].includes(s))
       .map(([stage, count]) => {
-        const ct = stageCycleTimes.find(c=>c.stage===stage);
-        const duration = ct ? ct.duration : 1;
+        // Use vendor's avgPending for vendor stages, stageCycleTimes for inhouse stages
+        let duration;
+        if (vendorAvgPendingMap[stage] !== undefined) {
+          duration = vendorAvgPendingMap[stage] || 1;
+        } else {
+          const ct = stageCycleTimes.find(c=>c.stage===stage);
+          duration = ct ? ct.duration : 1;
+        }
         const score = count * duration;
         return { stage, count, duration, score };
       })
@@ -1974,24 +1987,41 @@ function App() {
     });
 
     // Calculate vendor averages and rank
+    // ─── FIX (Issue 2 — Unified Formula) ────────────────────────────────────
+    // ROOT CAUSE of 3d vs 4d contradiction:
+    //   Bottleneck module "Avg Days in Stage" = timestamp-to-timestamp transition
+    //     (nextTS − currentTS) across SC records — measures actual time spent in stage.
+    //   Vendor "Avg Process Time" used avgFromPO (PO date → timestamp) — measures
+    //     total cycle time to reach the stage, NOT time spent in it.
+    //   These are fundamentally different metrics so they will always differ.
+    //
+    // CORRECT FORMULA for both modules = avgPending = workingDaysBetween(timestamp, today)
+    //   This is the only metric that means the same thing in both contexts:
+    //   "How many working days has this item been sitting at this vendor stage?"
+    //   It is already calculated correctly in vendorStageData.pendingDays.
+    //
+    // The Bottleneck module shows FBV=3d because it averages timestamp transitions.
+    // The Vendor module showed 4d because it averaged PO→timestamp (daysFromPO).
+    // BOTH are now unified to use avgPending (today − timestamp, working days).
     Object.keys(vendorStats).forEach(v => {
       const stats = vendorStats[v];
+      // avgPending = mean of (today − each item's last timestamp), working days only
       stats.avgPending = stats.count > 0 ? Math.round(stats.totalPending / stats.count) : 0;
       stats.maxPending = stats.pendingDays.length > 0 ? Math.max(...stats.pendingDays) : 0;
       stats.minPending = stats.pendingDays.length > 0 ? Math.min(...stats.pendingDays) : 0;
       stats.stale = stats.pendingDays.filter(d => d > TARGET_DAYS).length;
+      // avgFromPO kept for reference only — NOT used as the primary display metric
       stats.avgFromPO = stats.fromPODays.length > 0 ? Math.round(stats.totalFromPO / stats.fromPODays.length) : null;
       
-      // ─ NEW: SLA Tracking (>2 days pending = violation) ──────────────────
+      // SLA Tracking (>2 working days pending = violation)
       stats.slaViolations = stats.pendingDays.filter(d => d > 2).length;
       stats.slaViolationRate = stats.count > 0 ? Math.round((stats.slaViolations / stats.count) * 100) : 0;
       
-      // ─ NEW: Process Efficiency (items completed / total items attempted)
+      // Process Efficiency (items completed / total items attempted)
       const completedItems = stats.items.filter(i => ['READY','STORES','STOCK'].includes(i.stage)).length;
       stats.processEfficiency = stats.count > 0 ? Math.round((completedItems / stats.count) * 100) : 0;
       
-      // ─ NEW: Average active time = avgFromPO (days from PO to current stage)
-      stats.avgActiveTime = stats.avgFromPO || 0;
+      stats.avgActiveTime = stats.avgPending; // unified: both modules now show today−timestamp
     });
 
     // ── Vendor Process Bottleneck Detection ─────────────────────────────────
@@ -3703,11 +3733,11 @@ function VendorPage({kpis, data, setActiveNav}) {
               <div key={i} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid rgba(26,58,92,0.4)'}}>
                 <div style={{width:90,fontFamily:'Share Tech Mono',fontSize:11,color:'var(--accent1)',fontWeight:700}}>{v.code}</div>
                 <div style={{flex:0.25}}>
-                  {/* FIX Issue 2: avgFromPO = working days PO-date→last timestamp,
-                      same formula as Bottleneck module's stageCycleTimes.avgToReach.
-                      Old code used (today − timestamp) which conflated aging with cycle time. */}
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Avg Cycle (PO→Stage)</div>
-                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:'var(--accent4)'}}>{v.avgFromPO!=null?`${v.avgFromPO}d`:'—'}</div>
+                  {/* UNIFIED: avgPending = workingDays(today − timestamp).
+                      Bottleneck module also uses today−timestamp for its "Avg Days in Stage"
+                      so both modules now show the same number. */}
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Avg Pending Days</div>
+                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:'var(--accent4)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</div>
                 </div>
                 <div style={{flex:0.25}}>
                   <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Completion Rate</div>
@@ -3743,7 +3773,7 @@ function VendorPage({kpis, data, setActiveNav}) {
               <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--danger)'}}>{kpis.topVendorBottleneck.vendor}</div>
             </div>
             <div>
-              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Avg Cycle (PO→Stage)</div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Avg Pending Days</div>
               <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--accent4)'}}>{kpis.topVendorBottleneck.avgPending}d</div>
             </div>
             <div>
@@ -3795,7 +3825,7 @@ function VendorPage({kpis, data, setActiveNav}) {
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,color:overdue?'var(--danger)':'var(--warning)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</td>
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:16,color:'var(--accent4)'}}>{v.maxDays!=null?`${v.maxDays}d`:'—'}</td>
                     <td style={{color:v.delayed>0?'var(--danger)':'var(--success)',fontWeight:700,fontFamily:'Rajdhani',fontSize:17}}>{v.delayed}</td>
-                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:'var(--accent1)'}}>{v.avgFromPO!=null?`${v.avgFromPO}d`:'—'}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:'var(--accent1)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</td>
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:v.processEfficiency>=80?'var(--success)':v.processEfficiency>=60?'var(--warning)':'var(--danger)'}}>{v.processEfficiency!=null?`${v.processEfficiency}%`:'—'}</td>
                     <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:v.slaViolations>0?'var(--danger)':'var(--success)'}}>{v.slaViolations||0}</td>
                     <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{fmtTs(latestTs)}</td>
