@@ -1922,30 +1922,18 @@ function App() {
 
     // ── FEATURE 7: Bottleneck Detection ─────────────────────────────────────
     // Score = queue_size × avg_duration_in_stage
-    // For INHOUSE stages: duration = avg timestamp-to-timestamp transition (stageCycleTimes)
-    // For VENDOR stages:  duration = avgPending (today − timestamp, working days)
-    //   ← This is the FIX for the 3d vs 4d contradiction: vendor stages now use
-    //     the same formula (today−timestamp) as the Vendor Evaluation module.
-    const vendorAvgPendingMap = {};
-    Object.values(vendorStats).forEach(s => {
-      vendorAvgPendingMap[s.vendor] = s.avgPending;
-    });
+    // vendorAvgPendingMap is built after vendorStats — see below bottleneck section.
+    // For now use stageCycleTimes only; vendor stages get corrected after vendorStats ready.
     const bottleneckStages = Object.entries(stageCounts)
       .filter(([s]) => !['READY','STORES','STOCK','EXSTOCK'].includes(s))
       .map(([stage, count]) => {
-        // Use vendor's avgPending for vendor stages, stageCycleTimes for inhouse stages
-        let duration;
-        if (vendorAvgPendingMap[stage] !== undefined) {
-          duration = vendorAvgPendingMap[stage] || 1;
-        } else {
-          const ct = stageCycleTimes.find(c=>c.stage===stage);
-          duration = ct ? ct.duration : 1;
-        }
+        const ct = stageCycleTimes.find(c=>c.stage===stage);
+        const duration = ct ? ct.duration : 1;
         const score = count * duration;
         return { stage, count, duration, score };
       })
       .sort((a,b) => b.score - a.score);
-    const topBottleneck = bottleneckStages[0] || null;
+    // topBottleneck is derived after vendorStats is built — see topBottleneckCorrected below
 
     // ── FEATURE 9: Vendor Evaluation (Today vs last update timestamp) ───────
     // Measure process aging as days since last edit/update.
@@ -2042,6 +2030,34 @@ function App() {
       );
 
     const topVendorBottleneck = vendorBottlenecks[0] || null;
+
+    // ── Rebuild bottleneckStages now that vendorStats is fully populated ─────
+    // FIX: vendor stages now use avgPending (today−timestamp, same as Vendor Eval)
+    // instead of stageCycleTimes transitions, so both modules show the same number.
+    {
+      const vendorAvgPendingMap = {};
+      Object.values(vendorStats).forEach(s => {
+        if (s && s.vendor) vendorAvgPendingMap[s.vendor] = s.avgPending || 0;
+      });
+      const corrected = Object.entries(stageCounts)
+        .filter(([s]) => !['READY','STORES','STOCK','EXSTOCK'].includes(s))
+        .map(([stage, count]) => {
+          let duration;
+          if (vendorAvgPendingMap[stage] !== undefined) {
+            duration = vendorAvgPendingMap[stage] || 1;
+          } else {
+            const ct = stageCycleTimes.find(c => c.stage === stage);
+            duration = ct ? ct.duration : 1;
+          }
+          return { stage, count, duration, score: count * duration };
+        })
+        .sort((a, b) => b.score - a.score);
+      // Mutate the existing bottleneckStages array in-place so topBottleneck stays in sync
+      bottleneckStages.length = 0;
+      corrected.forEach(s => bottleneckStages.push(s));
+    }
+    // Re-derive topBottleneck from the now-corrected array
+    const topBottleneckCorrected = bottleneckStages[0] || null;
     // Old vendor time map (kept for backward compatibility with existing displays)
     const vendorTimeMap = {};
     filtered.forEach(r => {
@@ -2093,7 +2109,7 @@ function App() {
     return {
       totalItems, ready, stores, wip, inhouse, vendor,
       onTime, delayed, onTimePct, totalPOs,
-      stageCounts, stageWIP, bottleneck, bottleneckStages, topBottleneck,
+      stageCounts, stageWIP, bottleneck, bottleneckStages, topBottleneck: topBottleneckCorrected,
       vendors, vendorTotal, vendorStats, topVendorBottleneck,
       stageCycleTimes, stageAvgToReach, avgOverallCycle,
       scCompletion, scDailyOutput,
