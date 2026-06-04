@@ -589,9 +589,9 @@ function getVendorCode(stage,inhouse) {
   return null;
 }
 
-// Determine SC completion: all items in SC are READY or STORES
+// Determine SC completion: all items in SC are READY or STORES or EXSTOCK
 function isSCComplete(items) {
-  return items.every(i=>['READY','STORES','STOCK'].includes(i.currentStage));
+  return items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
 }
 
 function getSCLastTimestamp(items) {
@@ -1744,7 +1744,7 @@ function App() {
     const stores = storeSets.length;
     
     // WIP Sets: SC sets with items NOT all in READY/STORES/STOCK
-    const wip = filtered.filter(r=>!['READY','STORES','STOCK'].includes(r.currentStage)).length;
+    const wip = filtered.filter(r=>!['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)).length;
     const inhouse = filtered.filter(r=>r.inhouse==='INHOUSE').length;
     const vendor = filtered.filter(r=>r.inhouse==='VENDOR').length;
 
@@ -1755,7 +1755,7 @@ function App() {
     let onTime=0, delayed=0, onTimePOs=[], delayedPOs=[], completedPOCount=0;
     poGroups.forEach(pg => {
       const lastTs = getSCLastTimestamp(pg.items);
-      const allDone = pg.items.every(i=>['READY','STORES','STOCK'].includes(i.currentStage));
+      const allDone = pg.items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
       if (allDone) {
         completedPOCount++;
         const days = daysBetween(pg.poDate, lastTs);
@@ -1784,7 +1784,7 @@ function App() {
     // ── Bottleneck by PO ─────────────────────────────────────────────────────
     const bottleneck = [...poGroups].map(pg=>{
       const lastTs = getSCLastTimestamp(pg.items);
-      const done = pg.items.every(i=>['READY','STORES','STOCK'].includes(i.currentStage));
+      const done = pg.items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
       const days = done ? daysBetween(pg.poDate, lastTs) : daysBetween(pg.poDate, today);
       return {...pg, days, done};
     }).sort((a,b)=>(b.days||0)-(a.days||0));
@@ -1829,7 +1829,7 @@ function App() {
     // ── COMPLETE SETS from filtered data ──────────────────────────────────────
     // All SC sets where every item is in READY, STORES, or STOCK
     const completeSets = filteredScGroups.filter(sg=>
-      sg.items.every(i=>['READY','STORES','STOCK'].includes(i.currentStage))
+      sg.items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage))
     );
     // Note: readySets and storeSets already calculated from filtered data above
 
@@ -2006,7 +2006,7 @@ function App() {
       stats.slaViolationRate = stats.count > 0 ? Math.round((stats.slaViolations / stats.count) * 100) : 0;
       
       // Process Efficiency (items completed / total items attempted)
-      const completedItems = stats.items.filter(i => ['READY','STORES','STOCK'].includes(i.stage)).length;
+      const completedItems = stats.items.filter(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.stage)).length;
       stats.processEfficiency = stats.count > 0 ? Math.round((completedItems / stats.count) * 100) : 0;
       
       stats.avgActiveTime = stats.avgPending; // unified: both modules now show today−timestamp
@@ -2255,7 +2255,7 @@ function OverviewPage({kpis, data, filtered, liveData}) {
   });
   const dailySetPOs = Object.entries(poGroupsLive).filter(([po, items]) => {
     // All SCs completed
-    const allDone = items.every(i => ['READY','STORES','STOCK'].includes(i.currentStage));
+    const allDone = items.every(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
     // Completed today (last updated today)
     const completedToday = items.some(i => i.timestamp && i.timestamp.slice(0,10) === todayStr);
     return allDone && completedToday;
@@ -2264,7 +2264,7 @@ function OverviewPage({kpis, data, filtered, liveData}) {
 
   // 2. Delayed PO: not completed AND poDate > 21 working days ago
   const delayedPOItems = liveData.filter(i => {
-    if (['READY','STORES','STOCK'].includes(i.currentStage)) return false;
+    if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
     if (!i.poDate) return false;
     const days = workingDaysBetween(i.poDate, todayStr);
     return days !== null && days > 21;
@@ -2272,7 +2272,7 @@ function OverviewPage({kpis, data, filtered, liveData}) {
 
   // 3. In Progress: not completed AND within 21 working days from PO date
   const inProgressItems = liveData.filter(i => {
-    if (['READY','STORES','STOCK'].includes(i.currentStage)) return false;
+    if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
     const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
     return days === null || days <= 21;
   });
@@ -3935,7 +3935,7 @@ function VendorPage({kpis, data, setActiveNav}) {
                     const pendingDays = daysBetween(item.timestamp, today);
                     const isDelayed = pendingDays !== null && pendingDays > 2;
                     const isOnTime = cycleTime !== null && cycleTime <= 21;
-                    const completionStatus = ['READY','STORES','STOCK'].includes(item.currentStage);
+                    const completionStatus = ['READY','STORES','STOCK','EXSTOCK'].includes(item.currentStage);
                     
                     return (
                       <tr key={`${selectedSC}-${idx}`} style={{backgroundColor:isDelayed?'rgba(255,61,90,0.08)':completionStatus?'rgba(0,230,118,0.08)':'transparent'}}>
@@ -3982,7 +3982,7 @@ function VendorPage({kpis, data, setActiveNav}) {
               {(() => {
                 const scItems = data.filter(r=>r.sc===selectedSC && r.inhouse==='VENDOR');
                 const totalItems = scItems.length;
-                const completedItems = scItems.filter(r=>['READY','STORES','STOCK'].includes(r.currentStage)).length;
+                const completedItems = scItems.filter(r=>['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)).length;
                 const delayedItems = scItems.filter(r=>{
                   const now = new Date();
 const today =
@@ -4110,7 +4110,7 @@ const pending = daysBetween(r.timestamp, today);
                 const pending = daysBetween(selectedItem.timestamp, today);
                 const isDelayed = pending !== null && pending > 2;
                 const isOnTime = cycle !== null && cycle <= 21;
-                const isCompleted = ['READY','STORES','STOCK'].includes(selectedItem.currentStage);
+                const isCompleted = ['READY','STORES','STOCK','EXSTOCK'].includes(selectedItem.currentStage);
 
                 return (
                   <>
@@ -4514,8 +4514,8 @@ function MonthDayPage({ liveData }) {
                     <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
                     <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
                     <td className="mono" style={{fontSize:10}}>{(r.timestamp||'').substring(0,16)||'—'}</td>
-                    <td><span className={`status-pill ${['READY','STORES','STOCK'].includes(r.currentStage)?'s-ready':'s-wip'}`}>
-                      {['READY','STORES','STOCK'].includes(r.currentStage)?'DONE':'WIP'}
+                    <td><span className={`status-pill ${['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)?'s-ready':'s-wip'}`}>
+                      {['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)?'DONE':'WIP'}
                     </span></td>
                   </tr>
                 ))}</tbody>
@@ -4615,6 +4615,7 @@ const isDoneStage = s => {
     if(t === 'READY') return true;
     if(t === 'STORES') return true;
     if(t === 'STOCK') return true;
+    if(t === 'EXSTOCK') return true;
     // Tolerate minor typos that normalizeStage may not have caught
     if(/^STOCK{1,2}$/.test(t)) return true;
     if(/^READ{1,2}Y$/.test(t)) return true;
@@ -4829,6 +4830,7 @@ const isDoneStage = s => {
       if (t === 'READY')  return true;
       if (t === 'STORES') return true;
       if (t === 'STOCK')  return true;
+      if (t === 'EXSTOCK') return true;
       if (t === 'STORE')  return true;
       if (/^STOCK[K]?$/.test(t)) return true;
       if (/^READ{1,2}Y$/.test(t)) return true;
@@ -4852,7 +4854,7 @@ const isDoneStage = s => {
     // Breakdown counts for the +VA popup (stage-level item counts from filtered rows)
     // These count individual items (rows), not SC sets, for the breakdown display
     const vaBreakdown = (() => {
-      const counts = { READY: 0, STOCK: 0, STORES: 0, VA: 0 };
+      const counts = { READY: 0, STOCK: 0, STORES: 0, EXSTOCK: 0, VA: 0 };
       scsToCheck.forEach(sc => {
         // Use all rows for this SC (not just filtered) so VA rows outside the date
         // window are still counted in the breakdown display
@@ -4863,6 +4865,7 @@ const isDoneStage = s => {
             const st = String(r.currentStage || '').trim().toUpperCase();
             if (st === 'READY')  counts.READY++;
             else if (st === 'STOCK')  counts.STOCK++;
+            else if (st === 'EXSTOCK') counts.EXSTOCK++;
             else if (st === 'STORES' || st === 'STORE') counts.STORES++;
             else if (st === 'VA')   counts.VA++;
           });
@@ -5153,7 +5156,7 @@ const isDoneStage = s => {
           <div className="kpi-label">SC COMPLETED</div>
           <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
           <div className="kpi-sub">
-            all items READY/STOCK/STORES
+            all items READY/STOCK/STORES/EXSTOCK
             {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
             {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
             {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
@@ -5191,7 +5194,7 @@ const isDoneStage = s => {
             if(r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))dm[k]=r;
           });
           return Object.values(dm).filter(r=>isDoneStage(r.currentStage)).length;
-        })()} rows — READY / STOCK / STORES only):</span>
+        })()} rows — READY / STOCK / STORES / EXSTOCK only):</span>
       </div>
 {/* DATA TABLE — READY / STOCK / STORES only (completed items, deduplicated) */}
       {(() => {
@@ -5223,7 +5226,7 @@ const isDoneStage = s => {
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:4}}>
               <div>
                 <div className="chart-title">Completed Items — {tableRows.length} shown</div>
-                <div className="chart-sub">READY / STOCK / STORES ONLY · {wipCount} in-process items hidden · HISTORY + LIVE COMBINED · LATEST STATE PER PRODUCT</div>
+                <div className="chart-sub">READY / STOCK / STORES / EXSTOCK ONLY · {wipCount} in-process items hidden · HISTORY + LIVE COMBINED · LATEST STATE PER PRODUCT</div>
               </div>
               <div style={{display:'flex',gap:8,flexShrink:0}}>
                 <span style={{background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.3)',color:'var(--success)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
@@ -5243,8 +5246,8 @@ const isDoneStage = s => {
                     <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
                     <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
                     <td><span className="status-pill" style={{
-                      background: r.currentStage==='READY' ? 'rgba(0,230,118,0.15)' : r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' : 'rgba(255,214,10,0.15)',
-                      color: r.currentStage==='READY' ? 'var(--success)' : r.currentStage==='STORES' ? 'var(--accent1)' : 'var(--warning)'
+                      background: r.currentStage==='READY' ? 'rgba(0,230,118,0.15)' : r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' : r.currentStage==='EXSTOCK' ? 'rgba(178,75,255,0.15)' : 'rgba(255,214,10,0.15)',
+                      color: r.currentStage==='READY' ? 'var(--success)' : r.currentStage==='STORES' ? 'var(--accent1)' : r.currentStage==='EXSTOCK' ? 'var(--accent6)' : 'var(--warning)'
                     }}>{r.currentStage||'—'}</span></td>
                     <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
                     <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
@@ -5263,7 +5266,7 @@ const isDoneStage = s => {
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <div>
                 <div style={{fontSize:18,fontWeight:700,color:'var(--accent3)',marginBottom:4}}>SC COMPLETED ({kpiStats.scCompleted})</div>
-                <div style={{fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>All items READY/STOCK/STORES</div>
+                <div style={{fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>All items READY/STOCK/STORES/EXSTOCK</div>
               </div>
               <button onClick={() => setSelectedKPI(null)} style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}>CLOSE</button>
             </div>
@@ -5387,7 +5390,7 @@ const isDoneStage = s => {
         const isDoneOrVA = s => {
           if (!s) return false;
           const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
-          return ['READY','STOCK','STORES','STORE','VA'].includes(t) || /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+          return ['READY','STOCK','STORES','STORE','EXSTOCK','VA'].includes(t) || /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
         };
         const getLatestPP = rows => {
           const m = {};
@@ -5433,9 +5436,10 @@ const isDoneStage = s => {
                   </div>
                   <div style={{display:'flex',gap:18,flexWrap:'wrap',marginBottom:4}}>
                     {[
-                      {label:'READY',  val:kpiStats.vaBreakdown.READY,  c:'var(--success)'},
-                      {label:'STOCK',  val:kpiStats.vaBreakdown.STOCK,  c:'var(--warning)'},
-                      {label:'STORES', val:kpiStats.vaBreakdown.STORES, c:'var(--accent1)'},
+                      {label:'READY',   val:kpiStats.vaBreakdown.READY,   c:'var(--success)'},
+                      {label:'STOCK',   val:kpiStats.vaBreakdown.STOCK,   c:'var(--warning)'},
+                      {label:'STORES',  val:kpiStats.vaBreakdown.STORES,  c:'var(--accent1)'},
+                      {label:'EXSTOCK', val:kpiStats.vaBreakdown.EXSTOCK, c:'var(--accent6)'},
                     ].map(s=>(
                       <span key={s.label} style={{fontSize:12,fontFamily:'Share Tech Mono,monospace'}}>
                         <span style={{color:'var(--text-muted)'}}>{s.label}: </span>
@@ -5456,7 +5460,7 @@ const isDoneStage = s => {
                     </span>
                   </div>
                   <div style={{fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
-                    {completedPlusVASCs.length} sets · includes READY / STOCK / STORES / VA
+                    {completedPlusVASCs.length} sets · includes READY / STOCK / STORES / EXSTOCK / VA
                   </div>
                 </div>
                 <div style={{display:'flex',gap:8,flexShrink:0,flexWrap:'wrap'}}>
@@ -5490,15 +5494,17 @@ const isDoneStage = s => {
                         <td style={{padding:'10px'}}>
                           <span style={{
                             background:
-                              r.currentStage==='READY'  ? 'rgba(0,230,118,0.15)' :
-                              r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' :
-                              r.currentStage==='VA'     ? 'rgba(255,107,53,0.15)' :
-                                                          'rgba(255,214,10,0.15)',
+                              r.currentStage==='READY'   ? 'rgba(0,230,118,0.15)' :
+                              r.currentStage==='STORES'  ? 'rgba(0,201,255,0.15)' :
+                              r.currentStage==='EXSTOCK' ? 'rgba(178,75,255,0.15)' :
+                              r.currentStage==='VA'      ? 'rgba(255,107,53,0.15)' :
+                                                           'rgba(255,214,10,0.15)',
                             color:
-                              r.currentStage==='READY'  ? 'var(--success)'  :
-                              r.currentStage==='STORES' ? 'var(--accent1)'  :
-                              r.currentStage==='VA'     ? 'var(--accent4)'  :
-                                                          'var(--warning)',
+                              r.currentStage==='READY'   ? 'var(--success)'  :
+                              r.currentStage==='STORES'  ? 'var(--accent1)'  :
+                              r.currentStage==='EXSTOCK' ? 'var(--accent6)'  :
+                              r.currentStage==='VA'      ? 'var(--accent4)'  :
+                                                           'var(--warning)',
                             padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,
                           }}>{r.currentStage||'—'}</span>
                         </td>
