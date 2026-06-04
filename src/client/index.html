@@ -4686,8 +4686,17 @@ const isDoneStage = s => {
     // Total PO and SC counts — always from full data so history import doesn't shrink them.
     // These are "database totals", not filtered totals.
     const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
-    // For Total SCs: count unique SCs by their FINAL/latest state only (deduplicated per SC+product).
-    // Build a map of SC → latest-per-product rows, then count distinct SCs.
+    // For Total SCs: count only UNIQUE SCs where the latest state per product is a
+    // terminal/done stage (READY / STORES / STOCK / EXSTOCK / VA).
+    // Build SC → { product → best-row } map using the same priority rules:
+    //   1. Done stage beats WIP  2. _isLive beats DB history  3. Later timestamp wins
+    // Then keep only SCs where ALL latest-per-product rows are in a done/VA stage.
+    const _isDoneOrVA = s => {
+      if (!s) return false;
+      const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+      return ['READY','STORES','STORE','STOCK','EXSTOCK','VA'].includes(t) ||
+             /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+    };
     const _scFinalMap = {};
     data.forEach(r => {
       if (!r.sc) return;
@@ -4695,15 +4704,36 @@ const isDoneStage = s => {
       const pkey = (r.product || '__none__').trim();
       const ex = _scFinalMap[r.sc][pkey];
       if (!ex) { _scFinalMap[r.sc][pkey] = r; return; }
-      const rDone  = isDoneStage(r.currentStage);
-      const exDone = isDoneStage(ex.currentStage);
+      const rDone  = _isDoneOrVA(r.currentStage);
+      const exDone = _isDoneOrVA(ex.currentStage);
       if (rDone && !exDone) { _scFinalMap[r.sc][pkey] = r; return; }
       if (!rDone && exDone) return;
       if (r._isLive && !ex._isLive) { _scFinalMap[r.sc][pkey] = r; return; }
       if (!r._isLive && ex._isLive) return;
       if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[r.sc][pkey] = r;
     });
-    const totalSCCount = Object.keys(_scFinalMap).length;
+    // Count breakdown by stage for display
+    const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0, VA: 0 };
+    let _totalSCCompleted = 0;
+    Object.entries(_scFinalMap).forEach(([sc, prodMap]) => {
+      const latestRows = Object.values(prodMap);
+      // SC qualifies only if ALL its latest-per-product rows are in a done/VA stage
+      if (latestRows.length > 0 && latestRows.every(r => _isDoneOrVA(r.currentStage))) {
+        _totalSCCompleted++;
+        // Tally the most-advanced stage per SC (prefer READY > STORES > STOCK > EXSTOCK > VA)
+        const stageOrder = ['READY','STORES','STOCK','EXSTOCK','VA'];
+        let topStage = null;
+        latestRows.forEach(r => {
+          const st = String(r.currentStage||'').trim().toUpperCase();
+          const norm = st === 'STORE' ? 'STORES' : /^STOCK[K]?$/.test(st) ? 'STOCK' : /^READ{1,2}Y$/.test(st) ? 'READY' : st;
+          if (stageOrder.includes(norm)) {
+            if (!topStage || stageOrder.indexOf(norm) < stageOrder.indexOf(topStage)) topStage = norm;
+          }
+        });
+        if (topStage && _scStageCounts[topStage] !== undefined) _scStageCounts[topStage]++;
+      }
+    });
+    const totalSCCount = _totalSCCompleted;
 
     // Filtered PO and SC counts (respects date/search filters)
     const uniquePO = new Set(filtered.map(r=>r.po)).size;
@@ -4894,7 +4924,7 @@ const isDoneStage = s => {
 
     return {
       total, uniquePO, uniqueSC, readyItemsCount,
-      totalPOCount, totalSCCount,
+      totalPOCount, totalSCCount, scStageCounts: _scStageCounts,
       scReceived: scReceivedSet.size,
       scCompleted: scCompletedSet.size,
       scReady: scReadySet.size,
@@ -5156,8 +5186,20 @@ const isDoneStage = s => {
           <div className="kpi-label">TOTAL SCs</div>
           <div className="kpi-value">{kpiStats.totalSCCount}</div>
           <div className="kpi-sub">
-            all job sets in database
-            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--accent1)'}}>{kpiStats.uniqueSC} in selected range</span>}
+            unique completed SCs (READY/STORES/STOCK/EXSTOCK/VA)
+            <span style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+              {[
+                {label:'READY',   val:kpiStats.scStageCounts?.READY,   c:'var(--success)'},
+                {label:'STORES',  val:kpiStats.scStageCounts?.STORES,  c:'var(--accent1)'},
+                {label:'STOCK',   val:kpiStats.scStageCounts?.STOCK,   c:'var(--warning)'},
+                {label:'EXSTOCK', val:kpiStats.scStageCounts?.EXSTOCK, c:'var(--accent6)'},
+                {label:'VA',      val:kpiStats.scStageCounts?.VA,      c:'var(--accent4)'},
+              ].filter(s=>s.val>0).map(s=>(
+                <span key={s.label} style={{fontSize:9,fontFamily:'Share Tech Mono,monospace',color:s.c,background:s.c+'22',borderRadius:4,padding:'1px 5px'}}>
+                  {s.label}: {s.val}
+                </span>
+              ))}
+            </span>
           </div>
         </div>
         <div className="kpi-card" style={{'--c1':'#ffd60a','--c2':'#ff6b35'}}>
