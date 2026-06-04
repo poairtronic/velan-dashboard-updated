@@ -4683,9 +4683,27 @@ const isDoneStage = s => {
   const kpiStats = React.useMemo(() => {
     const total = filtered.length;
 
-    // Total PO and SC counts - always from full data (not filtered) so history import doesn't shrink them
+    // Total PO and SC counts — always from full data so history import doesn't shrink them.
+    // These are "database totals", not filtered totals.
     const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
-    const totalSCCount = new Set(data.filter(r=>r.sc).map(r=>r.sc)).size;
+    // For Total SCs: count unique SCs by their FINAL/latest state only (deduplicated per SC+product).
+    // Build a map of SC → latest-per-product rows, then count distinct SCs.
+    const _scFinalMap = {};
+    data.forEach(r => {
+      if (!r.sc) return;
+      if (!_scFinalMap[r.sc]) _scFinalMap[r.sc] = {};
+      const pkey = (r.product || '__none__').trim();
+      const ex = _scFinalMap[r.sc][pkey];
+      if (!ex) { _scFinalMap[r.sc][pkey] = r; return; }
+      const rDone  = isDoneStage(r.currentStage);
+      const exDone = isDoneStage(ex.currentStage);
+      if (rDone && !exDone) { _scFinalMap[r.sc][pkey] = r; return; }
+      if (!rDone && exDone) return;
+      if (r._isLive && !ex._isLive) { _scFinalMap[r.sc][pkey] = r; return; }
+      if (!r._isLive && ex._isLive) return;
+      if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[r.sc][pkey] = r;
+    });
+    const totalSCCount = Object.keys(_scFinalMap).length;
 
     // Filtered PO and SC counts (respects date/search filters)
     const uniquePO = new Set(filtered.map(r=>r.po)).size;
@@ -4753,18 +4771,21 @@ const isDoneStage = s => {
     };
 
     // Determine which SCs to evaluate for completion:
-    // - Always check against the filtered view to respect all active filters
-    // - Include date filters, search, PO, stage, type, category, inhouse filters
+    // - WHICH SCs are in scope: respect search/PO/type/stage/inhouse filters (non-date)
+    //   but NOT date filters — an SC completed outside the date window is still completed.
+    // - HOW to evaluate each SC: ALWAYS use allScItems (all rows for that SC across all
+    //   history + live), so that a READY row imported as history is never hidden by the
+    //   date window or stage filter.
     const scsToCheck = hasNonDateFilter
-      ? Object.keys(filteredScGroups)   // respect search/PO/type/stage filters
-      : Object.keys(allScItems);        // no non-date filters → evaluate ALL SCs from full history
+      ? Object.keys(filteredScGroups)   // non-date filter active: limit WHICH SCs
+      : Object.keys(allScItems);        // date-only or no filter: evaluate ALL SCs
 
     const scCompletedSet = new Set(
       scsToCheck.filter(sc => {
-        // Use filtered rows if available, otherwise use all rows
-        const allRowsForSC = (hasNonDateFilter || filteredScGroups[sc]) 
-          ? (filteredScGroups[sc] || [])
-          : (allScItems[sc] || []);
+        // Always use the FULL row set for this SC (all history + live).
+        // getLatestPerProduct picks DONE over WIP, live over history, newer timestamp —
+        // so old WIP history rows never block an SC that has a READY/STOCK/STORES row.
+        const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProduct(allRowsForSC);
         return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
       })
