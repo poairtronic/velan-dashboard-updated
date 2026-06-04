@@ -4683,9 +4683,9 @@ const isDoneStage = s => {
   const kpiStats = React.useMemo(() => {
     const total = filtered.length;
 
-    // Total PO and SC counts - from filtered data to respect all filters
-    const totalPOCount = new Set(filtered.filter(r=>r.po).map(r=>r.po)).size;
-    const totalSCCount = new Set(filtered.filter(r=>r.sc).map(r=>r.sc)).size;
+    // Total PO and SC counts - always from full data (not filtered) so history import doesn't shrink them
+    const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
+    const totalSCCount = new Set(data.filter(r=>r.sc).map(r=>r.sc)).size;
 
     // Filtered PO and SC counts (respects date/search filters)
     const uniquePO = new Set(filtered.map(r=>r.po)).size;
@@ -4756,11 +4756,8 @@ const isDoneStage = s => {
     // - Always check against the filtered view to respect all active filters
     // - Include date filters, search, PO, stage, type, category, inhouse filters
     const scsToCheck = hasNonDateFilter
-      ? Object.keys(filteredScGroups)   // respect all filters including search/PO/etc
-      : Object.keys(allScItems).filter(sc => {
-        // For date-only filters: check if this SC appears in filtered results
-        return filteredScGroups[sc] !== undefined;
-      });
+      ? Object.keys(filteredScGroups)   // respect search/PO/type/stage filters
+      : Object.keys(allScItems);        // no non-date filters → evaluate ALL SCs from full history
 
     const scCompletedSet = new Set(
       scsToCheck.filter(sc => {
