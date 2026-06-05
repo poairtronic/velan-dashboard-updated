@@ -165,26 +165,64 @@ function readBody(req) {
 }
 
 // ── Parse CSV text into row objects ──────────────────────────────────────────
+// Handles quoted fields and ALL Velan column name variants correctly.
 function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
-  // Parse header — lowercase, trim
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+
+  // Proper quoted-CSV parser
+  function parseLine(line) {
+    const fields = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; continue; }
+      if (ch === ',' && !inQ) { fields.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    fields.push(cur.trim());
+    return fields;
+  }
+
+  // Normalize header key
+  const normKey = h => String(h).trim().toLowerCase().replace(/[\s\/\-]+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+  // Find header row
+  let hIdx = 0;
+  while (hIdx < lines.length && !lines[hIdx].trim()) hIdx++;
+  const headers = parseLine(lines[hIdx]).map(normKey);
+
+  // Pick first non-empty value from obj by alias list
+  const pick = (obj, ...aliases) => {
+    for (const a of aliases) {
+      const v = obj[a];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  };
+
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',');
+  for (let i = hIdx + 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const cols = parseLine(lines[i]);
     const obj  = {};
-    headers.forEach((h, idx) => {
-      obj[h] = (cols[idx] || '').trim();
-    });
-    // Map common header aliases to the keys makeKey() expects
-    const sc  = obj.sc  || obj.sc_number || obj.sc_no || '';
-    const po  = obj.po  || obj.po_number || obj.po_no || '';
-    const product      = obj.product || obj.product_name || obj.item || '';
-    const currentStage = obj.currentstage || obj.current_stage || obj.stage || '';
-    const timestamp    = obj.timestamp || obj.date || obj.updated || '';
-    if (!sc && !po) continue; // skip empty rows
-    rows.push({ ...obj, sc, po, product, currentStage, timestamp });
+    headers.forEach((h, idx) => { obj[h] = (cols[idx] || '').trim(); });
+
+    // Map ALL Velan column variants to canonical names
+    const sc           = pick(obj, 'sc', 'sc_no', 'sc_number', 'scno');
+    const po           = pick(obj, 'po_no', 'po', 'po_number', 'pono', 'purchase_order');
+    const poDate       = pick(obj, 'po_recd_date', 'po_date', 'podate', 'date_received', 'date');
+    const product      = pick(obj, 'product_name', 'product', 'item', 'description', 'item_description');
+    const status1      = pick(obj, 'status_1', 'status1', 'current_operation', 'operation');
+    const status2      = pick(obj, 'status_2', 'status2', 'next_operation');
+    // OP column is the stage — critical mapping
+    const currentStage = pick(obj, 'op', 'currentstage', 'current_stage', 'stage', 'operation_stage');
+    const inhouse      = pick(obj, 'inhouse__vendor', 'inhouse_vendor', 'inhouse', 'location', 'vendor_status');
+    const qty          = pick(obj, 'qty', '_qty', 'quantity');
+    const timestamp    = pick(obj, 'timestamp', 'time_stamp', 'last_updated', 'op_time', 'datetime');
+
+    if (!sc && !po) continue;
+    rows.push({ sc, po, poDate, product, status1, status2, currentStage, inhouse, qty, timestamp });
   }
   return rows;
 }
