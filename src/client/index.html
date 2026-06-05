@@ -4775,23 +4775,41 @@ const isDoneStage = s => {
     //   4. Among WIP rows when no DONE row exists: _isLive beats DB, then timestamp.
     const getLatestPerProduct = rows => {
   const latestMap = {};
-
-  rows.forEach((r, idx) => {
+  rows.forEach(r => {
     const key = (r.product || '__none__').trim();
     const ex = latestMap[key];
-
-    const rTime = r.timestamp ? new Date(r.timestamp).getTime() : 0;
-    const exTime = ex?.timestamp ? new Date(ex.timestamp).getTime() : 0;
-
-    if (!ex || rTime > exTime || (rTime === exTime && idx > ex.__idx)) {
-      latestMap[key] = { ...r, __idx: idx };
-    }
+    if (!ex) { latestMap[key] = r; return; }
+    const rDone = isDoneStage(r.currentStage);
+    const exDone = isDoneStage(ex.currentStage);
+    // Rule 1: DONE always beats WIP
+    if (rDone && !exDone) { latestMap[key] = r; return; }
+    if (!rDone && exDone) return;
+    // Both DONE or both WIP — apply secondary rules
+    // Rule 2: _isLive beats DB history
+    if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+    if (!r._isLive && ex._isLive) return;
+    // Rule 3: later timestamp wins
+    if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
   });
-
   return Object.values(latestMap);
 };
 
-const getLatestPerProductForVA = getLatestPerProduct;
+const getLatestPerProductForVA = rows => {
+  const latestMap = {};
+  rows.forEach(r => {
+    const key = (r.product || '__none__').trim();
+    const ex = latestMap[key];
+    if (!ex) { latestMap[key] = r; return; }
+    const rDone = isDoneOrVAStage(r.currentStage);
+    const exDone = isDoneOrVAStage(ex.currentStage);
+    if (rDone && !exDone) { latestMap[key] = r; return; }
+    if (!rDone && exDone) return;
+    if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+    if (!r._isLive && ex._isLive) return;
+    if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+  });
+  return Object.values(latestMap);
+};
 
     // Determine which SCs to evaluate for completion:
     // - WHICH SCs are in scope: respect search/PO/type/stage/inhouse filters (non-date)
@@ -5467,19 +5485,15 @@ const getLatestPerProductForVA = getLatestPerProduct;
         };
         const getLatestPP = rows => {
   const m = {};
-
-  rows.forEach((r, idx) => {
-    const key = (r.product || '__none__').trim();
+  rows.forEach(r => {
+    const key = (r.product||'__none__').trim();
     const ex = m[key];
-
-    const rTime = r.timestamp ? new Date(r.timestamp).getTime() : 0;
-    const exTime = ex?.timestamp ? new Date(ex.timestamp).getTime() : 0;
-
-    if (!ex || rTime > exTime || (rTime === exTime && idx > ex.__idx)) {
-      m[key] = { ...r, __idx: idx };
-    }
+    if (!ex) { m[key]=r; return; }
+    const rD=isDoneOrVA(r.currentStage), eD=isDoneOrVA(ex.currentStage);
+    if (rD&&!eD){m[key]=r;return;} if(!rD&&eD)return;
+    if (r._isLive&&!ex._isLive){m[key]=r;return;} if(!r._isLive&&ex._isLive)return;
+    if (r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))m[key]=r;
   });
-
   return Object.values(m);
 };
         // Use allScItemsModal (all rows, no date filter) so VA rows outside the
