@@ -164,6 +164,31 @@ function readBody(req) {
   });
 }
 
+// ── Parse CSV text into row objects ──────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  // Parse header — lowercase, trim
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    const obj  = {};
+    headers.forEach((h, idx) => {
+      obj[h] = (cols[idx] || '').trim();
+    });
+    // Map common header aliases to the keys makeKey() expects
+    const sc  = obj.sc  || obj.sc_number || obj.sc_no || '';
+    const po  = obj.po  || obj.po_number || obj.po_no || '';
+    const product      = obj.product || obj.product_name || obj.item || '';
+    const currentStage = obj.currentstage || obj.current_stage || obj.stage || '';
+    const timestamp    = obj.timestamp || obj.date || obj.updated || '';
+    if (!sc && !po) continue; // skip empty rows
+    rows.push({ ...obj, sc, po, product, currentStage, timestamp });
+  }
+  return rows;
+}
+
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   let parsed;
@@ -236,7 +261,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── POST /api/import — append to Neon DB with dedup ──────────────────────
- 
+
+  // ── DELETE /api/data — wipe all rows from Neon ────────────────────────────
   if (pathname === '/api/data' && req.method === 'DELETE') {
     try {
       await pool.query('DELETE FROM velan_rows');
@@ -252,13 +278,70 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
+
+  // ── POST /api/reset — wipe Neon + optionally re-import from HISTORY_URL ──
+  if (pathname === '/api/reset' && req.method === 'POST') {
+    try {
+      // 1. Wipe Neon
+      await pool.query('DELETE FROM velan_rows');
+      _db       = [];
+      _liveRows = [];
+      _lastSync = '';
+      console.log('[POST /api/reset] Neon DB wiped');
+
+      // 2. Re-import from HISTORY_URL env var (if set)
+      const histUrl = HISTORY_URL;
+      if (!histUrl) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: true, message: 'DB wiped. No HISTORY_URL set — nothing imported.', total: 0 }));
+      }
+
+      console.log('[POST /api/reset] Fetching fresh data from HISTORY_URL…');
+      const raw  = await fetchRemote(histUrl);
+      const rows = parseCSV(raw);
+
+      const imported = await insertRows(rows);
+      _db       = await loadDB();
+      _lastSync = new Date().toLocaleString('en-IN');
+
+      console.log(`[POST /api/reset] Re-imported ${imported} rows | DB now: ${_db.length}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: true, imported, total: _db.length, lastSync: _lastSync }));
+    } catch (err) {
+      console.error('[POST /api/reset]', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+  }
+
   if (pathname === '/api/import' && req.method === 'POST') {
     try {
-      const body     = await readBody(req);
-      const payload  = JSON.parse(body);
-      const incoming = Array.isArray(payload.rows) ? payload.rows : [];
+      const body    = await readBody(req);
+      const payload = JSON.parse(body);
 
-      // Dedup against in-memory _db first
+      let incoming = [];
+
+      // Support two modes:
+      // 1. { rows: [...] }         — caller sends pre-parsed rows
+      // 2. { url: '...', replace: true/false } — fetch CSV from URL
+      if (Array.isArray(payload.rows) && payload.rows.length > 0) {
+        incoming = payload.rows;
+      } else if (typeof payload.url === 'string' && payload.url.trim()) {
+        console.log(`[POST /api/import] Fetching CSV from URL: ${payload.url.substring(0, 80)}…`);
+        const raw = await fetchRemote(payload.url.trim());
+        incoming  = parseCSV(raw);
+        console.log(`[POST /api/import] Parsed ${incoming.length} rows from CSV`);
+      }
+
+      // If replace=true, wipe Neon first
+      if (payload.replace === true) {
+        await pool.query('DELETE FROM velan_rows');
+        _db       = [];
+        _liveRows = [];
+        console.log('[POST /api/import] replace=true → wiped existing Neon rows');
+      }
+
+      // Dedup against in-memory _db
       const existingKeys = new Set(_db.map(makeKey));
       const newRows = [];
       incoming.forEach(row => {
@@ -397,6 +480,7 @@ async function startup() {
     console.log(`│  http://localhost:${PORT}                          │`);
     console.log(`│  Data:   http://localhost:${PORT}/api/data          │`);
     console.log(`│  Import: http://localhost:${PORT}/api/import        │`);
+    console.log(`│  Reset:  http://localhost:${PORT}/api/reset         │`);
     console.log(`│  Sheets: http://localhost:${PORT}/api/sheets        │`);
     console.log(`│  Health: http://localhost:${PORT}/api/health        │`);
     console.log(`└─────────────────────────────────────────────────┘`);
