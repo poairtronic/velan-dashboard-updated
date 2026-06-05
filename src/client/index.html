@@ -4920,7 +4920,7 @@ const getLatestPerProductForVA = rows => {
         if (fromDate || toDate) {
           const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
           return latestRows.some(r => {
-            const d = (r[dateField] || '').slice(0,10);
+            const d = parseDate(r[dateField] || '');
             if (!d) return false;
             if (fromDate && d < fromDate) return false;
             if (toDate && d > toDate) return false;
