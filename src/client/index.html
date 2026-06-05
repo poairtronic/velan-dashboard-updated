@@ -1101,18 +1101,17 @@ function App() {
     const aliases = {
       'STORE':'STORES','STORRES':'STORES','STOERS':'STORES',
       'READDY':'READY','REAADY':'READY',
-      'EXSTOCK':'EXSTOCK','EXSTK':'EXSTOCK','EXSTOCK':'EXSTOCK',
       'BLACKENEING':'BLACKENING','BLACKNING':'BLACKENING','BLACKENNING':'BLACKENING',
       'DCPL':'DCPLI',
       'HOV':'HOV','HOVE':'HOV',
       'SDV':'SDV','BLV':'BLV','FBV':'FBV','HTV':'HTV','HCV':'HCV',
     };
     const corrected = aliases[s] || s;
-    // Use exact-match checks — avoid dangerous substring tests that can corrupt EXSTOCK
+    // STOCK must be checked BEFORE STORE substring test — STOCK contains no 'STORE'
+    // but guard explicitly so future edits don't break this.
     if (corrected === 'STOCK' || corrected === 'STOCKK') return 'STOCK';
-    if (corrected === 'EXSTOCK' || corrected === 'EXSTK') return 'EXSTOCK';
-    if (corrected === 'READY' || corrected === 'READDY' || corrected === 'REAADY') return 'READY';
-    if (corrected === 'STORES' || corrected === 'STORE' || corrected === 'STORRES' || corrected === 'STOERS') return 'STORES';
+    if (corrected === 'READY' || corrected.includes('READY')) return 'READY';
+    if (corrected === 'STORES' || corrected.includes('STORE')) return 'STORES';
     return corrected.replace(/\s+/g, '');
   }
 
@@ -4631,19 +4630,7 @@ const isDoneStage = s => {
     return 'STORES';
   };
   const filtered = React.useMemo(() => {
-    // `data` prop = allDbData (liveRows + historical DB, merged in App).
-    // Use allScItemsModal (keyed map of same data) as source so completion
-    // checks and the filtered list are always consistent.
-    const allRows = Object.values(allScItemsModal).flat();
-    const seen = new Set();
-    const deduped = allRows.filter(r => {
-      const dk = (r.sc||'') + '||' + (r.product||'') + '||' + (r.currentStage||'') + '||' + (r.timestamp||'');
-      if (seen.has(dk)) return false;
-      seen.add(dk);
-      return true;
-    });
-
-    const result = deduped.filter(row => {
+    const result = data.filter(row => {
       const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
       if (!dateInRange(dateVal)) return false;
       if(filters.po && row.po !== filters.po) return false;
@@ -4659,63 +4646,17 @@ const isDoneStage = s => {
       }
       return true;
     });
-
+    
+    // SORT BY PO RECEIVED DATE (ASCENDING)
     return result.sort((a, b) => {
       const dateA = a.poDate ? new Date(a.poDate).getTime() : 0;
       const dateB = b.poDate ? new Date(b.poDate).getTime() : 0;
       return dateA - dateB;
     });
-  }, [allScItemsModal, filters, fromDate, toDate, dateType]);
+  }, [data, filters, fromDate, toDate, dateType]);
 
-  // ── Canonical latest-per-product helpers — hoisted to component scope ───────
-  // Used by BOTH kpiStats useMemo AND the modal popup, ensuring identical logic.
-  const isDoneStageGlobal = React.useCallback(s => {
-    if(!s) return false;
-    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
-    if(t === 'READY') return true;
-    if(t === 'STORES') return true;
-    if(t === 'STOCK') return true;
-    if(t === 'EXSTOCK') return true;
-    if(/^STOCK{1,2}$/.test(t)) return true;
-    if(/^READ{1,2}Y$/.test(t)) return true;
-    if(t === 'STORE') return true;
-    return false;
-  }, []);
-
-  const isDoneOrVAStageGlobal = React.useCallback(s => {
-    if (!s) return false;
-    const t = String(s).trim().toUpperCase().replace(/\s+/g, '');
-    if (t === 'READY')   return true;
-    if (t === 'STORES')  return true;
-    if (t === 'STOCK')   return true;
-    if (t === 'EXSTOCK') return true;
-    if (t === 'STORE')   return true;
-    if (/^STOCK[K]?$/.test(t))  return true;
-    if (/^READ{1,2}Y$/.test(t)) return true;
-    if (t === 'VA')      return true;
-    return false;
-  }, []);
-
-  const getLatestPerProductGlobal = React.useCallback((rows, doneChecker) => {
-    const latestMap = {};
-    rows.forEach(r => {
-      const key = (r.product || '__none__').trim();
-      const ex = latestMap[key];
-      if (!ex) { latestMap[key] = r; return; }
-      const rDone = doneChecker(r.currentStage);
-      const exDone = doneChecker(ex.currentStage);
-      if (rDone && !exDone) { latestMap[key] = r; return; }
-      if (!rDone && exDone) return;
-      if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
-      if (!r._isLive && ex._isLive) return;
-      if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
-    });
-    return Object.values(latestMap);
-  }, []);
-  // allScItemsModal: full SC→rows map.
-  // NOTE: the `data` prop passed to DatabasePage is allDbData from App,
-  // which already merges liveRows + historical DB (with liveRows taking priority).
-  // So building this map from `data` gives us all rows including the current upload.
+  // ── Component-level helpers shared by kpiStats AND the modal ──────────────
+  // allScItemsModal: full SC→rows map (entire data, no filters) for completion checks
   const allScItemsModal = React.useMemo(() => {
     const m = {};
     data.forEach(r => {
@@ -4832,32 +4773,58 @@ const isDoneStage = s => {
     //   2. Among DONE stages: _isLive (current Excel) beats DB history.
     //   3. Among same source + same done/wip category: later timestamp wins.
     //   4. Among WIP rows when no DONE row exists: _isLive beats DB, then timestamp.
-    const getLatestPerProduct = rows => getLatestPerProductGlobal(rows, isDoneStage);
+    const getLatestPerProduct = rows => {
+  const latestMap = {};
+  rows.forEach(r => {
+    const key = (r.product || '__none__').trim();
+    const ex = latestMap[key];
+    if (!ex) { latestMap[key] = r; return; }
+    const rDone = isDoneStage(r.currentStage);
+    const exDone = isDoneStage(ex.currentStage);
+    // Rule 1: DONE always beats WIP
+    if (rDone && !exDone) { latestMap[key] = r; return; }
+    if (!rDone && exDone) return;
+    // Both DONE or both WIP — apply secondary rules
+    // Rule 2: _isLive beats DB history
+    if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+    if (!r._isLive && ex._isLive) return;
+    // Rule 3: later timestamp wins
+    if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+  });
+  return Object.values(latestMap);
+};
 
-const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneOrVAStageGlobal);
+const getLatestPerProductForVA = rows => {
+  const latestMap = {};
+  rows.forEach(r => {
+    const key = (r.product || '__none__').trim();
+    const ex = latestMap[key];
+    if (!ex) { latestMap[key] = r; return; }
+    const rDone = isDoneOrVAStage(r.currentStage);
+    const exDone = isDoneOrVAStage(ex.currentStage);
+    if (rDone && !exDone) { latestMap[key] = r; return; }
+    if (!rDone && exDone) return;
+    if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+    if (!r._isLive && ex._isLive) return;
+    if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+  });
+  return Object.values(latestMap);
+};
 
-    // Determine which SC PREFIXES to evaluate for completion:
-    // - WHICH prefixes are in scope: respect search/PO/type/stage/inhouse filters (non-date)
+    // Determine which SCs to evaluate for completion:
+    // - WHICH SCs are in scope: respect search/PO/type/stage/inhouse filters (non-date)
     //   but NOT date filters — an SC completed outside the date window is still completed.
-    // - HOW to evaluate each prefix: ALWAYS use allScItems (all rows for all sub-SCs),
-    //   so that a READY row imported as history is never hidden by the date window.
-    const getScPrefix = sc => String(sc).trim().replace(/-\d+$/, '');
-
-    const allPrefixKeys = [...new Set(
-      Object.keys(allScItems).map(sc => getScPrefix(sc)).filter(Boolean)
-    )];
-    const filteredPrefixKeys = [...new Set(
-      Object.keys(filteredScGroups).map(sc => getScPrefix(sc)).filter(Boolean)
-    )];
-
-    const prefixesToCheck = hasNonDateFilter ? filteredPrefixKeys : allPrefixKeys;
+    // - HOW to evaluate each SC: ALWAYS use allScItems (all rows for that SC across all
+    //   history + live), so that a READY row imported as history is never hidden by the
+    //   date window or stage filter.
+    const scsToCheck = hasNonDateFilter
+      ? Object.keys(filteredScGroups)   // non-date filter active: limit WHICH SCs
+      : Object.keys(allScItems);        // date-only or no filter: evaluate ALL SCs
 
     const scCompletedSet = new Set(
-      prefixesToCheck.filter(prefix => {
-        const subSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
-        if (subSCs.length === 0) return false;
-        const allRowsForPrefix = subSCs.flatMap(sc => allScItems[sc] || []);
-        const latestRows = getLatestPerProduct(allRowsForPrefix);
+      scsToCheck.filter(sc => {
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProduct(allRowsForSC);
         if (!(latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage)))) return false;
         // When date filter active: SC must have at least one done row in the date range
         if (fromDate || toDate) {
@@ -4874,7 +4841,8 @@ const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneO
       })
     );
     const scReadySet = scCompletedSet;
-    // scSetsReceivedSet, scSetsCompletedSet, scSetsCompletedTotal reuse getScPrefix defined above
+    // SC Set prefix: strip trailing letters (e.g. "24050001A" → "24050001")
+    const getScPrefix = sc => String(sc).trim().replace(/-\d+$/, '');
 
     // SC Sets Received: unique SC set prefixes where at least one SC has PO date in range
     const scSetsReceivedSet = new Set(
@@ -4884,7 +4852,9 @@ const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneO
     // SC Sets Completed: unique SC set prefixes where ALL SCs with that prefix
     // have every LATEST item done AND at least one timestamp in range.
     // Use getLatestPerProduct so old WIP history rows don't block completion.
-    const allPrefixes = allPrefixKeys;
+    const allPrefixes = [...new Set(
+      data.filter(r => r.sc).map(r => getScPrefix(r.sc)).filter(Boolean)
+    )];
     const scSetsCompletedSet = new Set(
       allPrefixes.filter(prefix => {
         const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
@@ -4922,27 +4892,31 @@ const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneO
     // NEW metric: READY + STOCK + STORES + VA
     // The original scCompletedSet (READY/STOCK/STORES) is NOT modified.
     // This is a separate, isolated calculation using a wider done-stage check.
-    const isDoneOrVAStage = isDoneOrVAStageGlobal;
+    const isDoneOrVAStage = s => {
+      if (!s) return false;
+      const t = String(s).trim().toUpperCase().replace(/\s+/g, '');
+      if (t === 'READY')  return true;
+      if (t === 'STORES') return true;
+      if (t === 'STOCK')  return true;
+      if (t === 'EXSTOCK') return true;
+      if (t === 'STORE')  return true;
+      if (/^STOCK[K]?$/.test(t)) return true;
+      if (/^READ{1,2}Y$/.test(t)) return true;
+      if (t === 'VA')     return true;  // <-- VA included ONLY here
+      return false;
+    };
 
-    // Reuse getScPrefix, allPrefixKeys, filteredPrefixKeys already defined above
-    // Build prefix → [sub-SC keys] map from allScItems
-    const allScPrefixes = allPrefixKeys;
-    const filteredScPrefixes = filteredPrefixKeys;
-
-    // WHICH prefixes to evaluate: respect non-date filters via filteredScGroups,
-    // but ignore date filter (use all prefixes) so SCs outside the date window still count.
-    const prefixesToCheckForVA = hasNonDateFilter ? filteredScPrefixes : allScPrefixes;
-
-    // Build scCompletedPlusVASet using prefix grouping:
-    // sub-SCs 1300-1 and 1300-2 are evaluated together as prefix "1300"
+    // Build scCompletedPlusVASet:
+    // - Scope: same scsToCheck (respects date/PO/search filters for WHICH SCs are in scope)
+    // - Source: always allScItems (ALL rows for the SC, not just filtered rows),
+    //   so VA rows are never hidden by the date window or stage filter.
+    // - Priority: getLatestPerProductForVA (VA is treated as a terminal state, not WIP)
     const scCompletedPlusVASet = new Set(
-      prefixesToCheckForVA.filter(prefix => {
-        const subSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
-        if (subSCs.length === 0) return false;
-        const allRowsForPrefix = subSCs.flatMap(sc => allScItems[sc] || []);
-        const latestRows = getLatestPerProductGlobal(allRowsForPrefix, isDoneOrVAStage);
+      scsToCheck.filter(sc => {
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (!(latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage)))) return false;
-        // Date filter: at least one done/VA row in the selected range
+        // When date filter active: SC must have at least one done/VA row in the date range
         if (fromDate || toDate) {
           const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
           return latestRows.some(r => {
@@ -4961,10 +4935,11 @@ const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneO
     // These count individual items (rows), not SC sets, for the breakdown display
     const vaBreakdown = (() => {
       const counts = { READY: 0, STOCK: 0, STORES: 0, EXSTOCK: 0, VA: 0 };
-      prefixesToCheckForVA.forEach(prefix => {
-        const subSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
-        const allRowsForPrefix = subSCs.flatMap(sc => allScItems[sc] || []);
-        const latestRows = getLatestPerProductGlobal(allRowsForPrefix, isDoneOrVAStage);
+      scsToCheck.forEach(sc => {
+        // Use all rows for this SC (not just filtered) so VA rows outside the date
+        // window are still counted in the breakdown display
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage))) {
           latestRows.forEach(r => {
             const st = String(r.currentStage || '').trim().toUpperCase();
@@ -4992,7 +4967,7 @@ const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneO
       scCompletedPlusVA: scCompletedPlusVASet.size,
       vaBreakdown,
     };
-  }, [filtered, data, fromDate, toDate, allScItemsModal, filteredScGroupsModal, hasNonDateFilter, isDoneStageGlobal, isDoneOrVAStageGlobal, getLatestPerProductGlobal]);
+  }, [filtered, data, fromDate, toDate, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
   // --- Export handlers ---
   function exportJSON() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], {type:'application/json'});
@@ -5501,27 +5476,39 @@ const getLatestPerProductForVA = rows => getLatestPerProductGlobal(rows, isDoneO
           doc.save('sc_completed_plus_va.pdf');
         }
 
-        // Build the row list for the popup from allScItemsModal (full data, no date filter)
-        // Uses prefix grouping so 1300-1 and 1300-2 are evaluated together as "1300".
-        // WHICH prefixes to show: respect non-date filters, but NOT date filter.
-        const isDoneOrVA = isDoneOrVAStageGlobal;
-        const getLatestPP = rows => getLatestPerProductGlobal(rows, isDoneOrVA);
-
-        const getScPfx = sc => String(sc).trim().replace(/-\d+$/, '');
-
-        const scopePrefixes = hasNonDateFilter
-          ? [...new Set(Object.keys(filteredScGroupsModal).map(getScPfx))]
-          : [...new Set(Object.keys(allScItemsModal).map(getScPfx))];
-
-        const completedPlusVASCs = scopePrefixes
-          .map(prefix => {
-            const subSCs = Object.keys(allScItemsModal).filter(sc => getScPfx(sc) === prefix);
-            if (subSCs.length === 0) return null;
-            const allRowsForPrefix = subSCs.flatMap(sc => allScItemsModal[sc] || []);
-            const latest = getLatestPP(allRowsForPrefix);
-            if (latest.length > 0 && latest.every(r => isDoneOrVA(r.currentStage))) {
-              return [prefix, latest];
-            }
+        // Build the row list for the popup from filteredScGroupsModal
+        // Includes all SCs where every latest item is in READY/STOCK/STORES/VA
+        const isDoneOrVA = s => {
+          if (!s) return false;
+          const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+          return ['READY','STOCK','STORES','STORE','EXSTOCK','VA'].includes(t) || /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+        };
+        const getLatestPP = rows => {
+  const m = {};
+  rows.forEach(r => {
+    const key = (r.product||'__none__').trim();
+    const ex = m[key];
+    if (!ex) { m[key]=r; return; }
+    const rD=isDoneOrVA(r.currentStage), eD=isDoneOrVA(ex.currentStage);
+    if (rD&&!eD){m[key]=r;return;} if(!rD&&eD)return;
+    if (r._isLive&&!ex._isLive){m[key]=r;return;} if(!r._isLive&&ex._isLive)return;
+    if (r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))m[key]=r;
+  });
+  return Object.values(m);
+};
+        // Use allScItemsModal (all rows, no date filter) so VA rows outside the
+        // date window are still visible in the popup table. scsToCheck already
+        // scopes WHICH SCs are in view; here we just need ALL rows for those SCs.
+        const scsInView = Object.keys(filteredScGroupsModal);
+        const completedPlusVASCs = scsInView
+          .map(sc => {
+            // Pull from allScItemsModal so VA rows aren't hidden by the date filter
+            const rows = (allScItemsModal[sc] || []).length > 0
+              ? allScItemsModal[sc]
+              : (filteredScGroupsModal[sc] || []);
+            if (rows.length === 0) return null;
+            const latest = getLatestPP(rows);
+            if (latest.length > 0 && latest.every(r => isDoneOrVA(r.currentStage))) return [sc, latest];
             return null;
           })
           .filter(Boolean);
