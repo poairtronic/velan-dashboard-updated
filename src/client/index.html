@@ -4967,7 +4967,7 @@ const getLatestPerProductForVA = rows => {
       scCompletedPlusVA: scCompletedPlusVASet.size,
       vaBreakdown,
     };
-  }, [filtered, data, fromDate, toDate, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
+  }, [filtered, data, fromDate, toDate, dateType, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
   // --- Export handlers ---
   function exportJSON() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], {type:'application/json'});
