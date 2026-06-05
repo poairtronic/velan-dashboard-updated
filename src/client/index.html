@@ -4692,13 +4692,17 @@ const isDoneStage = s => {
     //   1. Done stage beats WIP  2. _isLive beats DB history  3. Later timestamp wins
     // Then keep only SCs where ALL latest-per-product rows are in a done/VA stage.
     const _isDoneOrVA = s => {
-  if (!s) return false;
-  const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
-  // For TOTAL SCs card: only READY/STORES/STOCK/EXSTOCK (NO VA)
-  return ['READY','STORES','STORE','STOCK','EXSTOCK'].includes(t) ||
-         /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
-};
+      if (!s) return false;
+      const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+      // TOTAL SCs counts READY/STORES/STOCK/EXSTOCK only (VA excluded here)
+      return ['READY','STORES','STORE','STOCK','EXSTOCK'].includes(t) ||
+             /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+    };
+    // For TOTAL SCs: build SC->product->best-row map.
+    // When a date filter is active, only count SCs whose DONE rows fall in range.
+    // When no date filter, use all data.
     const _scFinalMap = {};
+    const _dateFilterActive = !!(fromDate || toDate);
     data.forEach(r => {
       if (!r.sc) return;
       if (!_scFinalMap[r.sc]) _scFinalMap[r.sc] = {};
@@ -4714,12 +4718,24 @@ const isDoneStage = s => {
       if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[r.sc][pkey] = r;
     });
     // Count breakdown by stage for display
-    const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0, VA: 0 };
+    const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0 };
     let _totalSCCompleted = 0;
     Object.entries(_scFinalMap).forEach(([sc, prodMap]) => {
       const latestRows = Object.values(prodMap);
-      // SC qualifies only if ALL its latest-per-product rows are in a done/VA stage
+      // SC qualifies only if ALL its latest-per-product rows are in a done stage
       if (latestRows.length > 0 && latestRows.every(r => _isDoneOrVA(r.currentStage))) {
+        // When date filter is active: only count if at least one done row falls in range
+        if (_dateFilterActive) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          const anyInRange = latestRows.some(r => {
+            const d = (r[dateField] || '').slice(0,10);
+            if (!d) return false;
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+          if (!anyInRange) return;
+        }
         _totalSCCompleted++;
         // Tally the most-advanced stage per SC (prefer READY > STORES > STOCK > EXSTOCK > VA)
         const stageOrder = ['READY','STORES','STOCK','EXSTOCK','VA'];
@@ -4813,12 +4829,21 @@ const isDoneStage = s => {
 
     const scCompletedSet = new Set(
       scsToCheck.filter(sc => {
-        // Always use the FULL row set for this SC (all history + live).
-        // getLatestPerProduct picks DONE over WIP, live over history, newer timestamp —
-        // so old WIP history rows never block an SC that has a READY/STOCK/STORES row.
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProduct(allRowsForSC);
-        return latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage));
+        if (!(latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage)))) return false;
+        // When date filter active: SC must have at least one done row in the date range
+        if (fromDate || toDate) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          return latestRows.some(r => {
+            const d = (r[dateField] || '').slice(0,10);
+            if (!d) return false;
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+        }
+        return true;
       })
     );
     const scReadySet = scCompletedSet;
@@ -4896,7 +4921,19 @@ const isDoneStage = s => {
       scsToCheck.filter(sc => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProductForVA(allRowsForSC);
-        return latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage));
+        if (!(latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage)))) return false;
+        // When date filter active: SC must have at least one done/VA row in the date range
+        if (fromDate || toDate) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          return latestRows.some(r => {
+            const d = (r[dateField] || '').slice(0,10);
+            if (!d) return false;
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+        }
+        return true;
       })
     );
 
@@ -5187,14 +5224,13 @@ const isDoneStage = s => {
           <div className="kpi-label">TOTAL SCs</div>
           <div className="kpi-value">{kpiStats.totalSCCount}</div>
           <div className="kpi-sub">
-            unique completed SCs (READY/STORES/STOCK/EXSTOCK/VA)
+            unique completed SCs (READY/STORES/STOCK/EXSTOCK)
             <span style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
               {[
                 {label:'READY',   val:kpiStats.scStageCounts?.READY,   c:'var(--success)'},
                 {label:'STORES',  val:kpiStats.scStageCounts?.STORES,  c:'var(--accent1)'},
                 {label:'STOCK',   val:kpiStats.scStageCounts?.STOCK,   c:'var(--warning)'},
                 {label:'EXSTOCK', val:kpiStats.scStageCounts?.EXSTOCK, c:'var(--accent6)'},
-                {label:'VA',      val:kpiStats.scStageCounts?.VA,      c:'var(--accent4)'},
               ].filter(s=>s.val>0).map(s=>(
                 <span key={s.label} style={{fontSize:9,fontFamily:'Share Tech Mono,monospace',color:s.c,background:s.c+'22',borderRadius:4,padding:'1px 5px'}}>
                   {s.label}: {s.val}
