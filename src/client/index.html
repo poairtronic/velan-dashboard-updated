@@ -1635,11 +1635,18 @@ function App() {
     // regardless of timestamp (READY items often have no timestamp yet).
     const liveProcessed = liveRows.map(row => ({
       ...row,
+      // Client-side backfill: if currentStage missing but op/OP exists, use it
+      currentStage: row.currentStage || row.op || row.OP || '',
       _isLive: true,
       pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
       cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }));
-    const dbProcessed = processedData.map(row => ({...row, _isLive: false}));
+    const dbProcessed = processedData.map(row => ({
+      ...row,
+      // Client-side backfill: if currentStage missing but op/OP exists, use it
+      currentStage: row.currentStage || row.op || row.OP || '',
+      _isLive: false,
+    }));
     // Process liveRows FIRST so same-key duplicates from DB history are dropped
     return [...liveProcessed, ...dbProcessed].filter(r => {
       const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'') + '||' + (r.timestamp||'');
@@ -4616,6 +4623,7 @@ const isDoneStage = s => {
     if(t === 'STORES') return true;
     if(t === 'STOCK') return true;
     if(t === 'EXSTOCK') return true;
+    if(t === 'VA') return true;    // VA is a terminal stage (value-added, dispatch-ready)
     // Tolerate minor typos that normalizeStage may not have caught
     if(/^STOCK{1,2}$/.test(t)) return true;
     if(/^READ{1,2}Y$/.test(t)) return true;

@@ -52,9 +52,22 @@ async function initDB() {
 }
 
 // ── Load all rows from Neon into memory ───────────────────────────────────────
+// Also backfills currentStage from 'op' field for legacy rows imported before
+// the OP→currentStage mapping was in place.
 async function loadDB() {
   const res = await pool.query('SELECT data FROM velan_rows ORDER BY id');
-  return res.rows.map(r => r.data);
+  return res.rows.map(r => {
+    const d = r.data;
+    // Backfill: if currentStage is empty but op exists, use op
+    if (!d.currentStage && d.op) {
+      d.currentStage = String(d.op).trim();
+    }
+    // Also handle uppercase OP key (some imports may have stored it as-is)
+    if (!d.currentStage && d.OP) {
+      d.currentStage = String(d.OP).trim();
+    }
+    return d;
+  });
 }
 
 // ── Insert only NEW rows into Neon (skips duplicates via row_key) ─────────────
@@ -408,6 +421,57 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[POST /api/import]', err.message);
       res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+  }
+
+  // ── POST /api/migrate — fix legacy rows missing currentStage ────────────
+  // One-time operation: updates all Neon rows where currentStage is empty
+  // but op/OP field contains the stage value (rows imported before field mapping fix).
+  if (pathname === '/api/migrate' && req.method === 'POST') {
+    try {
+      // Fetch all rows
+      const allRes = await pool.query('SELECT id, row_key, data FROM velan_rows');
+      let fixed = 0;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const row of allRes.rows) {
+          const d = row.data;
+          let changed = false;
+          // Fix currentStage from op or OP
+          if (!d.currentStage || d.currentStage === '') {
+            const stage = d.op || d.OP || '';
+            if (stage) {
+              d.currentStage = String(stage).trim();
+              changed = true;
+            }
+          }
+          if (changed) {
+            // Also update the row_key since currentStage changed
+            const newKey = `${d.sc||''}||${d.po||''}||${d.product||''}||${d.currentStage||''}||${d.timestamp||''}`;
+            await client.query(
+              'UPDATE velan_rows SET data = $1, row_key = $2 WHERE id = $3',
+              [JSON.stringify(d), newKey, row.id]
+            );
+            fixed++;
+          }
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+      // Reload DB into memory
+      _db = await loadDB();
+      console.log(`[POST /api/migrate] Fixed ${fixed} rows | DB now: ${_db.length}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: true, fixed, total: _db.length }));
+    } catch (err) {
+      console.error('[POST /api/migrate]', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
