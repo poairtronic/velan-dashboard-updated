@@ -4737,17 +4737,15 @@ const isDoneStage = s => {
           if (!anyInRange) return;
         }
         _totalSCCompleted++;
-        // Tally the most-advanced stage per SC (prefer READY > STORES > STOCK > EXSTOCK > VA)
-        const stageOrder = ['READY','STORES','STOCK','EXSTOCK','VA'];
-        let topStage = null;
+        // Tally ALL stages present across this SC's products (not just top stage)
+        // Each SC can contribute to multiple stage counts if it has mixed READY+STORES etc.
+        const seenStages = new Set();
         latestRows.forEach(r => {
           const st = String(r.currentStage||'').trim().toUpperCase();
           const norm = st === 'STORE' ? 'STORES' : /^STOCK[K]?$/.test(st) ? 'STOCK' : /^READ{1,2}Y$/.test(st) ? 'READY' : st;
-          if (stageOrder.includes(norm)) {
-            if (!topStage || stageOrder.indexOf(norm) < stageOrder.indexOf(topStage)) topStage = norm;
-          }
+          if (_scStageCounts[norm] !== undefined) seenStages.add(norm);
         });
-        if (topStage && _scStageCounts[topStage] !== undefined) _scStageCounts[topStage]++;
+        seenStages.forEach(s => { _scStageCounts[s]++; });
       }
     });
     const totalSCCount = _totalSCCompleted;
@@ -5231,9 +5229,9 @@ const isDoneStage = s => {
                 {label:'STORES',  val:kpiStats.scStageCounts?.STORES,  c:'var(--accent1)'},
                 {label:'STOCK',   val:kpiStats.scStageCounts?.STOCK,   c:'var(--warning)'},
                 {label:'EXSTOCK', val:kpiStats.scStageCounts?.EXSTOCK, c:'var(--accent6)'},
-              ].filter(s=>s.val>0).map(s=>(
-                <span key={s.label} style={{fontSize:9,fontFamily:'Share Tech Mono,monospace',color:s.c,background:s.c+'22',borderRadius:4,padding:'1px 5px'}}>
-                  {s.label}: {s.val}
+              ].map(s=>(
+                <span key={s.label} style={{fontSize:9,fontFamily:'Share Tech Mono,monospace',color:s.val>0?s.c:'var(--text-muted)',background:s.val>0?s.c+'22':'rgba(255,255,255,0.04)',borderRadius:4,padding:'1px 5px'}}>
+                  {s.label}: {s.val||0}
                 </span>
               ))}
             </span>
