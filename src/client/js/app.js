@@ -1,0 +1,4910 @@
+function App() {
+  const [data, setData] = useState([]);
+  const [liveRows, setLiveRows] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastSync, setLastSync] = useState('');
+  const [activeNav, setActiveNav] = useState('overview');
+  const [filters, setFilters] = useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
+  const [dateRange, setDateRange] = useState({ from:'', to:'' });
+  const [serverStatus, setServerStatus] = useState('loading');
+  const [now] = useState(new Date());
+  const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? window.location.origin
+    : '';
+
+  // ── PARSE UPLOADED EXCEL / JSON ──────────────────────────────────────────
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [liveConfig, setLiveConfig] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('velan_live_source_v1') || '{}');
+      return {
+        enabled: stored.enabled === true,
+        url: typeof stored.url === 'string' ? stored.url : '',
+        intervalSec: Number(stored.intervalSec) || 300,
+      };
+    } catch {
+      return { enabled:false, url:'', intervalSec:300 };
+    }
+  });
+  const [liveState, setLiveState] = useState({ active:false, lastSync:'', lastError:'' });
+  const [historyConfig, setHistoryConfig] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('velan_history_source_v1') || '{}');
+      return { url: typeof stored.url === 'string' ? stored.url : '' };
+    } catch { return { url:'' }; }
+  });
+  const [importState, setImportState] = useState({ loading:false, lastMsg:'' });
+
+  useEffect(() => {
+    localStorage.setItem('velan_live_source_v1', JSON.stringify(liveConfig || {}));
+  }, [liveConfig]);
+  useEffect(() => {
+    localStorage.setItem('velan_history_source_v1', JSON.stringify(historyConfig || {}));
+  }, [historyConfig]);
+
+  useEffect(() => {
+    async function loadServerData() {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${apiBase}/api/data`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        // Historical warehouse
+        setData(Array.isArray(payload.rows) ? payload.rows : []);
+        // Current live operational rows
+        setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
+        if (payload.lastSync) setLastSync(payload.lastSync);
+        setServerStatus('ready');
+      } catch (err) {
+        setServerStatus('offline');
+        setData([]);
+        setLiveRows([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadServerData();
+  }, []);
+
+  // ── Auto-load LIVE_URL / HISTORY_URL from Render env vars ────────────────
+  useEffect(() => {
+    async function loadServerConfig() {
+      try {
+        const res = await fetch(`${apiBase}/api/config`);
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (cfg.liveUrl) {
+          setLiveConfig(prev => ({ ...prev, url: prev.url ? prev.url : cfg.liveUrl }));
+        }
+        if (cfg.historyUrl) {
+          setHistoryConfig(prev => ({ url: prev.url ? prev.url : cfg.historyUrl }));
+        }
+      } catch { /* safe to ignore */ }
+    }
+    loadServerConfig();
+  }, []);
+
+  function saveRowsToServer(rows) {
+    if (!rows || rows.length === 0) return;
+    fetch(`${apiBase}/api/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (result && result.success) {
+          if (result.lastSync) setLastSync(result.lastSync);
+          // Re-fetch full DB so UI shows ALL historical rows, not just uploaded slice
+          return fetch(`${apiBase}/api/data`)
+            .then(r => r.json())
+            .then(payload => {
+              setData(Array.isArray(payload.rows) ? payload.rows : []);
+              setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
+              setUploadStatus({
+                type: 'success',
+                msg: `✅ Saved ${rows.length} rows to live dashboard`,
+                detail: `Live: ${result.liveTotal} rows | DB: ${result.total} rows total (+${result.newRows || 0} new entries added to Database).`,
+              });
+            });
+        }
+      })
+      .catch(() => {
+        setUploadStatus({
+          type: 'warn',
+          msg: '⚠ Backend save failed',
+          detail: 'Data is loaded locally, but backend storage is unavailable.',
+        });
+      });
+  }
+
+
+  // ── Import rows into the permanent historical DB (append-only) ─────────────
+  function importRowsToDb(rows) {
+    if (!rows || rows.length === 0) return;
+    setImportState({ loading:true, lastMsg:'Importing…' });
+    fetch(apiBase + '/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    })
+      .then(r => r.json())
+      .then(result => {
+        const msg = result.success
+          ? '✅ Imported ' + result.imported + ' new rows to DB (' + result.skipped + ' duplicates skipped). Total DB: ' + result.total
+          : '❌ Import failed';
+        setImportState({ loading:false, lastMsg: msg });
+        return fetch(apiBase + '/api/data').then(r => r.json()).then(payload => {
+          setData(Array.isArray(payload.rows) ? payload.rows : []);
+        });
+      })
+      .catch(err => setImportState({ loading:false, lastMsg:'❌ ' + String(err) }));
+  }
+
+  // ── Fetch rows from a URL (CSV / XLSX / JSON) ─────────────────────────────
+  async function fetchRowsFromUrl(sourceUrl) {
+    const cleanPath = sourceUrl.split('?')[0].toLowerCase();
+    const queryText = sourceUrl.toLowerCase();
+    const isCsv  = cleanPath.endsWith('.csv')  || /[?&]output=csv([&#]|$)/.test(queryText);
+    const isXlsx = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
+    if (isCsv) {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      // Raw parser preserves DD/MM date strings — no SheetJS date auto-detection
+      const rawAoA = parseRawCsv(text);
+      return parseRowsFromHeaderAoA(rawAoA);
+    } else if (isXlsx) {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
+      return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+    } else {
+      const res = await fetch(sourceUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const parsed = await res.json();
+      return Array.isArray(parsed) ? parsed : [parsed];
+    }
+  }
+
+  // ── Sync the backup Google Sheet → import into DB ─────────────────────────
+  async function syncHistorySheet() {
+    const url = String(historyConfig.url || '').trim();
+    if (!url) { setImportState({ loading:false, lastMsg:'❌ No backup sheet URL set.' }); return; }
+    setImportState({ loading:true, lastMsg:'Fetching backup data from Google Sheet…' });
+    try {
+      const rawRows = await fetchDataUrl(url);
+      if (!rawRows || rawRows.length === 0) {
+        setImportState({ loading:false, lastMsg:'❌ No rows found in backup sheet.' });
+        return;
+      }
+      const normalized = rawRows.map(raw => {
+        const product = String(raw.product || raw['Product Name'] || '').trim();
+        const status1 = String(raw.status1 || '').trim();
+        const status2 = String(raw.status2 || '').trim();
+        const opStage = String(raw.currentStage || '').trim();
+        const poRaw   = String(raw.po || '').trim();
+        const poDate  = toIsoDateString(raw.poDate);
+        const po      = toIsoDateString(poRaw) ? '' : poRaw;
+        return {
+          ...raw,
+          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
+          po, poDate, product,
+          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
+          status1, status2,
+          inhouse: normalizeInhouse(raw.inhouse),
+          currentStage: resolveLatestStage({ opStage, status1, status2 }),
+          timestamp: normalizeTimestamp(raw.timestamp),
+        };
+      }).filter(r => r.sc || r.po);
+      importRowsToDb(normalized);
+    } catch(err) {
+      setImportState({ loading:false, lastMsg:'❌ Fetch error: ' + String(err) });
+    }
+  }
+   // ── NEW: Handle file uploads for history/backup (CROSS-DEVICE SUPPORT) ────
+  function handleHistoryFileUpload(file) {
+    if(!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const reader = new FileReader();
+    setImportState({loading:true, lastMsg:`⏳ Reading "${file.name}"…`});
+ 
+    const processRows = (rows) => {
+      if (!rows || rows.length === 0) {
+        setImportState({loading:false, lastMsg:'❌ No valid rows found in file.'});
+        return;
+      }
+      const normalized = rows.map(raw => {
+        const product = String(raw.product || raw['Product Name'] || '').trim();
+        const status1 = String(raw.status1 || '').trim();
+        const status2 = String(raw.status2 || '').trim();
+        const opStage = String(raw.currentStage || '').trim();
+        const poRaw   = String(raw.po || '').trim();
+        const poDate  = toIsoDateString(raw.poDate);
+        const po      = toIsoDateString(poRaw) ? '' : poRaw;
+        return {
+          ...raw,
+          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
+          po, poDate, product,
+          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
+          status1, status2,
+          inhouse: normalizeInhouse(raw.inhouse),
+          currentStage: resolveLatestStage({ opStage, status1, status2 }),
+          timestamp: normalizeTimestamp(raw.timestamp),
+        };
+      }).filter(r => r.sc || r.po);
+      importRowsToDb(normalized);
+    };
+ 
+    if(ext === 'json') {
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const rows = Array.isArray(parsed) ? parsed : [parsed];
+          rows.forEach(r => { if(!r.type) r.type = inferType(r.product||r['Product Name']||''); });
+          processRows(rows);
+        } catch(err) { 
+          setImportState({loading:false, lastMsg:'❌ Invalid JSON: ' + String(err)}); 
+        }
+      };
+      reader.readAsText(file);
+ 
+    } else if(['xlsx','xls'].includes(ext)) {
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, raw:false});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const parsedRows = parseWorksheet(ws);
+          processRows(parsedRows);
+        } catch(err) { 
+          setImportState({loading:false, lastMsg:'❌ Failed to read Excel: ' + String(err)}); 
+        }
+      };
+      reader.readAsArrayBuffer(file);
+ 
+    } else if(ext === 'csv') {
+      reader.onload = e => {
+        try {
+          const rawAoA = parseRawCsv(e.target.result);
+          const rows = parseRowsFromHeaderAoA(rawAoA);
+          processRows(rows);
+        } catch(err) { 
+          setImportState({loading:false, lastMsg:'❌ Failed to parse CSV: ' + String(err)}); 
+        }
+      };
+      reader.readAsText(file);
+ 
+    } else {
+      setImportState({loading:false, lastMsg:`❌ Unsupported: .${ext} (Use .xlsx, .xls, .csv, .json)`});
+    }
+  }
+ 
+  function handleHistoryDragDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleHistoryFileUpload(files[0]);
+    }
+  }
+
+  async function resetDB() {
+    if (!window.confirm('⚠️ DANGER: This will permanently DELETE ALL rows from the Neon database.\n\nThis CANNOT be undone.\n\nClick OK only if you want to clear history and start fresh.')) return;
+    setImportState({ loading:true, lastMsg:'⏳ Clearing database…' });
+    try {
+      const res = await fetch(`${apiBase}/api/data`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        setData([]);
+        setImportState({ loading:false, lastMsg:'✅ Database cleared. All history rows deleted. Re-import your 2K dataset using History Import above.' });
+      } else {
+        setImportState({ loading:false, lastMsg:'❌ Reset failed: ' + (json.error || 'Unknown error') });
+      }
+    } catch(err) {
+      setImportState({ loading:false, lastMsg:'❌ Reset error: ' + String(err) });
+    }
+  }
+
+  // ── Auto-detect product TYPE from product name ────────────────────────────
+  function inferType(productName) {
+    if(!productName) return 'ACCESSORY';
+    const p = String(productName).toUpperCase().trim();
+    if(p.startsWith('APG') || p.startsWith('2 PAIR APG')) return 'APG';
+    if(p.startsWith('ARG')) return 'ARG';
+    if(p.startsWith('SRG')) return 'SRG';
+    if(p.startsWith('SP ') || p.startsWith('SP\t') || p === 'SP' || /^SP DIA/.test(p)) return 'SP';
+    if(p.startsWith('SPG')) return 'SPG';
+    return 'ACCESSORY';
+  }
+
+  function normalizeStage(stage) {
+    if (!stage) return '';
+    const s = String(stage).trim().toUpperCase().replace(/[\.\s]/g, '');
+    if (!s) return '';
+    const aliases = {
+      'STORE':'STORES','STORRES':'STORES','STOERS':'STORES',
+      'READDY':'READY','REAADY':'READY',
+      'BLACKENEING':'BLACKENING','BLACKNING':'BLACKENING','BLACKENNING':'BLACKENING',
+      'DCPL':'DCPLI',
+      'HOV':'HOV','HOVE':'HOV',
+      'SDV':'SDV','BLV':'BLV','FBV':'FBV','HTV':'HTV','HCV':'HCV',
+    };
+    const corrected = aliases[s] || s;
+    // STOCK must be checked BEFORE STORE substring test — STOCK contains no 'STORE'
+    // but guard explicitly so future edits don't break this.
+    if (corrected === 'STOCK' || corrected === 'STOCKK') return 'STOCK';
+    if (corrected === 'READY' || corrected.includes('READY')) return 'READY';
+    if (corrected === 'STORES' || corrected.includes('STORE')) return 'STORES';
+    return corrected.replace(/\s+/g, '');
+  }
+
+  function normalizeInhouse(val) {
+    const s = String(val || '').trim().toUpperCase();
+    if(!s) return 'INHOUSE';
+    return s.includes('VENDOR') ? 'VENDOR' : 'INHOUSE';
+  }
+
+  function extractStageFromStatusText(text) {
+    const t = String(text || '').toUpperCase().trim();
+    if(!t) return '';
+
+    // Explicit "MOVE TO <stage>" pattern — highest priority
+    const moveMatch = t.match(/MOVE\s*TO\s*([A-Z0-9]+)/);
+    if(moveMatch && moveMatch[1]) return normalizeStage(moveMatch[1]);
+
+    // Check terminal/completion stages first with exact word boundaries to avoid
+    // "STORES" matching as "READY" or "STOCK" being confused with "STORES".
+    // Order: STOCK → STORES/STORE → READY (most specific first)
+    if(/\bSTOCK\b/.test(t)) return 'STOCK';
+    if(/\bSTORES?\b/.test(t)) return 'STORES';
+    if(/\bREADY\b/.test(t)) return 'READY';
+
+    // Other known production stages
+    const knownStages = [
+      'LATHE','M1','FB','HT','SZ','BLK','CG','SG','SD','HO',
+      'CA','WC','VA','QC','DCPLI','FBV','BLV','SDV','HOV','HTV','HCV','RM'
+    ];
+    for(const stage of knownStages) {
+      if(t.includes(stage)) return normalizeStage(stage);
+    }
+    return '';
+  }
+
+  function resolveLatestStage({opStage, status1, status2}) {
+    // ─── FIX (Issues 1 & 4): OP column is the SOLE source of truth for stage.
+    //
+    // ROOT CAUSE of CGV→CGV+CG split (Issue 4):
+    //   status2 text like "CG DONE, MOVE TO FB" was matching the "MOVE TO" regex,
+    //   returning "FB" or "CG" and OVERRIDING the OP value "CGV".  This caused items
+    //   with OP=CGV to be mis-classified as CG, splitting 17 CGV items into 12+5.
+    //
+    // FIX: "MOVE TO" in status2 only fires when OP is empty/unresolvable.
+    //   Step 1 — try OP column first (exact stage value, most reliable).
+    //   Step 2 — if OP is empty, then and only then parse status2/status1 free text.
+
+    // Step 1: OP column is primary — use it if it resolves to a known stage
+    const fromOp = normalizeStage(opStage);
+    if (fromOp) return fromOp;
+
+    // Step 2: OP column empty/unresolved — fall back to free-text status fields
+    // (This includes "MOVE TO <stage>" extraction from status2)
+    return (
+      extractStageFromStatusText(status2) ||
+      extractStageFromStatusText(status1) ||
+      ''
+    );
+  }
+
+  
+
+  function normalizeTimestamp(value) {
+    if(value === undefined || value === null || value === '') return '';
+    const s = String(value).trim().replace('T',' ');
+    if(!s) return '';
+
+    const date = toIsoDateString(s);
+    const timeMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if(date && timeMatch) {
+      const hh = String(timeMatch[1]).padStart(2,'0');
+      const mm = String(timeMatch[2]).padStart(2,'0');
+      const ss = String(timeMatch[3] || '00').padStart(2,'0');
+      return `${date} ${hh}:${mm}:${ss}`;
+    }
+    return date || s.substring(0,19);
+  }
+
+  // ── Parse the real Velan Excel format (merged cells / no type column) ─────
+  function parseVelanExcel(rows) {
+    // rows is raw array-of-arrays from XLSX with header=none
+    // Structure: 
+    //   Col 0=SNO, 1=PO NO, 2=PO RECD DATE, 3=SC, 4=CustomerName(merged row),
+    //   5=Product Name, 6=QTY, 7=STATUS1, 8=STATUS2, 9=INHOUSE/VENDOR, 10=OP(stage), 11=TIMESTAMP
+    // PO NO and PO DATE fill down within a PO group (only in first row of group)
+    // SC fills down within SC sub-group
+
+    const result = [];
+    let currentPO = '', currentPODate = '', currentSC = '', currentStage = '';
+
+    for(const row of rows) {
+      const v = (i) => {
+        const val = row[i];
+        if (val === undefined || val === null) return null;
+        if (val instanceof Date) return val;
+        const s = String(val).trim();
+        return (s === '' || s === 'nan') ? null : s;
+      };
+
+      // Skip header rows and title rows
+      const col1 = v(1); const col5 = v(5);
+      if(!col5 || col5 === 'Product Name' || col5 === 'Customer Name') continue;
+      if(col1 && (col1.includes('VELAN') || col1 === 'PO NO')) continue;
+
+      // Update running PO and date if present in this row
+      if(col1 && col1 !== 'NaN' && !col1.includes('SETS') && !col1.match(/^\d{4}/) ) currentPO = col1;
+      const col2 = v(2);
+      const parsedPODate = toIsoDateString(col2);
+      if(parsedPODate) currentPODate = parsedPODate;
+
+      // SC: col3 may have the SC value; sometimes has "1166- 3 SETS" note — strip that
+      const col3 = v(3);
+      if(col3 && !col3.toUpperCase().includes('SET')) {
+        currentSC = col3.replace(/\s+/g,''); // normalize SC like "1166- 2" → "1166-2"
+      }
+
+      const product = col5;
+      const status1 = v(7) || '';
+      const status2 = v(8) || '';
+      const inhouseRaw = v(9) || 'INHOUSE';
+      const inhouse = normalizeInhouse(inhouseRaw);
+      const stageRaw = v(10);
+      const tsRaw = v(11) || '';
+      const timestamp = normalizeTimestamp(tsRaw);
+      const type = inferType(product);
+      const latestStage = resolveLatestStage({ opStage: stageRaw, status1, status2 });
+      if(latestStage) currentStage = latestStage;
+
+      if(currentSC && product) {
+        result.push({
+          sc: currentSC,
+          po: currentPO,
+          poDate: currentPODate,
+          product,
+          type,
+          status1,
+          status2,
+          inhouse,
+          currentStage: latestStage || currentStage || '',
+          timestamp,
+        });
+      }
+    }
+    return result;
+  }
+
+  // ── Generic flat-row parser (standard CSV/Excel with headers) ────────────
+  function parseGenericRows(rows) {
+    const norm = s => String(s||'').replace(/[\s\/\-_]+/g,'').toLowerCase();
+    const pickField = (r, candidates) => {
+      for(const c of candidates) {
+        const val = r[norm(c)];
+        if(val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
+      }
+      for(const c of candidates) {
+        const word = norm(c);
+        for(const k of Object.keys(r)) {
+          if(norm(k).includes(word) && r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '')
+            return String(r[k]).trim();
+        }
+      }
+      return '';
+    };
+    const normalizeHeaders = row => {
+      const n = {};
+      Object.entries(row).forEach(([k,v]) => { n[norm(k)] = v; });
+      return n;
+    };
+    return rows.map(raw => {
+      const r = normalizeHeaders(raw);
+      const product = pickField(r, ['product name','productname','product','item description','description']);
+      const typeRaw  = pickField(r, ['type','product type','producttype','dtype']);
+      const type     = typeRaw || inferType(product);
+      const inhouseRaw = pickField(r, ['inhouse/ vendor','inhouse/vendor','inhousevendor','inhouse vendor','inhouse','location','vendor status']);
+      const inhouse  = normalizeInhouse(inhouseRaw);
+      const status1 = pickField(r, ['status 1','status1','current operation','operation']);
+      const status2 = pickField(r, ['status 2','status2','next operation']);
+      const opStage = pickField(r, ['currentstage','current stage','stage','operation stage','current operation','op']);
+      return {
+        sc:           pickField(r, ['sc','sc no','sc#','scno']).replace(/\s+/g,''),
+        // Avoid generic "po" token because it can incorrectly match "PO RECD DATE"
+        po:           pickField(r, ['po no','pono','purchase order','purchaseorder']),
+        poDate:       toIsoDateString(pickField(r, ['po recd date','porecddate','po date','podate','date received','date'])),
+        product,
+        type,
+        status1,
+        status2,
+        inhouse,
+        currentStage: resolveLatestStage({ opStage, status1, status2 }),
+        timestamp:    normalizeTimestamp(pickField(r, ['timestamp','time stamp','last updated','op time'])),
+      };
+    }).filter(r => r.sc || r.po);
+  }
+
+  function parseRowsFromHeaderAoA(rawAoA) {
+    if(!Array.isArray(rawAoA) || rawAoA.length === 0) return [];
+
+    const norm = s => String(s || '').replace(/[\s\/\-_]+/g,'').toLowerCase();
+    const headerAliases = {
+      sc: ['sc','scno','sc#'],
+      po: ['pono','pono.','po','purchaseorder'],
+      poDate: ['porecddate','podate','datereceived','date'],
+      product: ['productname','product','itemdescription','description'],
+      status1: ['status1','currentoperation','operation'],
+      status2: ['status2','nextoperation'],
+      inhouse: ['inhousevendor','inhouse','location','vendorstatus'],
+      op: ['op','currentstage','stage','operationstage'],
+      timestamp: ['timestamp','timestamp.','lastupdated','optime','datetime']
+    };
+
+    const findColumn = (row, exactAliases, containsAliases=[]) => {
+      const normalized = row.map(c => norm(c));
+      // exact match first (safest)
+      for(let i=0;i<normalized.length;i++) {
+        if(exactAliases.includes(normalized[i])) return i;
+      }
+      // then contains match for long/specific aliases only
+      for(let i=0;i<normalized.length;i++) {
+        if(containsAliases.some(a => normalized[i].includes(a))) return i;
+      }
+      return undefined;
+    };
+    let headerRowIdx = -1;
+    let headerMap = {};
+
+    for(let i=0;i<Math.min(rawAoA.length, 40);i++) {
+      const row = rawAoA[i] || [];
+      const probe = {
+        sc: findColumn(row, ['sc','scno','sc#']),
+        // Keep PO strict so it doesn't collide with PO RECD DATE
+        po: findColumn(row, ['pono','purchaseorder'], ['pono']),
+        poDate: findColumn(row, ['porecddate','podate','datereceived','date']),
+        product: findColumn(row, ['productname','product','itemdescription','description'], ['productname','itemdescription']),
+        status1: findColumn(row, ['status1','currentoperation','operation'], ['status1']),
+        status2: findColumn(row, ['status2','nextoperation'], ['status2']),
+        inhouse: findColumn(row, ['inhousevendor','inhouse','location','vendorstatus'], ['inhousevendor']),
+        op: findColumn(row, ['op','currentstage','stage','operationstage'], ['currentstage','operationstage']),
+        timestamp: findColumn(row, ['timestamp','lastupdated','optime','datetime'], ['timestamp','lastupdated']),
+      };
+
+      // Consider this as header row if it has core production columns
+      if(probe.sc !== undefined && probe.product !== undefined && (probe.po !== undefined || probe.poDate !== undefined)) {
+        headerRowIdx = i;
+        headerMap = probe;
+        break;
+      }
+    }
+
+    if(headerRowIdx < 0) return [];
+
+    const result = [];
+    let currentSC = '', currentPO = '', currentPODate = '';
+    for(let i=headerRowIdx + 1; i<rawAoA.length; i++) {
+      const row = rawAoA[i] || [];
+      const getVal = (idx) => {
+        if (idx === undefined) return '';
+        const v = row[idx];
+        if (v === null || v === undefined) return '';
+        if (v instanceof Date) return v;
+        return String(v).trim();
+      };
+
+      const scRaw = getVal(headerMap.sc);
+      if(scRaw) currentSC = scRaw.replace(/\s+/g,'');
+
+      const poRaw = getVal(headerMap.po);
+      if(poRaw) currentPO = poRaw;
+
+      const poDateRaw = getVal(headerMap.poDate);
+      const parsedPODate = toIsoDateString(poDateRaw);
+      if(parsedPODate) currentPODate = parsedPODate;
+
+      const product = getVal(headerMap.product);
+      const status1 = getVal(headerMap.status1);
+      const status2 = getVal(headerMap.status2);
+      const inhouse = normalizeInhouse(getVal(headerMap.inhouse));
+      const opStage = getVal(headerMap.op);
+      const timestamp = normalizeTimestamp(getVal(headerMap.timestamp));
+
+      if(!product && !status1 && !status2 && !opStage) continue;
+      if(!currentSC && !currentPO) continue;
+
+      result.push({
+        sc: currentSC,
+        po: currentPO,
+        poDate: currentPODate,
+        product,
+        type: inferType(product),
+        status1,
+        status2,
+        inhouse,
+        currentStage: resolveLatestStage({ opStage, status1, status2 }),
+        timestamp,
+      });
+    }
+    return result.filter(r => r.sc || r.po);
+  }
+
+  function finalizeRows(rows, sourceName) {
+      if(!rows || rows.length === 0) {
+        setUploadStatus({type:'error', msg:'No valid rows found in file.', detail:'Check that the file has data and correct column names.'});
+        return false;
+      }
+      const normalizedRows = rows.map(raw => {
+        const product = String(raw.product || raw['Product Name'] || '').trim();
+        const status1 = String(raw.status1 || '').trim();
+        const status2 = String(raw.status2 || '').trim();
+        const opStage = String(raw.currentStage || '').trim();
+        const poRaw = String(raw.po || '').trim();
+        const poDate = toIsoDateString(raw.poDate);
+        // If PO accidentally looks like a date, clear it to prevent bad PO filters.
+        const po = toIsoDateString(poRaw) ? '' : poRaw;
+        return {
+          ...raw,
+          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
+          po,
+          poDate,
+          product,
+          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
+          status1,
+          status2,
+          inhouse: normalizeInhouse(raw.inhouse),
+          currentStage: resolveLatestStage({ opStage, status1, status2 }),
+          timestamp: normalizeTimestamp(raw.timestamp),
+        };
+      }).filter(r => r.sc || r.po);
+      const missingStage = normalizedRows.filter(r=>!r.currentStage).length;
+      setLiveRows(normalizedRows);
+      saveRowsToServer(normalizedRows);
+      setUploadStatus({
+        type:'success',
+        msg:`✅ ${normalizedRows.length} rows loaded from "${sourceName}" — live latest status resolved`,
+        detail: missingStage > 0 ? `⚠ ${missingStage} rows have no stage value` : null,
+      });
+      return true;
+  }
+
+  function parseWorksheet(ws) {
+    const rawAoA = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+    const headerMapped = parseRowsFromHeaderAoA(rawAoA);
+    if(headerMapped.length > 0) return headerMapped;
+    const isVelanFormat = rawAoA.slice(0,5).some(row =>
+      row && row.some(cell => cell && String(cell).includes('VELAN METROLOGY'))
+    ) || rawAoA.slice(0,6).some(row =>
+      row && row.some(cell => String(cell||'').trim() === 'SNO')
+    );
+    if(isVelanFormat) return parseVelanExcel(rawAoA);
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false});
+    return parseGenericRows(rows);
+  }
+
+  function handleFileUpload(file) {
+    if(!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const reader = new FileReader();
+    setUploadStatus({type:'loading', msg:`⏳ Reading "${file.name}"…`});
+
+    if(ext === 'json') {
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const rows = Array.isArray(parsed) ? parsed : [parsed];
+          // auto-detect type if missing
+          rows.forEach(r => { if(!r.type) r.type = inferType(r.product||r['Product Name']||''); });
+          finalizeRows(rows, file.name);
+        } catch(err) { setUploadStatus({type:'error', msg:'Invalid JSON.', detail:String(err)}); }
+      };
+      reader.readAsText(file);
+
+    } else if(['xlsx','xls'].includes(ext)) {
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, raw:false});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const parsedRows = parseWorksheet(ws);
+          finalizeRows(parsedRows, file.name);
+        } catch(err) { setUploadStatus({type:'error', msg:'Failed to read Excel.', detail:String(err)}); }
+      };
+      reader.readAsArrayBuffer(file);
+
+    } else if(ext === 'csv') {
+      reader.onload = e => {
+        try {
+          // Raw parser — preserves DD/MM date strings without SheetJS M/D auto-conversion
+          const rawAoA = parseRawCsv(e.target.result);
+          const rows   = parseRowsFromHeaderAoA(rawAoA);
+          finalizeRows(rows, file.name);
+        } catch(err) { setUploadStatus({type:'error', msg:'Failed to parse CSV.', detail:String(err)}); }
+      };
+      reader.readAsText(file);
+
+    } else {
+      setUploadStatus({type:'error', msg:`Unsupported file type: .${ext}`, detail:'Supported: .xlsx, .xls, .csv, .json'});
+    }
+  }
+
+  // ── Google Sheets URL detection & normalization ──────────────────────────────
+  function normalizeGoogleSheetsUrl(rawUrl) {
+    // Convert any Google Sheets share/edit URL → CSV export URL
+    // Handles: /edit, /view, /pub, already-CSV, already-export URLs, and /d/e/ publish URLs
+    try {
+      const u = rawUrl.trim();
+      // Already a CSV export: leave alone
+      if (/docs\.google\.com\/spreadsheets\/d\/.+\/export/.test(u) && /format=csv/.test(u)) return u;
+      // Published CSV (including /d/e/ format): leave alone — pass directly to proxy
+      if (/docs\.google\.com\/spreadsheets\/d\/e\/.+\/pub/.test(u) && /output=csv/.test(u)) return u;
+      if (/docs\.google\.com\/spreadsheets\/d\/.+\/pub/.test(u) && /output=csv/.test(u)) return u;
+      // Extract spreadsheet ID — skip /d/e/ publish paths (can't convert, leave as-is)
+      if (/\/spreadsheets\/d\/e\//.test(u)) return u;
+      const idMatch = u.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+      if (!idMatch) return u; // not a Sheets URL — return as-is
+      const sheetId = idMatch[1];
+      // Extract gid if present (specific sheet tab)
+      const gidMatch = u.match(/[?&]gid=(\d+)/);
+      const gid = gidMatch ? gidMatch[1] : '0';
+      return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+    } catch { return rawUrl; }
+  }
+
+  // ── Fetch via backend proxy (/api/sheets) or direct, with Sheets normalization
+  async function fetchDataUrl(sourceUrl) {
+    const normalized = normalizeGoogleSheetsUrl(sourceUrl);
+    const isGoogleSheets = normalized.includes('docs.google.com/spreadsheets');
+
+    // Always route Google Sheets through backend proxy (avoids CORS on all deployments)
+    const proxyBase = window.location.origin;
+    const useProxy  = isGoogleSheets;
+
+    let fetchUrl = normalized;
+    if (useProxy) {
+      fetchUrl = `${proxyBase}/api/sheets?url=${encodeURIComponent(normalized)}`;
+    }
+
+    const cleanPath = normalized.split('?')[0].toLowerCase();
+    const queryText = normalized.toLowerCase();
+    const isCsvUrl  = cleanPath.endsWith('.csv') || /[?&](output|format)=csv([&#]|$)/.test(queryText) || isGoogleSheets;
+    const isJsonUrl = cleanPath.endsWith('.json') || /[?&](output|format)=json([&#]|$)/.test(queryText);
+    const isExcelUrl = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
+
+    if (isJsonUrl) {
+      const res = await fetch(fetchUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status} from server`);
+      const parsed = await res.json();
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } else if (isCsvUrl) {
+      const res = await fetch(fetchUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status} — make sure the sheet is shared "Anyone with the link"`);
+      const text = await res.text();
+      // Use raw CSV parser (not XLSX) so date strings like "06/05/2026" are
+      // preserved as-is and NOT auto-converted to US MM/DD Date objects by SheetJS.
+      const rawAoA = parseRawCsv(text);
+      return parseRowsFromHeaderAoA(rawAoA);
+    } else if (isExcelUrl) {
+      const res = await fetch(fetchUrl, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:true, raw:false});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return parseWorksheet(ws);
+    } else {
+      throw new Error('Paste a Google Sheets URL, or a direct .xlsx/.csv/.json link.');
+    }
+  }
+
+  async function syncLiveDataNow(urlOverride) {
+    const sourceUrl = String(urlOverride || liveConfig.url || '').trim();
+    if(!sourceUrl) {
+      setUploadStatus({type:'error', msg:'Live source URL is empty.', detail:'Paste your Google Sheets URL (share link, edit link, or CSV export link).'});
+      return;
+    }
+
+    const normalized = normalizeGoogleSheetsUrl(sourceUrl);
+    const isGSheets  = normalized.includes('docs.google.com/spreadsheets');
+    setUploadStatus({type:'loading', msg:'🔄 Syncing live source…', detail: isGSheets ? `Google Sheets → CSV export → ${normalized.substring(0,60)}…` : sourceUrl});
+
+    try {
+      const rows = await fetchDataUrl(sourceUrl);
+      const ok = finalizeRows(rows, isGSheets ? 'GOOGLE SHEETS (LIVE)' : 'LIVE SOURCE');
+      if(ok) {
+        setLiveState({ active:true, lastSync:new Date().toLocaleString('en-IN'), lastError:'' });
+      }
+    } catch(err) {
+      setLiveState(prev => ({ ...prev, active:false, lastError:String(err) }));
+      setUploadStatus({
+        type:'error',
+        msg:'Live sync failed.',
+        detail:`${String(err)}\n\n💡 For Google Sheets: File → Share → Publish to web → Entire Document → CSV → Publish\n   Copy the /pub?output=csv link and paste it above.`,
+      });
+    }
+  }
+
+  useEffect(() => {
+    const enabled = liveConfig?.enabled === true;
+    const url = String(liveConfig?.url || '').trim();
+    if(!enabled || !url) return;
+
+    const sec = Math.max(30, Number(liveConfig.intervalSec) || 300);
+    syncLiveDataNow(url);
+    const timer = setInterval(() => { syncLiveDataNow(url); }, sec * 1000);
+    return () => clearInterval(timer);
+  }, [liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec]);
+
+  // ── FILTERED DATA ──────────────────────────────────────────────────────────
+  // ── REQ 11: CENTRALIZED processedData — pendingDays & cycleTime on every row ──
+  const processedData = useMemo(() => {
+    const n = new Date();
+    const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    return data.map(row => ({
+      ...row,
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
+    }));
+  }, [data]);
+    // ── ALL DB DATA: historical + live combined (for Database page only) ───────
+  const allDbData = useMemo(() => {
+    const n = new Date();
+    const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    const seen = new Set();
+    // liveRows = current Excel upload (most up-to-date state).
+    // _isLive flag lets getLatestPerProduct prefer them over DB history
+    // regardless of timestamp (READY items often have no timestamp yet).
+    const liveProcessed = liveRows.map(row => ({
+      ...row,
+      // Client-side backfill: if currentStage missing but op/OP exists, use it
+      currentStage: row.currentStage || row.op || row.OP || '',
+      _isLive: true,
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
+    }));
+    const dbProcessed = processedData.map(row => ({
+      ...row,
+      // Client-side backfill: if currentStage missing but op/OP exists, use it
+      currentStage: row.currentStage || row.op || row.OP || '',
+      _isLive: false,
+    }));
+    // Process liveRows FIRST so same-key duplicates from DB history are dropped
+    return [...liveProcessed, ...dbProcessed].filter(r => {
+      const key = (r.sc||'') + '||' + (r.po||'') + '||' + (r.product||'') + '||' + (r.currentStage||'') + '||' + (r.timestamp||'');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [processedData, liveRows]);
+    // ── LIVE OPERATIONAL DATA — active WIP only (last 30 days, not completed) ──
+  const liveData = useMemo(() => {
+    const n = new Date();
+    const todayStr = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    // Use liveRows directly — this is the current uploaded/synced operational snapshot
+    return liveRows.map(row => ({
+      ...row,
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
+    }));
+  }, [liveRows]);
+  // filtered uses liveData — operational pages only show active production
+  const filtered = useMemo(() => {
+    return liveData.filter(row => {
+      if(filters.po && row.po !== filters.po) return false;
+      if(filters.stage && row.currentStage !== filters.stage) return false;
+      if(filters.type && row.type !== filters.type) return false;
+      if(filters.inhouse && row.inhouse !== filters.inhouse) return false;
+      if(filters.category && getProductCategory(row.type) !== filters.category) return false;
+      if(filters.search) {
+        const s = filters.search.trim().toLowerCase();
+        const scStr = String(row.sc||'').toLowerCase();
+        const poStr = String(row.po||'').toLowerCase();
+        const prodStr = String(row.product||'').toLowerCase();
+        const scMatch = scStr === s || scStr.startsWith(s);
+        const poMatch = poStr.includes(s);
+        const prodMatch = prodStr.includes(s);
+        if(!scMatch && !prodMatch && !poMatch) return false;
+        if(!scMatch && !prodMatch && poMatch) {
+          if(!scStr.startsWith(s)) return false;
+        }
+      }
+      return true;
+    });
+  }, [liveData, filters]);
+
+  // ── SC GROUPS ──────────────────────────────────────────────────────────────
+  // Built from full `data` (not filtered) so that completeness is evaluated
+  // against ALL products in the SC — a set is only COMPLETE when every single
+  // product across the entire SC is READY / STORES / STOCK.
+  const scGroups = useMemo(() => {
+    const g = {};
+    liveData.forEach(row => {
+      if(!g[row.sc]) g[row.sc] = { sc:row.sc, po:row.po, poDate:row.poDate, _all:[] };
+      g[row.sc]._all.push(row);
+    });
+    // Reduce to ONE row per product per SC (latest state wins).
+    // This prevents old WIP rows in liveData from blocking SC completion checks.
+    return Object.values(g).map(sg => {
+      const latestMap = {};
+      sg._all.forEach(r => {
+        const key = (r.product || '__none__').trim();
+        const ex = latestMap[key];
+        if (!ex) { latestMap[key] = r; return; }
+        // _isLive rows (current Excel) always win over DB history
+        if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+        if (!r._isLive && ex._isLive) return;
+        // Same source: pick later timestamp
+        if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+      });
+      return { sc:sg.sc, po:sg.po, poDate:sg.poDate, items:Object.values(latestMap) };
+    });
+  }, [liveData]);
+
+  // ── PO GROUPS ──────────────────────────────────────────────────────────────
+  const poGroups = useMemo(() => {
+    const g = {};
+    liveData.forEach(row => {
+      if(!g[row.po]) g[row.po] = { po:row.po, poDate:row.poDate, items:[] };
+      g[row.po].items.push(row);
+    });
+    return Object.values(g);
+  }, [liveData]);
+
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const totalItems = filtered.length;
+    
+    // ── BUILD FILTERED SC GROUPS ──────────────────────────────────────────────
+    // Create SC groups from filtered data (respecting all active filters)
+    const filteredScGroupsMap = {};
+    filtered.forEach(row => {
+      if(!row.sc) return;
+      if(!filteredScGroupsMap[row.sc]) {
+        filteredScGroupsMap[row.sc] = { sc:row.sc, po:row.po, poDate:row.poDate, items:[] };
+      }
+      filteredScGroupsMap[row.sc].items.push(row);
+    });
+    const filteredScGroups = Object.values(filteredScGroupsMap);
+    
+    // ── COUNT SC SETS (NOT individual items) ──────────────────────────────────
+    // Ready Sets: SC sets where ALL items are in READY (not STORES, not STOCK)
+    const readySets = filteredScGroups.filter(sg => 
+      sg.items.every(i => i.currentStage === 'READY')
+    );
+    const ready = readySets.length;
+    
+    // Store Sets: SC sets where ALL items are in STORES
+    const storeSets = filteredScGroups.filter(sg => 
+      sg.items.every(i => i.currentStage === 'STORES')
+    );
+    const stores = storeSets.length;
+    
+    // WIP Sets: SC sets with items NOT all in READY/STORES/STOCK
+    const wip = filtered.filter(r=>!['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)).length;
+    const inhouse = filtered.filter(r=>r.inhouse==='INHOUSE').length;
+    const vendor = filtered.filter(r=>r.inhouse==='VENDOR').length;
+
+    const _n = new Date();
+    const today = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+
+    // ── PO on-time analysis — denominator = COMPLETED POs only ──────────────
+    let onTime=0, delayed=0, onTimePOs=[], delayedPOs=[], completedPOCount=0;
+    poGroups.forEach(pg => {
+      const lastTs = getSCLastTimestamp(pg.items);
+      const allDone = pg.items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
+      if (allDone) {
+        completedPOCount++;
+        const days = daysBetween(pg.poDate, lastTs);
+        if (days!==null && days<=TARGET_DAYS) { onTime++; onTimePOs.push({...pg,days}); }
+        else { delayed++; delayedPOs.push({...pg,days}); }
+      } else {
+        const elapsed = daysBetween(pg.poDate, today);
+        if (elapsed!==null && elapsed>TARGET_DAYS) { delayed++; delayedPOs.push({...pg,days:elapsed,inProgress:true}); }
+      }
+    });
+    const totalPOs = poGroups.length;
+    // Correct: divide by completed POs only, not total POs
+    const onTimePct = completedPOCount>0 ? Math.round(onTime/completedPOCount*100) : 0;
+    // ── MODULE 2: Stage-wise WIP (Lathe / FB / Stores) ──
+    const stageWIP = {};
+    filtered.forEach(row => {
+      const stage = row.currentStage;
+      if(!stageWIP[stage]) stageWIP[stage] = 0;
+      stageWIP[stage]++;
+    });
+
+    // ── Stage WIP counts ─────────────────────────────────────────────────────
+    const stageCounts = {};
+    filtered.forEach(r=>{ stageCounts[r.currentStage]=(stageCounts[r.currentStage]||0)+1; });
+
+    // ── Bottleneck by PO ─────────────────────────────────────────────────────
+    const bottleneck = [...poGroups].map(pg=>{
+      const lastTs = getSCLastTimestamp(pg.items);
+      const done = pg.items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
+      const days = done ? daysBetween(pg.poDate, lastTs) : daysBetween(pg.poDate, today);
+      return {...pg, days, done};
+    }).sort((a,b)=>(b.days||0)-(a.days||0));
+
+    // ── Helper: working-day diff (routes through workingDaysBetween) ─────────
+    const dateDiff = (poDate, tsStr) => {
+      if (!poDate || !tsStr) return null;
+      const d = workingDaysBetween(poDate, tsStr);
+      return (d !== null && d >= 0) ? d : null;
+    };
+
+    // ── MODULE 1: Total Production Output (Daily – Ready / Moved to Stores) ──
+    // Grouped by date: count items by stage (READY vs STORES)
+    const dailyOutput = {};
+    filtered.forEach(row => {
+      if(!row.timestamp) return;
+      const date = row.timestamp.substring(0,10);
+      if(!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0 };
+      if(row.currentStage === 'READY') dailyOutput[date].ready++;
+      if(row.currentStage === 'STORES') dailyOutput[date].stores++;
+    });
+    const dailyOutputArray = Object.values(dailyOutput).sort((a,b)=>a.date>b.date?1:-1);
+
+    // ── FEATURE 1: SC Set grouping — complete sets (READY or STORES) ─────────
+    // A set is "complete" when every item in the SC is in READY, STORES, or STOCK
+    // Use the LAST timestamp date of the set as the completion date
+    const scByDate = {};
+    scGroups.forEach(sg => {
+      const done = isSCComplete(sg.items);
+      const lastTs = getSCLastTimestamp(sg.items);
+      if(!lastTs) return;
+      const d = lastTs.substring(0,10);
+      if(!scByDate[d]) scByDate[d] = { date:d, readySets:0, storeSets:0 };
+      if(done) {
+        const hasStores = sg.items.some(i=>i.currentStage==='STORES');
+        if(hasStores) scByDate[d].storeSets++;
+        else scByDate[d].readySets++;
+      }
+    });
+    const scDailyOutput = Object.values(scByDate).sort((a,b)=>a.date>b.date?1:-1);
+    
+    // ── COMPLETE SETS from filtered data ──────────────────────────────────────
+    // All SC sets where every item is in READY, STORES, or STOCK
+    const completeSets = filteredScGroups.filter(sg=>
+      sg.items.every(i=>['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage))
+    );
+    // Note: readySets and storeSets already calculated from filtered data above
+
+    // ── FEATURE 3: Avg Cycle Time per Stage ─────────────────────────────────
+    // Formula: for each item SC, calculate time from one stage timestamp to the next
+    // This measures actual time spent in each stage
+    const STAGE_ORDER = ['RM','LATHE','M1','FB','HT','SZ','BLK','CG','SG','SD','HO','CA','WC','VA','QC','DCPLI','STORES','READY',
+                         'FBV','BLV','SDV','HOV','HTV','HCV'];
+    
+    // Build a map of SC → sorted array of records for that SC
+    const scRecordMap = {};
+    filtered.forEach(r => {
+      if(!r.sc) return;
+      if(!scRecordMap[r.sc]) scRecordMap[r.sc] = [];
+      scRecordMap[r.sc].push(r);
+    });
+    
+    // For each SC, sort records by timestamp and calculate stage durations
+    const stageDurations = {}; // stage → [duration days]
+    Object.values(scRecordMap).forEach(records => {
+      // Sort records by timestamp for this SC — use parseDateTime to avoid MM/DD misparse
+      const sorted = records.sort((a, b) => {
+        const tA = parseDateTime(a.timestamp) || new Date(0);
+        const tB = parseDateTime(b.timestamp) || new Date(0);
+        return tA - tB;
+      });
+      
+      // For each consecutive pair, calculate time spent in the earlier stage
+      for(let i = 0; i < sorted.length - 1; i++) {
+        const current = sorted[i];
+        const next = sorted[i + 1];
+        
+        if(!current.currentStage || !current.timestamp || !next.timestamp) continue;
+        
+        // Calculate working days between consecutive timestamps
+        const daysDiff = workingDaysBetween(
+          current.timestamp.substring(0, 10),
+          next.timestamp.substring(0, 10)
+        );
+        
+        if(daysDiff >= 0) {
+          const stage = current.currentStage;
+          if(!stageDurations[stage]) stageDurations[stage] = [];
+          stageDurations[stage].push(daysDiff);
+        }
+      }
+    });
+    
+    // Calculate average duration per stage
+    const stageAvgDuration = {};
+    Object.entries(stageDurations).forEach(([stage, durations]) => {
+      const avg = durations.length > 0 
+        ? durations.reduce((a, b) => a + b, 0) / durations.length 
+        : 0;
+      stageAvgDuration[stage] = Math.round(avg * 10) / 10;
+    });
+    
+    // Also track cumulative days for "days to reach" metric
+    const stageAccum = {}; // stage → [cumulative days from PO]
+    filtered.forEach(r => {
+      if(!r.timestamp || !r.poDate || !r.currentStage) return;
+      const days = dateDiff(r.poDate, r.timestamp);
+      if(days === null) return;
+      if(!stageAccum[r.currentStage]) stageAccum[r.currentStage] = [];
+      stageAccum[r.currentStage].push(days);
+    });
+    
+    const stageAvgToReach = {};
+    Object.entries(stageAccum).forEach(([stage, vals]) => {
+      stageAvgToReach[stage] = Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+    });
+
+    // Build cycle time rows using actual stage durations from timestamp transitions
+    const stageCycleTimes = Object.entries(stageAvgDuration).map(([stage, duration]) => {
+      const avgToReach = stageAvgToReach[stage] || 0;
+      const count = stageDurations[stage] ? stageDurations[stage].length : 0;
+      return { stage, avgToReach, duration, count };
+    })
+    .filter(s => s.count > 0) // Only include stages with actual transition data
+    .sort((a, b) => a.avgToReach - b.avgToReach);
+
+    // Overall avg cycle = avg of DATE(po received) → DATE(last timestamp) for each row
+    // Time is intentionally ignored; only the calendar date is used for the diff.
+    const itemCycleDays = filtered
+      .map(r => dateDiff(r.poDate, r.timestamp))
+      .filter(d => d !== null && d >= 0);
+    const avgOverallCycle = itemCycleDays.length > 0
+      ? Math.round((itemCycleDays.reduce((a,b)=>a+b,0) / itemCycleDays.length) * 10) / 10
+      : null;
+
+    // ── FEATURE 7: Bottleneck Detection ─────────────────────────────────────
+    // Score = queue_size × avg_duration_in_stage
+    // vendorAvgPendingMap is built after vendorStats — see below bottleneck section.
+    // For now use stageCycleTimes only; vendor stages get corrected after vendorStats ready.
+    const bottleneckStages = Object.entries(stageCounts)
+      .filter(([s]) => !['READY','STORES','STOCK','EXSTOCK'].includes(s))
+      .map(([stage, count]) => {
+        const ct = stageCycleTimes.find(c=>c.stage===stage);
+        const duration = ct ? ct.duration : 1;
+        const score = count * duration;
+        return { stage, count, duration, score };
+      })
+      .sort((a,b) => b.score - a.score);
+    // topBottleneck is derived after vendorStats is built — see topBottleneckCorrected below
+
+    // ── FEATURE 9: Vendor Evaluation (Today vs last update timestamp) ───────
+    // Measure process aging as days since last edit/update.
+    const vendorStageData = []; // {vendor, stage, daysFromPO, pendingDays}
+    filtered.forEach(r => {
+      if(r.inhouse !== 'VENDOR' || !r.timestamp) return;
+      const daysFromPO = r.poDate ? dateDiff(r.poDate, r.timestamp) : null;
+      const pendingDays = dateDiff(r.timestamp, today);
+      if(pendingDays !== null) vendorStageData.push({
+        vendor: r.currentStage || 'UNKNOWN',
+        stage: r.currentStage,
+        daysFromPO,
+        pendingDays,
+        po: r.po,
+        sc: r.sc,
+        product: r.product,
+        timestamp: r.timestamp,
+      });
+    });
+
+    // Aggregate vendor stats
+    const vendorStats = {};
+    vendorStageData.forEach(s => {
+      if(!vendorStats[s.vendor]) {
+        vendorStats[s.vendor] = {
+          vendor: s.vendor,
+          totalPending: 0, count: 0, pendingDays: [],
+          totalFromPO: 0, fromPODays: [], items: [],
+        };
+      }
+      vendorStats[s.vendor].totalPending += s.pendingDays;
+      vendorStats[s.vendor].count++;
+      vendorStats[s.vendor].pendingDays.push(s.pendingDays);
+      if(s.daysFromPO !== null) {
+        vendorStats[s.vendor].totalFromPO += s.daysFromPO;
+        vendorStats[s.vendor].fromPODays.push(s.daysFromPO);
+      }
+      vendorStats[s.vendor].items.push(s);
+    });
+
+    // Calculate vendor averages and rank
+    // ─── FIX (Issue 2 — Unified Formula) ────────────────────────────────────
+    // ROOT CAUSE of 3d vs 4d contradiction:
+    //   Bottleneck module "Avg Days in Stage" = timestamp-to-timestamp transition
+    //     (nextTS − currentTS) across SC records — measures actual time spent in stage.
+    //   Vendor "Avg Process Time" used avgFromPO (PO date → timestamp) — measures
+    //     total cycle time to reach the stage, NOT time spent in it.
+    //   These are fundamentally different metrics so they will always differ.
+    //
+    // CORRECT FORMULA for both modules = avgPending = workingDaysBetween(timestamp, today)
+    //   This is the only metric that means the same thing in both contexts:
+    //   "How many working days has this item been sitting at this vendor stage?"
+    //   It is already calculated correctly in vendorStageData.pendingDays.
+    //
+    // The Bottleneck module shows FBV=3d because it averages timestamp transitions.
+    // The Vendor module showed 4d because it averaged PO→timestamp (daysFromPO).
+    // BOTH are now unified to use avgPending (today − timestamp, working days).
+    Object.keys(vendorStats).forEach(v => {
+      const stats = vendorStats[v];
+      // avgPending = mean of (today − each item's last timestamp), working days only
+      stats.avgPending = stats.count > 0 ? Math.round(stats.totalPending / stats.count) : 0;
+      stats.maxPending = stats.pendingDays.length > 0 ? Math.max(...stats.pendingDays) : 0;
+      stats.minPending = stats.pendingDays.length > 0 ? Math.min(...stats.pendingDays) : 0;
+      stats.stale = stats.pendingDays.filter(d => d > TARGET_DAYS).length;
+      // avgFromPO kept for reference only — NOT used as the primary display metric
+      stats.avgFromPO = stats.fromPODays.length > 0 ? Math.round(stats.totalFromPO / stats.fromPODays.length) : null;
+      
+      // SLA Tracking (>2 working days pending = violation)
+      stats.slaViolations = stats.pendingDays.filter(d => d > 2).length;
+      stats.slaViolationRate = stats.count > 0 ? Math.round((stats.slaViolations / stats.count) * 100) : 0;
+      
+      // Process Efficiency (items completed / total items attempted)
+      const completedItems = stats.items.filter(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.stage)).length;
+      stats.processEfficiency = stats.count > 0 ? Math.round((completedItems / stats.count) * 100) : 0;
+      
+      stats.avgActiveTime = stats.avgPending; // unified: both modules now show today−timestamp
+    });
+
+    // ── Vendor Process Bottleneck Detection ─────────────────────────────────
+    // Rank by: most SLA violations → highest avg pending days → highest item count
+    const vendorBottlenecks = Object.values(vendorStats)
+      .map(v => ({
+        vendor: v.vendor,
+        count: v.count,
+        avgPending: v.avgPending,
+        maxPending: v.maxPending,
+        slaViolations: v.slaViolations,
+        efficiency: v.processEfficiency,
+      }))
+      .sort((a, b) =>
+        b.slaViolations - a.slaViolations ||
+        b.avgPending    - a.avgPending    ||
+        b.count         - a.count
+      );
+
+    const topVendorBottleneck = vendorBottlenecks[0] || null;
+
+    // ── Rebuild bottleneckStages now that vendorStats is fully populated ─────
+    // FIX: vendor stages now use avgPending (today−timestamp, same as Vendor Eval)
+    // instead of stageCycleTimes transitions, so both modules show the same number.
+    {
+      const vendorAvgPendingMap = {};
+      Object.values(vendorStats).forEach(s => {
+        if (s && s.vendor) vendorAvgPendingMap[s.vendor] = s.avgPending || 0;
+      });
+      const corrected = Object.entries(stageCounts)
+        .filter(([s]) => !['READY','STORES','STOCK','EXSTOCK'].includes(s))
+        .map(([stage, count]) => {
+          let duration;
+          if (vendorAvgPendingMap[stage] !== undefined) {
+            duration = vendorAvgPendingMap[stage] || 1;
+          } else {
+            const ct = stageCycleTimes.find(c => c.stage === stage);
+            duration = ct ? ct.duration : 1;
+          }
+          return { stage, count, duration, score: count * duration };
+        })
+        .sort((a, b) => b.score - a.score);
+      // Mutate the existing bottleneckStages array in-place so topBottleneck stays in sync
+      bottleneckStages.length = 0;
+      corrected.forEach(s => bottleneckStages.push(s));
+    }
+    // Re-derive topBottleneck from the now-corrected array
+    const topBottleneckCorrected = bottleneckStages[0] || null;
+    // Old vendor time map (kept for backward compatibility with existing displays)
+    const vendorTimeMap = {};
+    filtered.forEach(r => {
+      if(r.inhouse !== 'VENDOR') return;
+      const vcode = r.currentStage || 'UNKNOWN';
+      if(!vendorTimeMap[vcode]) vendorTimeMap[vcode] = {code:vcode, count:0, items:[], days:[]};
+      vendorTimeMap[vcode].count++;
+      vendorTimeMap[vcode].items.push(r);
+      const d = dateDiff(r.timestamp, today);
+      if(d !== null) vendorTimeMap[vcode].days.push(d);
+    });
+    const vendorTotal = Object.values(vendorTimeMap).reduce((s,v)=>s+v.count,0);
+    const vendors = Object.values(vendorTimeMap)
+      .sort((a,b) => b.count - a.count)
+      .map(v => {
+        const avgDays = v.days.length > 0
+          ? Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length)
+          : null;
+        const maxDays = v.days.length > 0 ? Math.max(...v.days) : null;
+        const delayed = v.items.filter(i => {
+          const d = dateDiff(i.timestamp, today);
+          return d !== null && d > TARGET_DAYS;
+        }).length;
+        // Add new metrics from vendorStats
+        const stats = vendorStats[v.code] || {};
+        return { 
+          ...v, 
+          pct: Math.round(v.count/Math.max(vendorTotal,1)*100), 
+          avgDays, 
+          maxDays, 
+          delayed,
+          // NEW METRICS
+          avgFromPO: stats.avgFromPO || null,
+          slaViolations: stats.slaViolations || 0,
+          slaViolationRate: stats.slaViolationRate || 0,
+          processEfficiency: stats.processEfficiency || 0,
+          avgActiveTime: stats.avgActiveTime || 0,
+        };
+      });
+
+    // ── SC completion times ──────────────────────────────────────────────────
+    const scCompletion = scGroups.map(sg => {
+      const done = isSCComplete(sg.items);
+      const lastTs = getSCLastTimestamp(sg.items);
+      const days = dateDiff(sg.poDate, lastTs);
+      return {...sg, done, lastTs, days};
+    });
+
+    return {
+      totalItems, ready, stores, wip, inhouse, vendor,
+      onTime, delayed, onTimePct, totalPOs,
+      stageCounts, stageWIP, bottleneck, bottleneckStages, topBottleneck: topBottleneckCorrected,
+      vendors, vendorTotal, vendorStats, topVendorBottleneck,
+      stageCycleTimes, stageAvgToReach, avgOverallCycle,
+      scCompletion, scDailyOutput,
+      completeSets, storeSets, readySets,
+      delayedPOs, onTimePOs,
+      dailyOutput, dailyOutputArray,
+    };
+  }, [filtered, scGroups, poGroups, liveData]);
+
+  // ── UNIQUE OPTIONS ─────────────────────────────────────────────────────────
+  const uniquePOs     = useMemo(()=>[...new Set(liveData.map(r=>r.po))].sort(),[liveData]);
+  const uniqueStages  = useMemo(()=>[...new Set(liveData.map(r=>r.currentStage))].filter(Boolean).sort(),[liveData]);
+  const uniqueTypes   = useMemo(()=>[...new Set(liveData.map(r=>r.type))].filter(Boolean).sort(),[liveData]);
+  // ── NAV ───────────────────────────────────────────────────────────────────
+  const navItems = [
+    {id:'overview',label:'Overview',icon:'⬡'},
+    {id:'monthday',label:'Month / Day View',icon:'📅'},
+    {id:'database',label:'Database',icon:'🗄'},
+    {id:'production',label:'Production',icon:'⚙'},
+    {id:'wip',label:'Stage / WIP',icon:'⟳'},
+    {id:'cycleTime',label:'Cycle Time',icon:'⏱'},
+    {id:'bottleneck',label:'Bottleneck',icon:'🔴'},
+    {id:'po',label:'PO Analysis',icon:'📋'},
+    {id:'sc',label:'SC Sets',icon:'📦'},
+    {id:'vendor',label:'Vendor Eval',icon:'🏭'},
+    {id:'upload',label:'Upload Data',icon:'⬆'},
+  ];
+
+  return (
+    <div>
+      {/* HEADER */}
+      <div className="header">
+        <div className="logo-mark">VM</div>
+        <div>
+          <div className="logo-text">VELAN METROLOGY</div>
+          <div className="logo-sub">PRODUCTION COMMAND CENTER</div>
+        </div>
+        <div className="header-right">
+          {liveState?.active && (
+            <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',padding:'4px 12px',borderRadius:20,fontSize:10,fontFamily:'Share Tech Mono,monospace',color:'var(--success)'}}>
+              <span style={{width:6,height:6,background:'var(--success)',borderRadius:'50%',animation:'pulse 1.5s infinite',display:'inline-block'}}/>
+              SHEETS LIVE
+            </div>
+          )}
+          <div className="live-badge"><div className="live-dot"/><span>LIVE</span></div>
+          <div className="timestamp">{now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} &nbsp;{now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+          <button
+            onClick={() => setActiveNav('upload')}
+            style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',color:'var(--accent1)',borderRadius:8,padding:'5px 12px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}
+          >
+            📊 CONNECT SHEETS
+          </button>
+        </div>
+      </div>
+
+      <div className="main-container">
+        {/* SIDEBAR */}
+        <div className="sidebar">
+          <div className="nav-section">NAVIGATION</div>
+          {navItems.map(n=>(
+            <div key={n.id} className={`nav-item ${activeNav===n.id?'active':''}`} onClick={()=>setActiveNav(n.id)}>
+              <span className="nav-icon">{n.icon}</span>{n.label}
+            </div>
+          ))}
+        </div>
+
+        {/* CONTENT */}
+        <div className="content">
+          {/* FILTER BAR: Only show in non-database and non-upload modules */}
+          {activeNav!=="database" && activeNav!=="upload" && (
+            <div className="filter-bar">
+              <div className="filter-label">FILTERS</div>
+              <select className="filter-select" value={filters.po} onChange={e=>setFilters(f=>({...f,po:e.target.value}))}>
+                <option value="">All POs</option>
+                {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+              <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
+                <option value="">All Stages</option>
+                {uniqueStages.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
+                <option value="">All Types</option>
+                {uniqueTypes.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+              <select className="filter-select" value={filters.category} onChange={e=>setFilters(f=>({...f,category:e.target.value}))}>
+                <option value="">All Categories</option>
+                <option value="AIRPLUG">Airplug (APG/ARG)</option>
+                <option value="MASTER">Master (SRG/SP/SPG)</option>
+                <option value="ACCESSORY">Accessories</option>
+              </select>
+              <select className="filter-select" value={filters.inhouse} onChange={e=>setFilters(f=>({...f,inhouse:e.target.value}))}>
+                <option value="">Inhouse + Vendor</option>
+                <option value="INHOUSE">Inhouse Only</option>
+                <option value="VENDOR">Vendor Only</option>
+              </select>
+              <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
+              <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
+              <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} items · {liveData.length} live · {data.length} db</span>
+            </div>
+          )}
+
+          {/* PAGES */}
+          {activeNav==='overview'  && <OverviewPage kpis={kpis} data={data} filtered={filtered} liveData={liveData}/>}
+          {activeNav==='monthday'  && <MonthDayPage liveData={liveData}/>}
+          {activeNav==='database'  && <DatabasePage data={allDbData} historyRows={data} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} onUploadHistoryFile={handleHistoryFileUpload} importState={importState} onResetDB={resetDB}/>}
+          {activeNav==='production'&& <ProductionPage kpis={kpis} filtered={filtered} scGroups={scGroups}/>}
+          {activeNav==='wip'       && <WIPPage kpis={kpis} filtered={filtered}/>}
+          {activeNav==='cycleTime' && <CycleTimePage kpis={kpis} filtered={filtered}/>}
+          {activeNav==='bottleneck'&& <BottleneckPage kpis={kpis} filtered={filtered}/>}
+          {activeNav==='po'        && <POPage kpis={kpis} poGroups={poGroups} scGroups={scGroups}/>}
+          {activeNav==='sc'        && <SCPage kpis={kpis} scGroups={scGroups}/>}
+          {activeNav==='vendor'    && <VendorPage kpis={kpis} data={filtered} setActiveNav={setActiveNav}/>}
+          {activeNav==='upload'    && <UploadPage onUpload={handleFileUpload} data={liveRows.length > 0 ? liveRows : data} uploadStatus={uploadStatus} setUploadStatus={setUploadStatus} liveConfig={liveConfig} setLiveConfig={setLiveConfig} onSyncNow={syncLiveDataNow} liveState={liveState} historyConfig={historyConfig} setHistoryConfig={setHistoryConfig} onSyncHistory={syncHistorySheet} importState={importState}/>}
+        </div>
+      </div>
+    </div>
+  );
+  }
+
+// ─── OVERVIEW PAGE ─────────────────────────────────────────────────────────────
+function OverviewPage({kpis, data, filtered, liveData}) {
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [showReadyDetails, setShowReadyDetails] = useState(false);
+  const [openPOIds, setOpenPOIds] = useState({});
+  const stageChartRef = useRef();
+  const donutRef = useRef();
+  const typeChartRef = useRef();
+
+  const now = new Date();
+  const todayStr =
+    now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+
+  // Use liveData for all calculations
+
+  // 1. Daily Set: POs where all SCs are completed (READY/STORES/STOCK) and completed today
+  const poGroupsLive = {};
+  liveData.forEach(item => {
+    if(!item.po) return;
+    if(!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
+    poGroupsLive[item.po].push(item);
+  });
+  const dailySetPOs = Object.entries(poGroupsLive).filter(([po, items]) => {
+    // All SCs completed
+    const allDone = items.every(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
+    // Completed today (last updated today)
+    const completedToday = items.some(i => i.timestamp && i.timestamp.slice(0,10) === todayStr);
+    return allDone && completedToday;
+  });
+  const dailySetItems = dailySetPOs.flatMap(([_, items]) => items);
+
+  // 2. Delayed PO: not completed AND poDate > 21 working days ago
+  const delayedPOItems = liveData.filter(i => {
+    if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
+    if (!i.poDate) return false;
+    const days = workingDaysBetween(i.poDate, todayStr);
+    return days !== null && days > 21;
+  });
+
+  // 3. In Progress: not completed AND within 21 working days from PO date
+  const inProgressItems = liveData.filter(i => {
+    if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
+    const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
+    return days === null || days <= 21;
+  });
+
+  // Group items by PO for modal display
+  function groupByPO(items) {
+    const grouped = {};
+    items.forEach(item => {
+      if(!grouped[item.po]) grouped[item.po] = [];
+      grouped[item.po].push(item);
+    });
+    return Object.entries(grouped).map(([po, poItems]) => ({
+      po,
+      scs: [...new Set(poItems.map(i => i.sc))],
+      items: poItems,
+      count: poItems.length
+    }));
+  }
+
+  const dailyPOs = groupByPO(dailySetItems);
+  const delayedPOs = groupByPO(delayedPOItems);
+  const inProgressPOs = groupByPO(inProgressItems);
+
+  // FIXED: define readyPOs so the "View ready details" modal works
+  // Only include items in READY stage (not STORES, not STOCK)
+  const readyItems = liveData.filter(i => i.currentStage === 'READY');
+  const readyPOs = groupByPO(readyItems);
+
+  const stages = Object.entries(kpis.stageCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+
+  useChart(stageChartRef, {
+    type:'bar',
+    data:{
+      labels: stages.map(s=>s[0]),
+      datasets:[{
+        label:'Items',
+        data: stages.map(s=>s[1]),
+        backgroundColor: stages.map(s=>getStageColor(s[0])+'99'),
+        borderColor: stages.map(s=>getStageColor(s[0])),
+        borderWidth:1, borderRadius:4,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}}}}
+  }, [kpis]);
+
+  const inhouseCount = filtered.filter(r=>r.inhouse==='INHOUSE').length;
+  const vendorCount = filtered.filter(r=>r.inhouse==='VENDOR').length;
+  useChart(donutRef, {
+    type:'doughnut',
+    data:{
+      labels:['Inhouse','Vendor'],
+      datasets:[{data:[inhouseCount,vendorCount],backgroundColor:['#00c9ff99','#b24bff99'],borderColor:['#00c9ff','#b24bff'],borderWidth:2,hoverOffset:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7ba7cc',font:{size:11}}}}}
+  }, [kpis, filtered]);
+
+  const typeCounts = {};
+  filtered.forEach(r=>{ typeCounts[getProductCategory(r.type)]=(typeCounts[getProductCategory(r.type)]||0)+1; });
+  useChart(typeChartRef, {
+    type:'pie',
+    data:{
+      labels:Object.keys(typeCounts),
+      datasets:[{data:Object.values(typeCounts),backgroundColor:['#00c9ff99','#00ff9d99','#ffd60a99'],borderColor:['#00c9ff','#00ff9d','#ffd60a'],borderWidth:2}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7ba7cc',font:{size:11}}}}}
+  }, [filtered]);
+
+  return (
+    <div>
+      <div className="section-title">Overview <span>Dashboard</span><div className="section-line"/></div>
+
+      <div className="kpi-grid">
+        <KPICard label="TOTAL ITEMS" value={filtered.length} sub="in current view" color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard
+          label="READY / DAILY OUT"
+          value={kpis.ready}
+          sub="sets ready to dispatch"
+          color1="#00e676"
+          color2="#00c9ff"
+          badge={{text:`+${kpis.stores} to stores`,cls:'badge-blue'}}
+          action={{text:'View ready details', onClick:()=>setShowReadyDetails(true)}}
+        />
+        <KPICard label="IN PROGRESS (WIP)" value={kpis.wip} sub="items active in production" color1="#ffd60a" color2="#ff6b35"/>
+        <KPICard label="ON-TIME COMPLETION" value={`${kpis.onTimePct}%`} sub={`${kpis.onTime} of ${kpis.totalPOs} POs within 3 weeks`} color1="#00ff9d" color2="#00c9ff" badge={{text:`${kpis.delayed} delayed`,cls:'badge-red'}}/>
+        <KPICard label="DELAYED POs" value={kpis.delayed} sub="exceeded 21-day target" color1="#ff3d5a" color2="#ff6b35"/>
+        <KPICard label="INHOUSE WORKLOAD" value={`${Math.round(kpis.inhouse/Math.max(filtered.length,1)*100)}%`} sub={`${kpis.inhouse} inhouse · ${kpis.vendor} vendor`} color1="#00c9ff" color2="#b24bff"/>
+      </div>
+
+      {/* FEATURE 1: Overview Category Cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
+        {[
+          {id:'daily',label:'DAILY SET',value:dailySetItems.length,sub:'items created today',color1:'#00c9ff',color2:'#0fa8e0',data:dailyPOs},
+          {id:'delayed',label:'DELAYED SC',value:delayedPOItems.length,sub:'items in delayed POs',color1:'#ff3d5a',color2:'#ff6b35',data:delayedPOs},
+          {id:'inprogress',label:'INPROGRESS',value:inProgressItems.length,sub:'items in production',color1:'#ffd60a',color2:'#b24bff',data:inProgressPOs},
+        ].map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => { setSelectedCategory(cat.id); setOpenPOIds({}); }}
+            style={{
+              background:`linear-gradient(135deg,${cat.color1}15,${cat.color2}08)`,
+              border:`1px solid ${cat.color1}40`,
+              borderRadius:10,
+              padding:16,
+              cursor:'pointer',
+              textAlign:'left',
+              transition:'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = cat.color1 + '80';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = cat.color1 + '40';
+            }}
+          >
+            <div style={{fontSize:12,color:'var(--text-muted)',letterSpacing:1,marginBottom:8}}>{cat.label}</div>
+            <div style={{fontFamily:'Rajdhani',fontSize:32,fontWeight:700,color:cat.color1,marginBottom:6}}>{cat.value}</div>
+            <div style={{fontSize:11,color:'var(--text-secondary)'}}>{cat.sub}</div>
+            <div style={{fontSize:10,color:cat.color1,marginTop:8}}>CLICK TO VIEW ▸</div>
+          </button>
+        ))}
+      </div>
+
+      {/* FEATURE 1: Category Modal */}
+      {selectedCategory && (
+        <div className="table-card" style={{marginBottom:20,border:'2px solid var(--accent1)',boxShadow:'0 0 30px rgba(0,201,255,0.2)'}}>
+          <div className="table-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',backgroundColor:'rgba(0,201,255,0.05)'}}>
+            <div>
+              <div className="chart-title" style={{color:'var(--accent1)'}}>
+                {selectedCategory==='daily'?'📅 DAILY SET':selectedCategory==='delayed'?'⚠️ DELAYED POs':'⏳ INPROGRESS'}
+              </div>
+              <div className="chart-sub">
+                {selectedCategory==='daily'?'Items created today':selectedCategory==='delayed'?'Items with >21 days pending':'All items in production'}
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedCategory(null)}
+              style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}
+            >
+              CLOSE
+            </button>
+          </div>
+          <div style={{padding:'16px 18px',maxHeight:'500px',overflowY:'auto'}}>
+            {(selectedCategory==='daily'?dailyPOs:selectedCategory==='delayed'?delayedPOs:inProgressPOs).map((poGroup,poIdx) => (
+              <div key={poIdx} style={{marginBottom:16,border:'1px solid var(--border)',borderRadius:8,overflow:'hidden'}}>
+                <div style={{background:'rgba(26,58,92,0.5)',padding:'12px 14px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}
+                  onClick={() => setOpenPOIds(prev => ({...prev, [poIdx]: !prev[poIdx]}))}
+                >
+                  <div>
+                    <div style={{fontFamily:'Share Tech Mono',fontSize:11,fontWeight:700,color:'var(--accent1)'}}>{poGroup.po}</div>
+                    <div style={{fontSize:10,color:'var(--text-muted)',marginTop:4}}>{poGroup.count} items · {poGroup.scs.length} SCs</div>
+                  </div>
+                  <div style={{fontSize:12}}>{openPOIds[poIdx] ? '▲' : '▼'}</div>
+                </div>
+                {openPOIds[poIdx] && (
+                  <div style={{padding:'12px 14px',borderTop:'1px solid var(--border)',background:'rgba(0,0,0,0.2)'}}>
+                    <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8}}>SCs in this PO: {poGroup.scs.join(', ')}</div>
+                    <div style={{fontSize:10,color:'var(--text-muted)'}}>
+                      {poGroup.items.map((i,idx) => (
+                        <div key={idx} style={{padding:'6px 0',borderBottom:idx<poGroup.items.length-1?'1px solid rgba(26,58,92,0.4)':'none'}}>
+                          <span style={{color:'var(--accent1)',fontFamily:'Share Tech Mono',fontSize:9}}>{i.po}</span>
+                          {' · '}
+                          <span style={{fontSize:9}}>{i.product?.substring(0,40)}</span>
+                          {' · '}
+                          <span style={{color:'var(--text-muted)',fontSize:9}}>{i.currentStage}</span>
+                          {' · '}
+                          {(() => {
+                            const poAge = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
+                            return (
+                              <span style={{color:poAge>21?'var(--danger)':poAge>7?'var(--warning)':'var(--success)',fontSize:9,fontWeight:700}}>
+                                {poAge != null ? `${poAge}d` : '—'}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showReadyDetails && (
+        <div className="table-card" style={{marginBottom:20,border:'2px solid var(--success)',boxShadow:'0 0 30px rgba(0,230,118,0.2)'}}>
+          <div className="table-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',backgroundColor:'rgba(0,230,118,0.06)'}}>
+            <div>
+              <div className="chart-title" style={{color:'var(--success)'}}>
+                ✅ READY / DAILY OUT DETAILS
+              </div>
+              <div className="chart-sub">
+                PO and SC numbers ready to dispatch with item details
+              </div>
+            </div>
+            <button
+              onClick={() => setShowReadyDetails(false)}
+              style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}
+            >
+              CLOSE
+            </button>
+          </div>
+          <div style={{padding:'16px 18px',maxHeight:'500px',overflowY:'auto'}}>
+            {readyPOs.length === 0 ? (
+              <div style={{color:'var(--text-secondary)',fontSize:12}}>No ready items found for dispatch.</div>
+            ) : readyPOs.map((poGroup,poIdx) => (
+              <div key={poIdx} style={{marginBottom:16,border:'1px solid var(--border)',borderRadius:8,overflow:'hidden'}}>
+                <div style={{background:'rgba(0,230,118,0.08)',padding:'12px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontFamily:'Share Tech Mono',fontSize:11,fontWeight:700,color:'var(--success)'}}>{poGroup.po}</div>
+                    <div style={{fontSize:10,color:'var(--text-muted)',marginTop:4}}>SCs: {poGroup.scs.join(', ')}</div>
+                    <div style={{fontSize:10,color:'var(--text-muted)'}}>{poGroup.count} ready items</div>
+                  </div>
+                </div>
+                <div style={{padding:'12px 14px',borderTop:'1px solid var(--border)',background:'rgba(0,0,0,0.12)'}}>
+                  {poGroup.items.map((item, idx) => (
+                    <div key={idx} style={{padding:'8px 0',borderBottom:idx < poGroup.items.length - 1 ? '1px solid rgba(26,58,92,0.4)' : 'none'}}>
+                      <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
+                        <span style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--accent1)'}}>{item.sc}</span>
+                        <span style={{fontSize:10,color:'var(--text-primary)'}}>{item.product}</span>
+                        <span style={{fontSize:10,color:'var(--text-muted)'}}>Stage: <strong>{item.currentStage}</strong></span>
+                        <span style={{fontSize:10,color:'var(--text-muted)'}}>Last update: {fmtTs(item.timestamp)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-title">Stage-Wise Item Distribution</div>
+          <div className="chart-sub">ITEMS PER PRODUCTION STAGE</div>
+          <div className="chart-wrap"><canvas ref={stageChartRef}/></div>
+        </div>
+        <div className="chart-card" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <div>
+            <div className="chart-title">Inhouse vs Vendor</div>
+            <div className="chart-sub">WORKLOAD SPLIT</div>
+            <div className="chart-wrap"><canvas ref={donutRef}/></div>
+          </div>
+          <div>
+            <div className="chart-title">Product Category</div>
+            <div className="chart-sub">AIRPLUG / MASTER / ACC</div>
+            <div className="chart-wrap"><canvas ref={typeChartRef}/></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottleneck quick view */}
+      <div className="chart-card" style={{marginBottom:20}}>
+        <div className="chart-title">⚠ Bottleneck POs (Highest Lead Time)</div>
+        <div className="chart-sub">ORDERED BY DAYS — TARGET: 21 DAYS</div>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:8}}>
+          {kpis.bottleneck.filter(b=>!b.done).slice(0,10).map(b=>(
+            <div key={b.po} style={{background:'var(--bg-secondary)',border:`1px solid ${(b.days||0)>21?'var(--danger)':'var(--border)'}`,borderRadius:8,padding:'10px 14px',minWidth:140}}>
+              <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-muted)'}}>{b.po}</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:22,fontWeight:700,color:(b.days||0)>21?'var(--danger)':'var(--success)'}}>{b.days??'—'}<span style={{fontSize:12,color:'var(--text-muted)'}}> days</span></div>
+              <div style={{fontSize:10,color:'var(--text-muted)'}}>⏳ In progress</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PRODUCTION PAGE ───────────────────────────────────────────────────────────
+function ProductionPage({kpis, filtered, scGroups}) {
+  const dailyRef = useRef();
+  const setsRef  = useRef();
+  const catRef   = useRef();
+  const [tab, setTab] = useState('sets'); // 'sets' | 'items'
+
+  // Daily items chart (existing)
+  const byDate = {};
+  filtered.forEach(r=>{
+    if(!r.timestamp) return;
+    const d = r.timestamp.substring(0,10);
+    if(!byDate[d]) byDate[d]={date:d,ready:0,stores:0,wip:0};
+    if(r.currentStage==='READY') byDate[d].ready++;
+    else if(r.currentStage==='STORES') byDate[d].stores++;
+    else byDate[d].wip++;
+  });
+  const dateSeries = Object.keys(byDate).sort().map(d=>byDate[d]);
+
+  useChart(dailyRef, {
+    type:'bar',
+    data:{
+      labels: dateSeries.map(d=>d.date.substring(5)),
+      datasets:[
+        {label:'Ready Items',data:dateSeries.map(d=>d.ready),backgroundColor:'#00e67699',borderColor:'#00e676',borderWidth:1,borderRadius:3},
+        {label:'To Stores',  data:dateSeries.map(d=>d.stores),backgroundColor:'#00c9ff99',borderColor:'#00c9ff',borderWidth:1,borderRadius:3},
+        {label:'WIP',        data:dateSeries.map(d=>d.wip),backgroundColor:'#ffd60a44',borderColor:'#ffd60a',borderWidth:1,borderRadius:3},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},y:{stacked:true,ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}}},plugins:{legend:{labels:{color:'#7ba7cc'}}}}
+  }, [filtered]);
+
+  // SC Sets daily output chart
+  const scDaily = kpis.scDailyOutput;
+  useChart(setsRef, {
+    type:'bar',
+    data:{
+      labels: scDaily.map(d=>d.date.substring(5)),
+      datasets:[
+        {label:'Sets → READY',  data:scDaily.map(d=>d.readySets),backgroundColor:'#00e67699',borderColor:'#00e676',borderWidth:1,borderRadius:4},
+        {label:'Sets → STORES', data:scDaily.map(d=>d.storeSets),backgroundColor:'#00c9ff99',borderColor:'#00c9ff',borderWidth:1,borderRadius:4},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},y:{stacked:true,ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'},title:{display:true,text:'SC Sets',color:'#7ba7cc'}}},plugins:{legend:{labels:{color:'#7ba7cc'}}}}
+  }, [kpis]);
+
+  const cats = {AIRPLUG:0,MASTER:0,ACCESSORY:0};
+  filtered.forEach(r=>{ cats[getProductCategory(r.type)]++; });
+  useChart(catRef, {
+    type:'doughnut',
+    data:{labels:Object.keys(cats),datasets:[{data:Object.values(cats),backgroundColor:['#00c9ff88','#00ff9d88','#ffd60a88'],borderColor:['#00c9ff','#00ff9d','#ffd60a'],borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7ba7cc',font:{size:11}}}}}
+  }, [filtered]);
+
+  // SC sets ready/stores grouped
+  const readySets   = kpis.readySets;
+  const storeSets   = kpis.storeSets;
+  const displaySets = tab==='sets' ? (readySets.concat(storeSets)) : null;
+  const readyItems  = filtered.filter(r=>r.currentStage==='READY');
+
+  return (
+    <div>
+      <div className="section-title">Production <span>Output</span><div className="section-line"/></div>
+      <div className="kpi-grid">
+        <KPICard label="COMPLETE SC SETS" value={readySets.length} sub="full sets ready to dispatch" color1="#00e676" color2="#00c9ff" badge={{text:'READY',cls:'badge-green'}}/>
+        <KPICard label="SETS → STORES" value={storeSets.length} sub="full sets moved to stores" color1="#00c9ff" color2="#0fa8e0" badge={{text:'STORES',cls:'badge-blue'}}/>
+        <KPICard label="READY ITEMS" value={kpis.ready} sub="individual items ready" color1="#00e676" color2="#0fa8e0"/>
+        <KPICard label="ITEMS → STORES" value={kpis.stores} sub="individual items in stores" color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard label="AIRPLUG OUTPUT" value={filtered.filter(r=>AIRPLUG_TYPES.includes(r.type)&&['READY','STORES'].includes(r.currentStage)).length} sub="APG/ARG items done" color1="#00c9ff" color2="#b24bff"/>
+        <KPICard label="MASTER OUTPUT" value={filtered.filter(r=>['SPG','SRG','SP'].includes(r.type)&&['READY','STORES'].includes(r.currentStage)).length} sub="SRG/SP items done" color1="#00ff9d" color2="#00c9ff"/>
+      </div>
+
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-title">📦 Daily SC Sets Output (Grouped)</div>
+          <div className="chart-sub">COMPLETE SETS REACHING READY / STORES EACH DAY</div>
+          <div className="chart-wrap-lg"><canvas ref={setsRef}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-title">📊 Daily Items Output</div>
+          <div className="chart-sub">INDIVIDUAL ITEMS BY STATUS PER DATE</div>
+          <div className="chart-wrap-lg"><canvas ref={dailyRef}/></div>
+        </div>
+      </div>
+
+      <div className="chart-grid" style={{gridTemplateColumns:'1fr 2fr'}}>
+        <div className="chart-card">
+          <div className="chart-title">Product Mix</div>
+          <div className="chart-sub">AIRPLUG / MASTER / ACCESSORY</div>
+          <div className="chart-wrap"><canvas ref={catRef}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-title">SC Sets Daily — Detail</div>
+          <div className="chart-sub">SETS COMPLETED PER DAY</div>
+          <div style={{overflowX:'auto',maxHeight:220,overflowY:'auto',marginTop:8}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead><tr><th style={{padding:'8px 10px',background:'var(--bg-secondary)',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10,borderBottom:'1px solid var(--border)',position:'sticky',top:0}}>DATE</th><th style={{padding:'8px 10px',background:'var(--bg-secondary)',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10,borderBottom:'1px solid var(--border)',position:'sticky',top:0}}>READY SETS</th><th style={{padding:'8px 10px',background:'var(--bg-secondary)',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10,borderBottom:'1px solid var(--border)',position:'sticky',top:0}}>STORE SETS</th><th style={{padding:'8px 10px',background:'var(--bg-secondary)',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10,borderBottom:'1px solid var(--border)',position:'sticky',top:0}}>TOTAL</th></tr></thead>
+              <tbody>{scDaily.map((d,i)=>(
+                <tr key={i} style={{borderBottom:'1px solid rgba(26,58,92,0.4)'}}>
+                  <td style={{padding:'7px 10px',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--accent1)'}}>{d.date}</td>
+                  <td style={{padding:'7px 10px',color:'var(--success)',fontWeight:700}}>{d.readySets||0}</td>
+                  <td style={{padding:'7px 10px',color:'var(--accent1)',fontWeight:700}}>{d.storeSets||0}</td>
+                  <td style={{padding:'7px 10px',color:'var(--text-primary)',fontWeight:700,fontFamily:'Rajdhani',fontSize:16}}>{(d.readySets||0)+(d.storeSets||0)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* SC Sets table */}
+      <div className="tabs">
+        {[['sets','SC Sets (Complete)'],['items','Ready Items']].map(([id,label])=>(
+          <div key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</div>
+        ))}
+      </div>
+      {tab==='sets' && (
+        <div className="table-card">
+          <div className="table-header"><div className="chart-title">✅ Complete SC Sets ({displaySets.length}) — Ready + Stores</div></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>SC NO</th><th>PO</th><th>PRODUCTS IN SET</th><th>LAST TIMESTAMP</th><th>DAYS</th><th>STATUS</th></tr></thead>
+              <tbody>{displaySets.map((sg,i)=>{
+                const hasStore = sg.items.some(i=>i.currentStage==='STORES');
+                const lastTs = getSCLastTimestamp(sg.items);
+                const days = daysBetween(sg.poDate, lastTs);
+                return (
+                  <tr key={i}>
+                    <td className="mono text-accent fw7">{sg.sc}</td>
+                    <td style={{fontSize:11}}>{sg.po}</td>
+                    <td style={{fontSize:10,color:'var(--text-muted)',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sg.items.map(i=>i.product).join(' · ')}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(lastTs)}</td>
+                    <td><span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:17,color:(days||0)>21?'var(--danger)':'var(--success)'}}>{days??'—'}</span></td>
+                    <td><span className={`status-pill ${hasStore?'s-stores':'s-ready'}`}>{hasStore?'STORES':'READY'}</span></td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {tab==='items' && (
+        <div className="table-card">
+          <div className="table-header"><div className="chart-title">✅ Ready Items ({readyItems.length})</div></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>SC</th><th>PO</th><th>PRODUCT</th><th>TYPE</th><th>CATEGORY</th><th>INHOUSE</th><th>TIMESTAMP</th></tr></thead>
+              <tbody>{readyItems.slice(0,150).map((r,i)=>(
+                <tr key={i}><td className="mono text-accent">{r.sc||'—'}</td><td>{r.po}</td><td>{r.product||'—'}</td>
+                  <td><span className="status-pill badge-blue">{r.type||'—'}</span></td>
+                  <td><span className="status-pill badge-green">{getProductCategory(r.type)}</span></td>
+                  <td>{r.inhouse}</td><td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WIP PAGE ──────────────────────────────────────────────────────────────────
+function WIPPage({kpis, filtered}) {
+  const [expandedItem, setExpandedItem] = useState(null);
+  const wipRef = useRef();
+  const stages = Object.entries(kpis.stageCounts).sort((a,b)=>b[1]-a[1]);
+
+  useChart(wipRef, {
+    type:'bar',
+    data:{
+      labels:stages.map(s=>s[0]),
+      datasets:[{label:'Items',data:stages.map(s=>s[1]),backgroundColor:stages.map(s=>getStageColor(s[0])+'88'),borderColor:stages.map(s=>getStageColor(s[0])),borderWidth:1,borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}},y:{ticks:{color:'#7ba7cc',font:{size:10}},grid:{display:false}}}}
+  }, [kpis]);
+
+  const stageEntries = stages.map(([stage,count])=>({stage,count}));
+  const maxStageCount = stageEntries.length > 0 ? Math.max(...stageEntries.map(s=>s.count)) : 1;
+
+  return (
+    <div>
+      <div className="section-title">Stage / WIP <span>Analysis</span><div className="section-line"/></div>
+      <div className="kpi-grid">
+        {stageEntries.map(s => (
+          <KPICard
+            key={s.stage}
+            label={s.stage}
+            value={s.count}
+            sub={`items in ${s.stage}`}
+            color1={getStageColor(s.stage)}
+            color2="#7ba7cc"
+          />
+        ))}
+      </div>
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-title">Items per Stage (Horizontal)</div>
+          <div className="chart-sub">ALL STAGES SORTED BY QUEUE SIZE</div>
+          <div className="chart-wrap-lg"><canvas ref={wipRef}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-title">Stage Summary</div>
+          <div className="chart-sub">INDIVIDUAL STAGES ONLY — NO COMBINED GROUPS</div>
+          <div className="vendor-bar-wrap" style={{marginTop:8}}>
+            {stageEntries.map(s=>(
+              <div className="vendor-row" key={s.stage}>
+                <div className="vendor-name">{s.stage}</div>
+                <div className="vendor-bar-bg">
+                  <div className="vendor-bar-fill" style={{width:`${Math.min(100,(s.count/maxStageCount)*100)}%`,background:'linear-gradient(90deg,#00c9ff,#b24bff)'}}/>
+                </div>
+                <div className="vendor-val">{s.count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="table-card">
+        <div className="table-header"><div className="chart-title">All Items by Stage — Separate Individual Items</div></div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>SC</th><th>PO</th><th>PRODUCT</th><th>TYPE</th><th>STAGE</th><th>STATUS 1</th><th>INHOUSE</th><th>TIMESTAMP</th><th>DETAILS</th></tr></thead>
+            <tbody>{filtered.slice(0,200).map((r,i)=>(
+              <React.Fragment key={i}>
+                <tr style={{cursor:'pointer',backgroundColor:expandedItem===i?'rgba(0,201,255,0.08)':'transparent'}}>
+                  <td className="mono text-accent">{r.sc||'—'}</td>
+                  <td style={{fontSize:11}}>{r.po}</td>
+                  <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                  <td><span className="status-pill badge-blue">{r.type}</span></td>
+                  <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage}</span></td>
+                  <td style={{fontSize:10,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.status1}</td>
+                  <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                  <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
+                  <td>
+                    <button onClick={() => setExpandedItem(expandedItem===i?null:i)} style={{background:'none',border:'none',color:'var(--accent1)',cursor:'pointer',fontSize:11}}>
+                      {expandedItem===i?'▼':'▶'}
+                    </button>
+                  </td>
+                </tr>
+                {expandedItem===i && (
+                  <tr style={{backgroundColor:'rgba(0,201,255,0.04)',borderBottom:'2px solid var(--border)'}}>
+                    <td colSpan="9" style={{padding:'14px'}}>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+                        <div>
+                          <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>PO Number</div>
+                          <div style={{fontFamily:'Share Tech Mono',fontSize:13,fontWeight:700,color:'var(--accent1)'}}>{r.po}</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>SC Number</div>
+                          <div style={{fontFamily:'Share Tech Mono',fontSize:13,fontWeight:700,color:'var(--accent1)'}}>{r.sc||'—'}</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>Current Stage</div>
+                          <div style={{fontSize:12,fontWeight:600,color:getStageColor(r.currentStage)}}>{r.currentStage}</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>Days Pending</div>
+                          <div style={{fontSize:13,fontWeight:700,color:(r.pendingDays||0)>2?'var(--danger)':'var(--success)'}}>
+                            {r.pendingDays!=null?r.pendingDays:'-'}d
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CYCLE TIME PAGE ────────────────────────────────────────────────────────────
+function CycleTimePage({kpis, filtered}) {
+  const ctBarRef  = useRef();
+  const ctLineRef = useRef();
+
+  // FEATURE 3: Remove STORE, reorder with HOV first, convert to integers
+  const cts = kpis.stageCycleTimes
+    .filter(s => !['STOCK','RM','STORE','STORES'].includes(s.stage))
+    .sort((a, b) => {
+      const stageOrder = ['HOV','BLV','HCV','FBV','HTV','SDV','LATHE','M1','FB','HT','SZ','BLK','CG','SG','SD','HO','CA','WC','VA','QC','DCPLI','READY'];
+      const aIdx = stageOrder.indexOf(a.stage);
+      const bIdx = stageOrder.indexOf(b.stage);
+      return (aIdx >= 0 ? aIdx : 1000) - (bIdx >= 0 ? bIdx : 1000);
+    })
+    .map(s => ({...s, duration: Math.round(s.duration), avgToReach: Math.round(s.avgToReach)}));
+  
+  const maxDur = Math.max(...cts.map(c=>c.duration), 1);
+
+  useChart(ctBarRef, {
+    type:'bar',
+    data:{
+      labels: cts.map(c=>c.stage),
+      datasets:[
+        {
+          label:'Avg Duration (days)',
+          data: cts.map(c=>c.duration),
+          backgroundColor: cts.map(c=>{
+            if(c.duration >= maxDur*0.7) return '#ff3d5a99';
+            if(c.duration >= maxDur*0.4) return '#ffd60a99';
+            return '#00c9ff99';
+          }),
+          borderColor: cts.map(c=>{
+            if(c.duration >= maxDur*0.7) return '#ff3d5a';
+            if(c.duration >= maxDur*0.4) return '#ffd60a';
+            return '#00c9ff';
+          }),
+          borderWidth:1, borderRadius:4,
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y} days avg in stage`}}},
+      scales:{
+        x:{ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},
+        y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'},title:{display:true,text:'Days in Stage',color:'#7ba7cc'}}
+      }
+    }
+  }, [kpis]);
+
+  // Cumulative flow line chart
+  const flowStages = [...cts].sort((a,b)=>a.avgToReach-b.avgToReach);
+  useChart(ctLineRef, {
+    type:'line',
+    data:{
+      labels: flowStages.map(c=>c.stage),
+      datasets:[{
+        label:'Avg Days to Reach Stage',
+        data: flowStages.map(c=>c.avgToReach),
+        borderColor:'#00c9ff', backgroundColor:'rgba(0,201,255,0.1)',
+        borderWidth:2, pointRadius:5, pointBackgroundColor:'#00c9ff',
+        tension:0.3, fill:true,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#7ba7cc'}},tooltip:{callbacks:{label:c=>`${c.parsed.y} days from PO date`}}},
+      scales:{
+        x:{ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},
+        y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'},title:{display:true,text:'Days from PO Date',color:'#7ba7cc'}}
+      }
+    }
+  }, [kpis]);
+
+  const totalAvgCycle = kpis.avgOverallCycle;
+  const slowestStage = cts.length>0 ? [...cts].reduce((a,b)=>b.duration>a.duration?b:a) : {stage:'—',duration:0};
+  const fastestStage = cts.filter(c=>c.duration>0).length>0 ? cts.filter(c=>c.duration>0).reduce((a,b)=>b.duration<a.duration?b:a) : {stage:'—',duration:0};
+
+  return (
+    <div>
+      <div className="section-title">⏱ Cycle Time <span>per Stage</span><div className="section-line"/></div>
+      <div style={{background:'rgba(0,201,255,0.06)',border:'1px solid rgba(0,201,255,0.2)',borderRadius:8,padding:'10px 16px',marginBottom:16,fontSize:11,color:'var(--text-secondary)',fontFamily:'Share Tech Mono,monospace'}}>
+        ℹ FORMULA: Avg days in stage = Mean of (Next Stage Timestamp − Current Stage Timestamp) for each item SC transition. Time component ignored — date only. This measures actual time spent in each stage from one timestamp to the next.
+      </div>
+
+      <div className="kpi-grid">
+        <KPICard label="AVG OVERALL CYCLE" value={totalAvgCycle!=null?`${totalAvgCycle} days`:'—'} sub="avg from PO date to last timestamp date · date only" color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard label="SLOWEST STAGE" value={slowestStage?.stage||'—'} sub={`~${slowestStage?.duration||0} days avg at stage`} color1="#ff3d5a" color2="#ff6b35" badge={{text:'BOTTLENECK',cls:'badge-red'}}/>
+        <KPICard label="FASTEST STAGE" value={fastestStage?.stage||'—'} sub={`~${fastestStage?.duration||0} days avg at stage`} color1="#00e676" color2="#00c9ff" badge={{text:'QUICK',cls:'badge-green'}}/>
+        <KPICard label="STAGES TRACKED" value={cts.length} sub="stages with cycle data" color1="#ffd60a" color2="#b24bff"/>
+        <KPICard label="TARGET" value="21 days" sub="total PO cycle target" color1="#ffd60a" color2="#ff6b35"/>
+        <KPICard label="ITEMS WITH DATA" value={filtered.filter(r=>r.timestamp&&r.poDate).length} sub="items with both dates" color1="#b24bff" color2="#00c9ff"/>
+      </div>
+
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-title">⏱ Avg Duration at Each Stage</div>
+          <div className="chart-sub">DATE-ONLY CALC · RED=SLOW · YELLOW=MODERATE · GREEN=FAST</div>
+          <div className="chart-wrap-lg"><canvas ref={ctBarRef}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-title">📈 Cumulative Days to Reach Stage</div>
+          <div className="chart-sub">AVG DAYS FROM PO RECEIVED DATE → EACH STAGE</div>
+          <div className="chart-wrap-lg"><canvas ref={ctLineRef}/></div>
+        </div>
+      </div>
+
+      <div className="table-card">
+        <div className="table-header">
+          <div className="chart-title">Stage Cycle Time — Full Detail</div>
+          <div style={{fontSize:10,fontFamily:'Share Tech Mono',color:'var(--text-muted)'}}>AVG DURATION IN STAGE = Mean of (Next Timestamp − Current Timestamp) for each item transition from one stage to next</div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>STAGE</th>
+                <th>AVG DAYS TO REACH</th>
+                <th>AVG DURATION IN STAGE</th>
+                <th>ITEMS COUNTED</th>
+                <th>VS 21-DAY TARGET</th>
+                <th>RATING</th>
+                <th>BAR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...cts].sort((a,b)=>a.avgToReach-b.avgToReach).map((c,i)=>{
+                const pct = Math.min(100, Math.round(c.duration/maxDur*100));
+                const color = pct>=70?'var(--danger)':pct>=40?'var(--warning)':'var(--success)';
+                const rating = pct>=70?'🔴 SLOW':pct>=40?'🟡 MODERATE':'🟢 FAST';
+                const vsTarget = c.avgToReach > TARGET_DAYS ? `+${c.avgToReach-TARGET_DAYS}d over` : `-${TARGET_DAYS-c.avgToReach}d under`;
+                const vsColor = c.avgToReach > TARGET_DAYS ? 'var(--danger)' : 'var(--success)';
+                return (
+                  <tr key={i}>
+                    <td><span className="status-pill" style={{background:getStageColor(c.stage)+'22',color:getStageColor(c.stage)}}>{c.stage}</span></td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:17,color:'var(--accent1)'}}>{Math.round(c.avgToReach)}d</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:17,color}}>{Math.round(c.duration)}d</td>
+                    <td style={{color:'var(--text-muted)'}}>{c.count}</td>
+                    <td style={{color:vsColor,fontWeight:700,fontSize:12}}>{vsTarget}</td>
+                    <td style={{fontSize:11}}>{rating}</td>
+                    <td style={{minWidth:100}}>
+                      <div style={{height:8,background:'rgba(255,255,255,0.05)',borderRadius:4,overflow:'hidden'}}>
+                        <div style={{width:`${pct}%`,height:'100%',background:color,borderRadius:4}}/>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BOTTLENECK PAGE ────────────────────────────────────────────────────────────
+function BottleneckPage({kpis, filtered}) {
+  const scoreRef   = useRef();
+  const queueRef   = useRef();
+  const [timeSearch, setTimeSearch] = useState('');
+
+  const stages = kpis.bottleneckStages.filter(s=>s.count>0);
+  const maxScore = stages.length>0 ? stages[0].score : 1;
+
+  // ── EXPORT HELPERS — export "Items Currently Stuck" table only ─────────────
+  function getStuckRows() {
+    if (!top) return [];
+    const today = new Date().toISOString().substring(0,10);
+    return filtered
+      .filter(r => r.currentStage === top.stage)
+      .map(r => {
+        const days = Math.ceil(daysBetween(r.timestamp?.substring(0,10), today) || 0);
+        return {
+          SC: r.sc || '—',
+          PO: r.po || '—',
+          Product: r.product || '—',
+          Type: r.type || '—',
+          'Status 1': r.status1 || '',
+          'Days Stuck': days,
+          Inhouse: r.inhouse || '',
+          Timestamp: r.timestamp?.substring(0,10) || '',
+        };
+      });
+  }
+
+  function exportExcel() {
+    const rows = getStuckRows();
+    if (!rows.length) return;
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:10},{wch:24},{wch:36},{wch:10},{wch:28},{wch:12},{wch:10},{wch:14}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `Stuck_${top?.stage||'items'}`);
+    const d = new Date();
+    XLSX.writeFile(wb, `stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`);
+  }
+
+  function exportCSV() {
+    const rows = getStuckRows();
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => JSON.stringify(r[h]??'')).join(','))].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    a.href = url;
+    a.download = `stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportJSON() {
+    const rows = getStuckRows();
+    const blob = new Blob([JSON.stringify({stage: top?.stage, exportDate: new Date().toISOString(), items: rows}, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    a.href = url;
+    a.download = `stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    const rows = getStuckRows();
+    if (!rows.length) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({orientation:'landscape'});
+    const d = new Date();
+    doc.setFontSize(14); doc.setTextColor(40);
+    doc.text(`Items Stuck in ${top?.stage||'—'}`, 14, 14);
+    doc.setFontSize(9); doc.setTextColor(120);
+    doc.text(`Velan Metrology · ${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()} · ${rows.length} items`, 14, 20);
+    doc.autoTable({
+      startY: 26,
+      head:[['SC','PO','Product','Type','Status 1','Days','Inhouse','Timestamp']],
+      body: rows.map(r=>[r.SC, r.PO, r.Product, r.Type, r['Status 1'], r['Days Stuck'], r.Inhouse, r.Timestamp]),
+      styles:{fontSize:9},
+      headStyles:{fillColor:[13,31,53]},
+      alternateRowStyles:{fillColor:[240,245,255]},
+      columnStyles:{5:{halign:'center'}, 6:{halign:'center'}},
+    });
+    doc.save(`stuck_${top?.stage||'items'}_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
+  }
+
+  useChart(scoreRef, {
+    type:'bar',
+    data:{
+      labels: stages.slice(0,12).map(s=>s.stage),
+      datasets:[{
+        label:'Bottleneck Score (Queue × Duration)',
+        data: stages.slice(0,12).map(s=>Math.round(s.score*10)/10),
+        backgroundColor: stages.slice(0,12).map((s,i)=>i===0?'#ff3d5a99':i<3?'#ffd60a99':'#00c9ff44'),
+        borderColor: stages.slice(0,12).map((s,i)=>i===0?'#ff3d5a':i<3?'#ffd60a':'#00c9ff'),
+        borderWidth:1, borderRadius:4,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Score: ${c.parsed.y} (items × avg days)`}}},
+      scales:{
+        x:{ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},
+        y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'},title:{display:true,text:'Bottleneck Score',color:'#7ba7cc'}}
+      }
+    }
+  }, [kpis]);
+
+  useChart(queueRef, {
+    type:'bar',
+    data:{
+      labels: stages.slice(0,12).map(s=>s.stage),
+      datasets:[
+        {label:'Queue (items)',data:stages.slice(0,12).map(s=>s.count),backgroundColor:'#ffd60a99',borderColor:'#ffd60a',borderWidth:1,borderRadius:4},
+        {label:'Avg Days',data:stages.slice(0,12).map(s=>Math.round(s.duration*10)/10),backgroundColor:'#b24bff99',borderColor:'#b24bff',borderWidth:1,borderRadius:4,yAxisID:'y2'},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#7ba7cc'}}},
+      scales:{
+        x:{ticks:{color:'#7ba7cc',font:{size:10}},grid:{color:'rgba(26,58,92,0.3)'}},
+        y:{ticks:{color:'#ffd60a'},grid:{color:'rgba(26,58,92,0.2)'},title:{display:true,text:'Queue (items)',color:'#ffd60a'}},
+        y2:{position:'right',ticks:{color:'#b24bff'},grid:{display:false},title:{display:true,text:'Avg Days',color:'#b24bff'}},
+      }
+    }
+  }, [kpis]);
+
+  const top = kpis.topBottleneck;
+
+  return (
+    <div>
+      <div className="section-title">🔴 Bottleneck <span>Detection</span><div className="section-line"/></div>
+
+      {top && (
+        <div style={{background:'rgba(255,61,90,0.1)',border:'2px solid rgba(255,61,90,0.5)',borderRadius:12,padding:'18px 22px',marginBottom:20,display:'flex',alignItems:'center',gap:24}}>
+          <div style={{fontSize:40}}>🚨</div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:'Share Tech Mono',fontSize:11,color:'var(--danger)',letterSpacing:2,marginBottom:4}}>TOP BOTTLENECK STAGE DETECTED</div>
+            <div style={{fontFamily:'Rajdhani',fontWeight:800,fontSize:32,color:'var(--danger)'}}>{top.stage}</div>
+            <div style={{color:'var(--text-secondary)',fontSize:13,marginTop:4}}>
+              {top.count} items queued · ~{Math.round(top.duration*10)/10} days avg duration · Score: {Math.round(top.score*10)/10}
+            </div>
+          </div>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-muted)'}}>BOTTLENECK SCORE</div>
+            <div style={{fontFamily:'Rajdhani',fontSize:48,fontWeight:800,color:'var(--danger)',lineHeight:1}}>{Math.round(top.score)}</div>
+            <div style={{fontSize:10,color:'var(--text-muted)'}}>queue × avg-days</div>
+          </div>
+        </div>
+      )}
+
+      <div className="kpi-grid">
+        <KPICard label="TOP BOTTLENECK" value={top?.stage||'—'} sub={`${top?.count||0} items · ${Math.round((top?.duration||0)*10)/10}d avg`} color1="#ff3d5a" color2="#ff6b35" badge={{text:'CRITICAL',cls:'badge-red'}}/>
+        <KPICard label="2ND BOTTLENECK" value={stages[1]?.stage||'—'} sub={`${stages[1]?.count||0} items queued`} color1="#ffd60a" color2="#ff6b35" badge={{text:'HIGH',cls:'badge-yellow'}}/>
+        <KPICard label="3RD BOTTLENECK" value={stages[2]?.stage||'—'} sub={`${stages[2]?.count||0} items queued`} color1="#ffd60a" color2="#ff6b35" badge={{text:'MEDIUM',cls:'badge-yellow'}}/>
+        <KPICard label="TOTAL ITEMS" value={stages.reduce((s,x)=>s+x.count,0)} sub="items in non-output stages" color1="#ff3d5a" color2="#b24bff"/>
+        <KPICard label="STAGES MONITORED" value={stages.length} sub="active WIP stages" color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard label="VENDOR BOTTLENECK" value={filtered.filter(r=>r.inhouse==='VENDOR').length} sub="items waiting at vendors" color1="#b24bff" color2="#ff6b35"/>
+      </div>
+
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-title">🔴 Bottleneck Score by Stage</div>
+          <div className="chart-sub">SCORE = QUEUE SIZE × AVG DAYS IN STAGE · HIGHER = WORSE</div>
+          <div className="chart-wrap-lg"><canvas ref={scoreRef}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-title">📊 Queue Size vs Avg Duration</div>
+          <div className="chart-sub">DUAL AXIS: ITEMS IN QUEUE (YELLOW) vs DAYS IN STAGE (PURPLE)</div>
+          <div className="chart-wrap-lg"><canvas ref={queueRef}/></div>
+        </div>
+      </div>
+
+      <div className="table-card">
+        <div className="table-header"><div className="chart-title">Bottleneck Ranking — All Stages</div></div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>RANK</th><th>STAGE</th><th>QUEUE (ITEMS)</th><th>AVG DAYS IN STAGE</th><th>SCORE</th><th>SEVERITY</th><th>SCORE BAR</th></tr>
+            </thead>
+            <tbody>
+              {stages.map((s,i)=>{
+                const pct = Math.min(100,Math.round(s.score/maxScore*100));
+                const severity = i===0?'🔴 CRITICAL':i<3?'🟡 HIGH':i<6?'🟠 MEDIUM':'🟢 LOW';
+                const color = i===0?'var(--danger)':i<3?'var(--warning)':i<6?'#ff6b35':'var(--success)';
+                return (
+                  <tr key={i}>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:800,fontSize:20,color:i===0?'var(--danger)':i<3?'var(--warning)':'var(--text-muted)'}}>{i+1}</td>
+                    <td><span className="status-pill" style={{background:getStageColor(s.stage)+'22',color:getStageColor(s.stage)}}>{s.stage}</span></td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,color:'var(--warning)'}}>{s.count}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,color:'#b24bff'}}>{Math.round(s.duration*10)/10}d</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,color}}>{Math.round(s.score*10)/10}</td>
+                    <td style={{fontSize:12}}>{severity}</td>
+                    <td style={{minWidth:120}}>
+                      <div style={{height:10,background:'rgba(255,255,255,0.05)',borderRadius:5,overflow:'hidden'}}>
+                        <div style={{width:`${pct}%`,height:'100%',background:color,borderRadius:5}}/>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Items stuck in top bottleneck */}
+      {top && (
+        <div className="table-card" style={{marginTop:0}}>
+          <div className="table-header">
+            <div className="chart-title">🔴 Items Currently Stuck in {top.stage}</div>
+            {/* Export buttons — right next to the table title */}
+            <div style={{display:'flex',gap:6,marginLeft:'auto'}}>
+              <button onClick={exportExcel} title="Export to Excel" style={{background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.35)',color:'var(--success)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ XLS</button>
+              <button onClick={exportCSV}   title="Export to CSV"   style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.35)',color:'var(--accent1)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ CSV</button>
+              <button onClick={exportPDF}   title="Export to PDF"   style={{background:'rgba(255,61,90,0.1)',border:'1px solid rgba(255,61,90,0.35)',color:'var(--danger)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ PDF</button>
+              <button onClick={exportJSON}  title="Export to JSON"  style={{background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.35)',color:'var(--accent5)',borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:10,fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>⬇ JSON</button>
+            </div>
+          </div>
+          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
+            <label style={{fontSize:12,color:'var(--text-secondary)',fontWeight:500}}>Filter by Days:</label>
+            <input type="text" placeholder="Type # of days (e.g., 2, 3)" value={timeSearch} onChange={e=>setTimeSearch(e.target.value)} style={{padding:'6px 10px',background:'rgba(255,255,255,0.05)',border:'1px solid var(--border)',borderRadius:4,color:'var(--text-primary)',fontSize:12,width:200}}/>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>SC</th><th>PO</th><th>PRODUCT</th><th>TYPE</th><th>STATUS 1</th><th>DAYS</th><th>INHOUSE</th><th>TIMESTAMP</th></tr></thead>
+              <tbody>
+                {filtered.filter(r=>r.currentStage===top.stage).map((r,i)=>{
+                  const today = new Date().toISOString().substring(0,10);
+                  const days = Math.ceil(daysBetween(r.timestamp?.substring(0,10), today));
+                  const matchesSearch = !timeSearch.trim() || days >= parseInt(timeSearch.trim(), 10);
+                  return matchesSearch ? (
+                    <tr key={i}>
+                      <td className="mono text-accent">{r.sc||'—'}</td>
+                      <td style={{fontSize:11}}>{r.po}</td>
+                      <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                      <td><span className="status-pill badge-blue">{r.type||'—'}</span></td>
+                      <td style={{fontSize:10,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.status1}</td>
+                      <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:days>5?'var(--danger)':days>2?'var(--warning)':'var(--text-secondary)'}}>{days}d</td>
+                      <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                      <td className="mono" style={{fontSize:10}}>{r.timestamp?.substring(0,10)}</td>
+                    </tr>
+                  ) : null;
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PO PAGE ───────────────────────────────────────────────────────────────────
+function isPOComplete(scGroupsForPO) {
+  return scGroupsForPO.length > 0 && scGroupsForPO.every(sg => isSCComplete(sg.items));
+}
+
+function POPage({kpis, poGroups, scGroups}) {
+  const leadsRef = useRef();
+  const [tab, setTab]           = useState('all');
+  const [selectedPO, setSelectedPO] = useState(null);
+  const [search, setSearch]     = useState('');
+
+  // Build PO → SC mapping from scGroups (full data, already correct)
+  const poSCMap = {};
+  scGroups.forEach(sg => {
+    if(!poSCMap[sg.po]) poSCMap[sg.po] = [];
+    poSCMap[sg.po].push(sg);
+  });
+
+  // Build enriched PO rows
+  const poRows = poGroups.map(pg => {
+    const scs    = poSCMap[pg.po] || [];
+    const done   = isPOComplete(scs);
+    const lastTs = getSCLastTimestamp(pg.items);
+    const days   = daysBetween(pg.poDate, lastTs);
+    return { ...pg, scs, done, lastTs, days };
+  });
+
+  const tabFiltered = tab==='complete' ? poRows.filter(p=>p.done)
+                    : tab==='wip'      ? poRows.filter(p=>!p.done)
+                    : poRows;
+
+  const displayed = search.trim()
+    ? tabFiltered.filter(p => {
+        const s = search.trim().toLowerCase();
+        return String(p.po||'').toLowerCase().includes(s) ||
+               p.scs.some(sg => String(sg.sc||'').toLowerCase().includes(s)) ||
+               p.items.some(item => String(item.product||'').toLowerCase().includes(s));
+      })
+    : tabFiltered;
+
+  const completePOs   = poRows.filter(p=>p.done).length;
+  const inProgressPOs = poRows.filter(p=>!p.done).length;
+
+  const leadData = kpis.bottleneck.slice(0,15);
+  useChart(leadsRef, {
+    type:'bar',
+    data:{
+      labels:leadData.map(b=>b.po.length>12?b.po.substring(0,12)+'…':b.po),
+      datasets:[{
+        label:'Days',
+        data:leadData.map(b=>b.days||0),
+        backgroundColor:leadData.map(b=>(b.days||0)>21?'#ff3d5a99':'#00e67699'),
+        borderColor:leadData.map(b=>(b.days||0)>21?'#ff3d5a':'#00e676'),
+        borderWidth:1,borderRadius:4,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y} days`}}},
+      scales:{
+        x:{ticks:{color:'#7ba7cc',font:{size:9}},grid:{color:'rgba(26,58,92,0.3)'}},
+        y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'},title:{display:true,text:'Days',color:'#7ba7cc'}}
+      }
+    }
+  }, [kpis]);
+
+  return (
+    <div>
+      <div className="section-title">PO <span>Analysis</span><div className="section-line"/></div>
+
+      {/* KPI Cards */}
+      <div className="kpi-grid">
+        <KPICard label="TOTAL POs" value={poGroups.length} sub="purchase orders" color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard label="COMPLETE POs" value={completePOs} sub="all SC sets ready" color1="#00e676" color2="#00c9ff"/>
+        <KPICard label="IN-PROGRESS POs" value={inProgressPOs} sub="awaiting completion" color1="#ffd60a" color2="#ff6b35"/>
+        <KPICard label="TARGET" value="21 days" sub="3 weeks delivery target" color1="#ffd60a" color2="#ff6b35"/>
+      </div>
+
+      {/* Lead Time Chart */}
+      <div className="chart-card" style={{marginBottom:16}}>
+        <div className="chart-title">Lead Time per PO — Bottleneck Chart</div>
+        <div className="chart-sub">RED = EXCEEDED 21 DAYS · GREEN = ON TIME</div>
+        <div className="chart-wrap-lg"><canvas ref={leadsRef}/></div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="tabs">
+        {[['all','All POs'],['complete','Completed'],['wip','In Progress']].map(([id,label])=>(
+          <div key={id} className={`tab ${tab===id?'active':''}`}
+            onClick={()=>{setTab(id);setSelectedPO(null);}}>
+            {label}
+          </div>
+        ))}
+      </div>
+
+      {/* PO Sets Table */}
+      <div className="table-card">
+        <div className="table-header" style={{flexWrap:'wrap',gap:10}}>
+          <div className="chart-title">PO Sets — {displayed.length} entries</div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginLeft:'auto'}}>
+            <input
+              className="filter-input"
+              placeholder="Search PO / SC / Product..."
+              value={search}
+              onChange={e=>{setSearch(e.target.value);setSelectedPO(null);}}
+              style={{minWidth:220,padding:'5px 12px'}}
+            />
+            {search && (
+              <button
+                onClick={()=>{setSearch('');setSelectedPO(null);}}
+                className="filter-btn reset"
+                style={{padding:'5px 10px'}}
+              >✕ Clear</button>
+            )}
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>PO</th>
+                <th>PO DATE</th>
+                <th>SC SETS</th>
+                <th>ITEMS</th>
+                <th>LAST TIMESTAMP</th>
+                <th>DAYS TAKEN</th>
+                <th>VS TARGET</th>
+                <th>PO STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayed.map((p,i)=>{
+                const over = (p.days||0)-21;
+                return (
+                  <tr key={i}>
+                    <td>
+                      <button
+                        onClick={()=>setSelectedPO(selectedPO?.po===p.po ? null : p)}
+                        className="mono text-accent fw7"
+                        style={{background:'none',border:'none',padding:0,cursor:'pointer',
+                          textDecoration:'underline',fontSize:13}}
+                        title={`View SC sets for PO ${p.po}`}
+                      >
+                        {p.po}
+                      </button>
+                    </td>
+                    <td className="mono" style={{fontSize:11}}>{fmtDate(p.poDate)}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:15,
+                      color:'var(--text-muted)'}}>{p.scs.length}</td>
+                    <td>{p.items.length}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(p.lastTs)}</td>
+                    <td>
+                      <span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,
+                        color:p.done&&p.days!=null&&p.days>21?'var(--danger)':
+                              p.done?'var(--success)':'var(--warning)'}}>
+                        {p.days??'—'}
+                      </span>
+                    </td>
+                    <td style={{color:over>0?'var(--danger)':'var(--success)',fontWeight:700}}>
+                      {p.days!=null?(over>0?`+${over} over`:`-${Math.abs(over)} early`):'—'}
+                    </td>
+                    <td>
+                      <span className={`status-pill ${p.done?'s-ready':'s-wip'}`}>
+                        {p.done?'COMPLETE':'IN PROGRESS'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SC Drill-down — shown when PO is clicked */}
+      {selectedPO && (
+        <div className="table-card" style={{marginTop:16}}>
+          <div className="table-header"
+            style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}>
+            <div>
+              <div className="chart-title">PO {selectedPO.po} — SC Sets Inside</div>
+              <div className="chart-sub">
+                {selectedPO.scs.length} SC sets · {selectedPO.items.length} total items
+              </div>
+            </div>
+            <button
+              onClick={()=>setSelectedPO(null)}
+              style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',
+                borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:11}}
+            >CLOSE</button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>SC NO</th>
+                  <th>ITEMS</th>
+                  <th>LAST TIMESTAMP</th>
+                  <th>DAYS TAKEN</th>
+                  <th>SET STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPO.scs.map((sg,idx)=>{
+                  const scDone  = isSCComplete(sg.items);
+                  const scLastTs = getSCLastTimestamp(sg.items);
+                  const scDays  = daysBetween(selectedPO.poDate, scLastTs);
+                  return (
+                    <tr key={idx}>
+                      <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:16,
+                        color:'var(--text-muted)'}}>{idx+1}</td>
+                      <td className="mono text-accent fw7">{sg.sc}</td>
+                      <td>{sg.items.length}</td>
+                      <td className="mono" style={{fontSize:10}}>
+                        {fmtDate(scLastTs)}
+                      </td>
+                      <td>
+                        <span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,
+                          color:scDone&&scDays!=null&&scDays>21?'var(--danger)':
+                                scDone?'var(--success)':'var(--warning)'}}>
+                          {scDays??'—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${scDone?'s-ready':'s-wip'}`}>
+                          {scDone?'COMPLETE':'IN PROGRESS'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── SC SETS PAGE ──────────────────────────────────────────────────────────────
+function SCPage({kpis, scGroups}) {
+  const [tab, setTab] = useState('all');
+  const [selectedSC, setSelectedSC] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const tabFiltered = tab==='complete' ? scGroups.filter(g=>isSCComplete(g.items))
+                    : tab==='wip'      ? scGroups.filter(g=>!isSCComplete(g.items))
+                    : scGroups;
+
+  const displayed = search.trim()
+    ? tabFiltered.filter(sg => {
+        const s = search.trim().toLowerCase();
+        return String(sg.sc||'').toLowerCase().includes(s) ||
+               String(sg.po||'').toLowerCase().includes(s) ||
+               sg.items.some(item => String(item.product||'').toLowerCase().includes(s));
+      })
+    : tabFiltered;
+
+  return (
+    <div>
+      <div className="section-title">SC Sets <span>Completion</span><div className="section-line"/></div>
+      <div className="kpi-grid">
+        <KPICard label="TOTAL SC SETS" value={scGroups.length} sub="unique job sets" color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard label="COMPLETE SETS" value={scGroups.filter(g=>isSCComplete(g.items)).length} sub="all items ready/stores" color1="#00e676" color2="#00c9ff"/>
+        <KPICard label="IN-PROGRESS SETS" value={scGroups.filter(g=>!isSCComplete(g.items)).length} sub="awaiting completion" color1="#ffd60a" color2="#ff6b35"/>
+      </div>
+      <div className="tabs">
+        {[['all','All Sets'],['complete','Completed'],['wip','In Progress']].map(([id,label])=>(
+          <div key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</div>
+        ))}
+      </div>
+      <div className="table-card">
+        <div className="table-header" style={{flexWrap:'wrap',gap:10}}>
+          <div className="chart-title">SC Sets — {displayed.length} entries</div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginLeft:'auto'}}>
+            <input
+              className="filter-input"
+              placeholder="Search SC / PO / Product..."
+              value={search}
+              onChange={e=>{setSearch(e.target.value);setSelectedSC(null);}}
+              style={{minWidth:220,padding:'5px 12px'}}
+            />
+            {search && (
+              <button
+                onClick={()=>{setSearch('');setSelectedSC(null);}}
+                className="filter-btn reset"
+                style={{padding:'5px 10px'}}
+              >✕ Clear</button>
+            )}
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>SC NO</th><th>PO</th><th>PO DATE</th><th>ITEMS</th><th>LAST TIMESTAMP</th><th>DAYS TAKEN</th><th>SET STATUS</th></tr></thead>
+            <tbody>
+              {displayed.map((sg,i)=>{
+                const done = isSCComplete(sg.items);
+                const lastTs = getSCLastTimestamp(sg.items);
+                const days = daysBetween(sg.poDate, lastTs);
+                return (
+                  <tr key={i}>
+                    <td>
+                      <button
+                        onClick={()=>setSelectedSC(sg)}
+                        className="mono text-accent fw7"
+                        style={{background:'none',border:'none',padding:0,cursor:'pointer',textDecoration:'underline',fontSize:13}}
+                        title={`View products for SC ${sg.sc}`}
+                      >
+                        {sg.sc}
+                      </button>
+                    </td>
+                    <td style={{fontSize:11}}>{sg.po}</td>
+                    <td className="mono" style={{fontSize:11}}>{fmtDate(sg.poDate)}</td>
+                    <td>{sg.items.length}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtTs(lastTs)}</td>
+                    <td><span style={{fontFamily:'Rajdhani',fontSize:18,fontWeight:700,color:done&&days!=null&&days>21?'var(--danger)':done?'var(--success)':'var(--warning)'}}>{days??'—'}</span></td>
+                    <td><span className={`status-pill ${done?'s-ready':'s-wip'}`}>{done?'COMPLETE':'IN PROGRESS'}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {selectedSC && (
+        <div className="table-card" style={{marginTop:16}}>
+          <div className="table-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}>
+            <div>
+              <div className="chart-title">SC {selectedSC.sc} — Product & Process Details</div>
+              <div className="chart-sub">PO: {selectedSC.po} · {selectedSC.items.length} items in this SC</div>
+            </div>
+            <button
+              onClick={()=>setSelectedSC(null)}
+              style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:11}}
+            >
+              CLOSE
+            </button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>PRODUCT</th>
+                  <th>CURRENT PROCESS</th>
+                  <th>STATUS 1</th>
+                  <th>INHOUSE/VENDOR</th>
+                  <th>LAST UPDATE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedSC.items.map((item, idx)=>(
+                  <tr key={`${selectedSC.sc}-${idx}`}>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:16,color:'var(--text-muted)'}}>{idx+1}</td>
+                    <td style={{maxWidth:320,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.product||'—'}</td>
+                    <td>
+                      <span className="status-pill" style={{background:getStageColor(item.currentStage)+'22',color:getStageColor(item.currentStage)}}>
+                        {item.currentStage || '—'}
+                      </span>
+                    </td>
+                    <td style={{fontSize:10,maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.status1||'—'}</td>
+                    <td><span className={`status-pill ${item.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{item.inhouse||'INHOUSE'}</span></td>
+                    <td className="mono" style={{fontSize:10}}>{fmtTs(item.timestamp)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── VENDOR PAGE ───────────────────────────────────────────────────────────────
+function VendorPage({kpis, data, setActiveNav}) {
+  const [selectedSC, setSelectedSC] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const vendorBarRef  = useRef();
+  const vendorTimeRef = useRef();
+  const vendors = kpis.vendors;
+  const max = vendors.length>0 ? Math.max(...vendors.map(v=>v.count)) : 1;
+  const maxDays = vendors.length>0 ? Math.max(...vendors.map(v=>v.avgDays||0)) : 1;
+
+  useChart(vendorBarRef, {
+    type:'bar',
+    data:{
+      labels: vendors.map(v=>v.code),
+      datasets:[
+        {label:'Avg Pending Days (Today - Last Update)',data:vendors.map(v=>v.avgDays||0),backgroundColor:vendors.map(v=>(v.avgDays||0)>21?'#ff3d5a99':'#ffd60a99'),borderColor:vendors.map(v=>(v.avgDays||0)>21?'#ff3d5a':'#ffd60a'),borderWidth:1,borderRadius:4},
+        {label:'Max Pending Days',data:vendors.map(v=>v.maxDays||0),backgroundColor:'rgba(255,107,53,0.3)',borderColor:'#ff6b35',borderWidth:1,borderRadius:4},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#7ba7cc'}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y} days`}}},
+      scales:{
+        x:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'}},
+        y:{ticks:{color:'#7ba7cc'},grid:{color:'rgba(26,58,92,0.3)'},title:{display:true,text:'Pending Days (Today - Last Update)',color:'#7ba7cc'}}
+      }
+    }
+  }, [kpis]);
+
+  const inhPct = Math.round(kpis.inhouse/Math.max(kpis.inhouse+kpis.vendor,1)*100);
+  const venPct = 100-inhPct;
+  const worstVendor = vendors.reduce((a,b)=>(b.avgDays||0)>(a.avgDays||0)?b:a, vendors[0]||{});
+  const mostDelayed = vendors.reduce((a,b)=>(b.delayed||0)>(a.delayed||0)?b:a, vendors[0]||{});
+  const now = new Date();
+  const todayRef =
+  now.getFullYear() + '-' +
+  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(now.getDate()).padStart(2, '0');
+
+  return (
+    <div>
+      <div className="section-title">🏭 Vendor <span>Evaluation</span><div className="section-line"/></div>
+
+      <div className="kpi-grid">
+        <KPICard label="INHOUSE ITEMS" value={kpis.inhouse} sub={`${inhPct}% of total`} color1="#00c9ff" color2="#0fa8e0"/>
+        <KPICard label="VENDOR ITEMS" value={kpis.vendor} sub={`${venPct}% of total`} color1="#b24bff" color2="#ff6b35"/>
+        <KPICard label="VENDOR STAGES" value={vendors.length} sub="distinct vendor operations" color1="#ffd60a" color2="#b24bff"/>
+        <KPICard label="SLOWEST VENDOR OP" value={worstVendor?.code||'—'} sub={`~${worstVendor?.avgDays||0} days since last update`} color1="#ff3d5a" color2="#ff6b35" badge={{text:'HIGHEST AGING',cls:'badge-red'}}/>
+        <KPICard label="MOST DELAYED" value={mostDelayed?.code||'—'} sub={`${mostDelayed?.delayed||0} items >21 days pending`} color1="#ff3d5a" color2="#b24bff" badge={{text:'DELAYED',cls:'badge-red'}}/>
+        <KPICard label="TOTAL VENDOR" value={kpis.inhouse+kpis.vendor} sub="all items tracked" color1="#00ff9d" color2="#00c9ff"/>
+      </div>
+      <div style={{marginTop:-8,marginBottom:14,fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
+        Aging reference date: {todayRef} (computed from last edit/update timestamp in sheet)
+      </div>
+
+      {/* Inhouse vs Vendor split bar */}
+      <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,padding:18,marginBottom:16}}>
+        <div className="chart-title">Inhouse vs Vendor Workload Split</div>
+        <div className="chart-sub">PERCENTAGE OF TOTAL ITEMS</div>
+        <div style={{display:'flex',gap:20,marginTop:12,alignItems:'center'}}>
+          <div style={{flex:1}}>
+            <div style={{display:'flex',height:28,borderRadius:6,overflow:'hidden'}}>
+              <div style={{width:`${inhPct}%`,background:'linear-gradient(90deg,#00c9ff,#0fa8e0)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#000'}}>{inhPct}% IH</div>
+              <div style={{width:`${venPct}%`,background:'linear-gradient(90deg,#b24bff,#ff6b35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff'}}>{venPct}% VN</div>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:16}}>
+            <span style={{fontSize:12,color:'var(--accent1)'}}>■ Inhouse: {kpis.inhouse}</span>
+            <span style={{fontSize:12,color:'var(--accent6)'}}>■ Vendor: {kpis.vendor}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-title">Items per Vendor Operation</div>
+          <div className="chart-sub">WORKLOAD BY VENDOR STAGE CODE</div>
+          <div className="chart-wrap"><canvas ref={vendorBarRef}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-title">⏱ Avg & Max Pending Days per Vendor Op</div>
+          <div className="chart-sub">TODAY - LAST UPDATE TIMESTAMP · RED = OVER 21 DAYS</div>
+          <div className="chart-wrap"><canvas ref={vendorTimeRef}/></div>
+        </div>
+      </div>
+
+      {/* Vendor time ranking bars */}
+      <div className="chart-card" style={{marginBottom:16}}>
+        <div className="chart-title">Vendor Operation — Time Ranking</div>
+        <div className="chart-sub">SORTED BY AVG PENDING DAYS (HIGHEST = NEEDS ATTENTION)</div>
+        <div className="vendor-bar-wrap" style={{marginTop:12}}>
+          {[...vendors].sort((a,b)=>(b.avgDays||0)-(a.avgDays||0)).map((v,i)=>{
+            const pct = Math.min(100, Math.round((v.avgDays||0)/Math.max(maxDays,1)*100));
+            const overdue = (v.avgDays||0) > TARGET_DAYS;
+            return (
+              <div className="vendor-row" key={i}>
+                <div className="vendor-name" style={{color:overdue?'var(--danger)':'var(--text-secondary)'}}>{v.code}</div>
+                <div className="vendor-bar-bg">
+                  <div className="vendor-bar-fill" style={{width:`${pct}%`,background:overdue?'linear-gradient(90deg,#ff3d5a,#ff6b35)':'linear-gradient(90deg,#ffd60a,#b24bff)'}}/>
+                </div>
+                <div style={{width:110,textAlign:'right',fontSize:11,color:overdue?'var(--danger)':'var(--text-muted)'}}>
+                  {v.avgDays!=null?`${v.avgDays}d avg pending`:'-'} · {v.count} items
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* NEW: Process Cycle Time & Efficiency Metrics */}
+      <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,padding:18,marginBottom:16}}>
+        <div className="chart-title">⏱ Process Cycle Time & Efficiency by Vendor Operation</div>
+        <div className="chart-sub">AVERAGE TIME FROM PO RECEIPT · PROCESS COMPLETION RATE · SLA VIOLATIONS (2d+ PENDING)</div>
+        <div className="vendor-bar-wrap" style={{marginTop:12}}>
+          {[...vendors].sort((a,b)=>(b.avgDays||0)-(a.avgDays||0)).map((v,i)=>{
+            return (
+              <div key={i} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid rgba(26,58,92,0.4)'}}>
+                <div style={{width:90,fontFamily:'Share Tech Mono',fontSize:11,color:'var(--accent1)',fontWeight:700}}>{v.code}</div>
+                <div style={{flex:0.25}}>
+                  {/* UNIFIED: avgPending = workingDays(today − timestamp).
+                      Bottleneck module also uses today−timestamp for its "Avg Days in Stage"
+                      so both modules now show the same number. */}
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Avg Pending Days</div>
+                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:'var(--accent4)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</div>
+                </div>
+                <div style={{flex:0.25}}>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Completion Rate</div>
+                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:'var(--success)'}}>{v.processEfficiency!=null?`${v.processEfficiency}%`:'—'}</div>
+                </div>
+                <div style={{flex:0.25}}>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>SLA Violations (2d+)</div>
+                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:v.slaViolations>0?'var(--danger)':'var(--success)'}}>{v.slaViolations||0}</div>
+                </div>
+                <div style={{flex:0.25}}>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Violation Rate</div>
+                  <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:v.slaViolationRate>20?'var(--danger)':v.slaViolationRate>10?'var(--warning)':'var(--success)'}}>{v.slaViolationRate!=null?`${v.slaViolationRate}%`:'—'}</div>
+                </div>
+                <div style={{flex:0.2}}>
+                  <span className={`status-pill ${v.slaViolations===0?'badge-green':v.slaViolationRate>20?'badge-red':'badge-yellow'}`}>
+                    {v.slaViolations===0?'✓ COMPLIANT':v.slaViolationRate>20?'⚠ CRITICAL':'⚡ WARNING'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* NEW: Bottleneck Detection */}
+      {kpis.topVendorBottleneck && (
+        <div style={{background:'linear-gradient(135deg,rgba(255,61,90,0.1),rgba(255,107,53,0.08))',border:'1px solid rgba(255,61,90,0.3)',borderRadius:10,padding:18,marginBottom:16}}>
+          <div className="chart-title" style={{color:'var(--danger)'}}>⚠️ Vendor Bottleneck Alert</div>
+          <div className="chart-sub">HIGHEST RISK VENDOR OPERATION</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginTop:14}}>
+            <div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Bottleneck Operation</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--danger)'}}>{kpis.topVendorBottleneck.vendor}</div>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Avg Pending Days</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--accent4)'}}>{kpis.topVendorBottleneck.avgPending}d</div>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>SLA Violations</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--danger)'}}>{kpis.topVendorBottleneck.slaViolations}</div>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>Process Efficiency</div>
+              <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--warning)'}}>{kpis.topVendorBottleneck.efficiency}%</div>
+            </div>
+          </div>
+          <div style={{marginTop:12,fontSize:12,color:'var(--text-secondary)',fontStyle:'italic'}}>
+            This vendor operation has the highest bottleneck score and requires immediate attention. Consider process optimization or resource reallocation.
+          </div>
+        </div>
+      )}
+
+
+      {/* Full vendor detail table */}
+      <div className="table-card">
+        <div className="table-header"><div className="chart-title">Full Vendor Evaluation Table</div></div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>VENDOR OP</th><th>ITEMS</th><th>% SHARE</th>
+                <th>AVG PENDING DAYS</th><th>MAX PENDING</th><th>DELAYED (&gt;21d)</th>
+                <th>PROCESS CYCLE</th><th>EFFICIENCY</th><th>SLA VIOLATIONS</th>
+                <th>LAST UPDATE</th><th>RATING</th><th>SAMPLE PRODUCTS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...vendors].sort((a,b)=>(b.avgDays||0)-(a.avgDays||0)).map((v,i)=>{
+                const overdue = (v.avgDays||0) > TARGET_DAYS;
+                const latestTs = v.items.map(i=>i.timestamp).filter(Boolean).sort().pop();
+                const rating = overdue ? '🔴 SLOW' : (v.avgDays||0)>14 ? '🟡 OK' : '🟢 FAST';
+                return (
+                  <tr key={i}>
+                    <td><span className="status-pill s-vendor">{v.code}</span></td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,color:'var(--accent6)'}}>{v.count}</td>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:60,height:7,background:'rgba(255,255,255,0.05)',borderRadius:4,overflow:'hidden'}}>
+                          <div style={{width:`${v.pct}%`,height:'100%',background:'#b24bff',borderRadius:4}}/>
+                        </div>
+                        <span style={{color:'var(--accent6)',fontWeight:700}}>{v.pct}%</span>
+                      </div>
+                    </td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:18,color:overdue?'var(--danger)':'var(--warning)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:16,color:'var(--accent4)'}}>{v.maxDays!=null?`${v.maxDays}d`:'—'}</td>
+                    <td style={{color:v.delayed>0?'var(--danger)':'var(--success)',fontWeight:700,fontFamily:'Rajdhani',fontSize:17}}>{v.delayed}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:'var(--accent1)'}}>{v.avgDays!=null?`${v.avgDays}d`:'—'}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:v.processEfficiency>=80?'var(--success)':v.processEfficiency>=60?'var(--warning)':'var(--danger)'}}>{v.processEfficiency!=null?`${v.processEfficiency}%`:'—'}</td>
+                    <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:v.slaViolations>0?'var(--danger)':'var(--success)'}}>{v.slaViolations||0}</td>
+                    <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{fmtTs(latestTs)}</td>
+                    <td style={{fontSize:12}}>{rating}</td>
+                    <td style={{fontSize:10,color:'var(--text-muted)',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      {v.items.slice(0,3).map(i=>i.product).join(' · ')}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="table-card" style={{marginTop:16}}>
+        <div className="table-header"><div className="chart-title">Vendor Process Aging & Cycle Time — Item Level (Today Reference)</div></div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>SC</th><th>PO</th><th>PRODUCT</th><th>PROCESS</th><th>LAST UPDATE</th><th>PENDING DAYS</th><th>CYCLE TIME</th><th>SLA STATUS</th><th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data
+                .filter(r=>r.inhouse==='VENDOR')
+                .map(r => {
+                  const pendingDays = daysBetween(r.timestamp, todayRef);
+                  const cycleTime = calculateProcessCycleTime(r.poDate, r.timestamp);
+                  const slaViolation = pendingDays !== null && pendingDays > 2;
+                  return { ...r, pendingDays, cycleTime, slaViolation };
+                })
+                .sort((a,b)=>(b.pendingDays||0)-(a.pendingDays||0))
+                .slice(0,300)
+                .map((r,i)=>{
+                  const pending = r.pendingDays;
+                  const cycle = r.cycleTime;
+                  const overdue = pending != null && pending > TARGET_DAYS;
+                  const slaStatus = r.slaViolation ? 'VIOLATION' : 'COMPLIANT';
+                  return (
+                    <tr key={`${r.sc||'—'}-${r.po}-${i}`} onClick={() => setSelectedItem(r)} style={{cursor:'pointer',backgroundColor:selectedItem===r?'rgba(255,107,53,0.08)':'transparent'}} title="Click to view item details">
+                      <td>
+                        <button
+                          onClick={(e)=>{e.stopPropagation();setSelectedSC(r.sc)}}
+                          className="mono text-accent fw7"
+                          style={{background:'none',border:'none',padding:0,cursor:'pointer',textDecoration:'underline',fontSize:12}}
+                          title={`View all products for SC ${r.sc||'—'}`}
+                        >
+                          {r.sc||'—'}
+                        </button>
+                      </td>
+                      <td style={{fontSize:11}}>{r.po||'—'}</td>
+                      <td style={{fontSize:11,maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                      <td><span className="status-pill s-vendor">{r.currentStage||'UNKNOWN'}</span></td>
+                      <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
+                      <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:overdue?'var(--danger)':'var(--success)'}}>{pending!=null?`${pending}d`:'—'}</td>
+                      <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:14,color:'var(--accent1)'}}>{cycle!=null?`${cycle}d`:'—'}</td>
+                      <td><span className={`status-pill ${r.slaViolation?'badge-red':'badge-green'}`}>{slaStatus}</span></td>
+                      <td><span className={`status-pill ${overdue?'badge-red':'badge-green'}`}>{overdue?'DELAYED':'ACTIVE'}</span></td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SC DETAIL MODAL - Shows all products in SC with processing status */}
+      {selectedSC && (
+        <div className="table-card" style={{marginTop:20,border:'2px solid var(--accent1)',boxShadow:'0 0 20px rgba(0,201,255,0.15)'}}>
+          <div className="table-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,backgroundColor:'rgba(0,201,255,0.05)'}}>
+            <div>
+              <div className="chart-title" style={{color:'var(--accent1)'}}>📦 SC {selectedSC} — Vendor Products & Processing Status</div>
+              <div className="chart-sub">
+                {data.filter(r=>r.sc===selectedSC && r.inhouse==='VENDOR').length} vendor items in this SC set
+              </div>
+            </div>
+            <button
+              onClick={()=>setSelectedSC(null)}
+              style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}
+            >
+              CLOSE
+            </button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>PO</th>
+                  <th>PRODUCT NAME</th>
+                  <th>TYPE</th>
+                  <th>PROCESS STAGE</th>
+                  <th>LAST UPDATE</th>
+                  <th>CYCLE TIME</th>
+                  <th>PENDING DAYS</th>
+                  <th>PROCESSING STATUS</th>
+                  <th>SLA COMPLIANCE</th>
+                  <th>OVERALL STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data
+                  .filter(r=>r.sc===selectedSC && r.inhouse==='VENDOR')
+                  .map((item, idx)=>{
+                    const cycleTime = calculateProcessCycleTime(item.poDate, item.timestamp);
+                    const now = new Date();
+                    const today =
+                    now.getFullYear() + '-' +
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(now.getDate()).padStart(2, '0');
+                    const pendingDays = daysBetween(item.timestamp, today);
+                    const isDelayed = pendingDays !== null && pendingDays > 2;
+                    const isOnTime = cycleTime !== null && cycleTime <= 21;
+                    const completionStatus = ['READY','STORES','STOCK','EXSTOCK'].includes(item.currentStage);
+                    
+                    return (
+                      <tr key={`${selectedSC}-${idx}`} style={{backgroundColor:isDelayed?'rgba(255,61,90,0.08)':completionStatus?'rgba(0,230,118,0.08)':'transparent'}}>
+                        <td className="mono" style={{fontSize:11}}>{item.po}</td>
+                        <td style={{fontSize:11,maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.product}</td>
+                        <td><span className="status-pill badge-blue">{item.type}</span></td>
+                        <td>
+                          <span className="status-pill s-vendor" style={{fontSize:10}}>
+                            {item.currentStage}
+                          </span>
+                        </td>
+                        <td className="mono" style={{fontSize:10,color:'var(--text-muted)'}}>{fmtTs(item.timestamp)}</td>
+                        <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:13,color:'var(--accent1)'}}>
+                          {cycleTime!==null?`${cycleTime}d`:'—'}
+                        </td>
+                        <td style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:13,color:isDelayed?'var(--danger)':'var(--success)'}}>
+                          {pendingDays!==null?`${pendingDays}d`:'—'}
+                        </td>
+                        <td>
+                          <span className={`status-pill ${completionStatus?'badge-green':'badge-yellow'}`} style={{fontSize:10}}>
+                            {completionStatus?'✓ COMPLETED':'⏳ PROCESSING'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${isDelayed?'badge-red':'badge-green'}`} style={{fontSize:10}}>
+                            {isDelayed?'⚠ VIOLATION':'✓ COMPLIANT'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${isOnTime&&completionStatus?'badge-green':isDelayed?'badge-red':'badge-yellow'}`} style={{fontSize:10}}>
+                            {isOnTime&&completionStatus?'🟢 ON-TIME':isDelayed?'🔴 DELAYED':completionStatus?'🟢 EARLY':'🟡 IN-PROGRESS'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary Stats for this SC */}
+          <div style={{padding:'16px 18px',backgroundColor:'rgba(0,201,255,0.02)',borderTop:'1px solid var(--border)'}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:20}}>
+              {(() => {
+                const scItems = data.filter(r=>r.sc===selectedSC && r.inhouse==='VENDOR');
+                const totalItems = scItems.length;
+                const completedItems = scItems.filter(r=>['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)).length;
+                const delayedItems = scItems.filter(r=>{
+                  const now = new Date();
+const today =
+  now.getFullYear() + '-' +
+  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(now.getDate()).padStart(2, '0');
+
+const pending = daysBetween(r.timestamp, today);
+                  return pending !== null && pending > 2;
+                }).length;
+                const onTimeItems = scItems.filter(r=>{
+                  const cycle = calculateProcessCycleTime(r.poDate, r.timestamp);
+                  return cycle !== null && cycle <= 21;
+                }).length;
+                const avgCycleTime = scItems.reduce((sum, r)=>{
+                  const cycle = calculateProcessCycleTime(r.poDate, r.timestamp);
+                  return sum + (cycle !== null ? cycle : 0);
+                }, 0) / Math.max(totalItems, 1);
+
+                return (
+                  <>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>Total Items in SC</div>
+                      <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--accent1)'}}>{totalItems}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>Completed</div>
+                      <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:'var(--success)'}}>{completedItems} <span style={{fontSize:11,color:'var(--text-muted)'}}>{totalItems>0?`(${Math.round(completedItems/totalItems*100)}%)`:''}</span></div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>Delayed Items (2d+)</div>
+                      <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:delayedItems>0?'var(--danger)':'var(--success)'}}>{delayedItems}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>On-Time Items ({'>'}21d Avg Cycle Time</div>
+                      <div style={{fontFamily:'Rajdhani',fontSize:24,fontWeight:700,color:avgCycleTime<=21?'var(--success)':'var(--warning)'}}>{Math.round(avgCycleTime)}d</div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FEATURE 5: ITEM DETAIL MODAL - Click any vendor item to see full details */}
+      {selectedItem && (
+        <div className="table-card" style={{marginTop:20,border:'2px solid var(--accent4)',boxShadow:'0 0 30px rgba(255,107,53,0.2)'}}>
+          <div className="table-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center',backgroundColor:'rgba(255,107,53,0.05)'}}>
+            <div>
+              <div className="chart-title" style={{color:'var(--accent4)'}}>📋 Item Details</div>
+              <div className="chart-sub">Complete information for {selectedItem.sc}</div>
+            </div>
+            <button
+              onClick={() => setSelectedItem(null)}
+              style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}
+            >
+              CLOSE
+            </button>
+          </div>
+          <div style={{padding:'20px 24px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:20,marginBottom:20}}>
+              <div style={{background:'rgba(0,0,0,0.2)',border:'1px solid var(--border)',borderRadius:8,padding:14}}>
+                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>PO Number</div>
+                <div style={{fontFamily:'Share Tech Mono',fontSize:16,fontWeight:700,color:'var(--accent1)'}}>{selectedItem.po}</div>
+              </div>
+              <div style={{background:'rgba(0,0,0,0.2)',border:'1px solid var(--border)',borderRadius:8,padding:14}}>
+                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>SC Number</div>
+                <div style={{fontFamily:'Share Tech Mono',fontSize:16,fontWeight:700,color:'var(--accent1)'}}>{selectedItem.sc}</div>
+              </div>
+              <div style={{background:'rgba(0,0,0,0.2)',border:'1px solid var(--border)',borderRadius:8,padding:14}}>
+                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Product Type</div>
+                <div style={{fontSize:14,fontWeight:600,color:'var(--accent2)'}}>{selectedItem.type}</div>
+              </div>
+            </div>
+
+            <div style={{background:'rgba(0,0,0,0.2)',border:'1px solid var(--border)',borderRadius:8,padding:14,marginBottom:20}}>
+              <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Product Name</div>
+              <div style={{fontSize:14,fontWeight:600,color:'var(--text-primary)'}}>{selectedItem.product}</div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
+              {(() => {
+                const cycle = calculateProcessCycleTime(selectedItem.poDate, selectedItem.timestamp);
+                const now = new Date();
+                const today =
+                  now.getFullYear() + '-' +
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(now.getDate()).padStart(2, '0');
+                const pending = daysBetween(selectedItem.timestamp, today);
+                const isDelayed = pending !== null && pending > 2;
+                const isOnTime = cycle !== null && cycle <= 21;
+
+                return (
+                  <>
+                    <div style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',borderRadius:8,padding:12}}>
+                      <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:6}}>Current Stage</div>
+                      <div style={{fontFamily:'Share Tech Mono',fontSize:14,fontWeight:700,color:'var(--accent1)'}}>{selectedItem.currentStage}</div>
+                    </div>
+                    <div style={{background:'rgba(255,107,53,0.1)',border:'1px solid rgba(255,107,53,0.3)',borderRadius:8,padding:12}}>
+                      <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:6}}>Cycle Time</div>
+                      <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:isOnTime?'var(--success)':'var(--warning)'}}>{cycle!==null?`${cycle} days`:'—'}</div>
+                    </div>
+                    <div style={{background:`rgba(${isDelayed?'255,61,90':'0,230,118'},0.1)`,border:`1px solid rgba(${isDelayed?'255,61,90':'0,230,118'},0.3)`,borderRadius:8,padding:12}}>
+                      <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:6}}>Pending Days</div>
+                      <div style={{fontFamily:'Rajdhani',fontSize:16,fontWeight:700,color:isDelayed?'var(--danger)':'var(--success)'}}>{pending!==null?`${pending} days`:'—'}</div>
+                    </div>
+                    <div style={{background:'rgba(0,0,0,0.2)',border:'1px solid var(--border)',borderRadius:8,padding:12}}>
+                      <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:6}}>Last Update</div>
+                      <div style={{fontFamily:'Share Tech Mono',fontSize:10,color:'var(--text-secondary)'}}>{fmtTs(selectedItem.timestamp)}</div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
+              {(() => {
+                const cycle = calculateProcessCycleTime(selectedItem.poDate, selectedItem.timestamp);
+                const now = new Date();
+                const today =
+                  now.getFullYear() + '-' +
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(now.getDate()).padStart(2, '0');
+                const pending = daysBetween(selectedItem.timestamp, today);
+                const isDelayed = pending !== null && pending > 2;
+                const isOnTime = cycle !== null && cycle <= 21;
+                const isCompleted = ['READY','STORES','STOCK','EXSTOCK'].includes(selectedItem.currentStage);
+
+                return (
+                  <>
+                    <div>
+                      <span className={`status-pill ${isCompleted?'badge-green':'badge-yellow'}`} style={{fontSize:11}}>
+                        {isCompleted?'✓ COMPLETED':'⏳ PROCESSING'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`status-pill ${isDelayed?'badge-red':'badge-green'}`} style={{fontSize:11}}>
+                        {isDelayed?'⚠ SLA VIOLATION':'✓ COMPLIANT'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`status-pill ${isOnTime&&isCompleted?'badge-green':isDelayed?'badge-red':'badge-yellow'}`} style={{fontSize:11}}>
+                        {isOnTime&&isCompleted?'🟢 ON-TIME':isDelayed?'🔴 DELAYED':isCompleted?'🟢 EARLY':'🟡 IN-PROGRESS'}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div style={{background:'rgba(0,201,255,0.05)',border:'1px dashed rgba(0,201,255,0.3)',borderRadius:8,padding:14}}>
+              <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:8}}>📌 Quick Actions</div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <button 
+                  onClick={() => { setSelectedItem(null); setSelectedSC(selectedItem.sc); }}
+                  style={{background:'var(--bg-secondary)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10,fontWeight:600}}
+                >
+                  View SC {selectedItem.sc} Details
+                </button>
+                {setActiveNav && (
+                  <button 
+                    onClick={() => { setSelectedItem(null); setActiveNav('po'); }}
+                    style={{background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',color:'var(--accent1)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10,fontWeight:600}}
+                  >
+                    View in PO Analysis
+                  </button>
+                )}
+                {setActiveNav && (
+                  <button 
+                    onClick={() => { setSelectedItem(null); setActiveNav('wip'); }}
+                    style={{background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.3)',color:'var(--accent5)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10,fontWeight:600}}
+                  >
+                    View in Stage / WIP
+                  </button>
+                )}
+                <button 
+                  onClick={() => setSelectedItem(null)}
+                  style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontSize:10}}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+function UploadPage({onUpload, data, uploadStatus, setUploadStatus, liveConfig, setLiveConfig, onSyncNow, liveState, historyConfig, setHistoryConfig, onSyncHistory, importState}) {
+  const [drag, setDrag] = useState(false);
+  const fileRef = useRef();
+
+  function handleDrop(e) {
+    e.preventDefault(); setDrag(false);
+    const file = e.dataTransfer.files[0];
+    if(file) { onUpload(file); }
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files[0];
+    if(file) {
+      onUpload(file);
+      // Reset input so same file can be re-uploaded
+      e.target.value = '';
+    }
+  }
+
+  function downloadTemplate() {
+    const rows = [
+      {'SNO':1,'PO NO':'AGIPLPO2326','PO RECD DATE':'2026-03-25','SC':'1170','Product Name':'ARG DIA 15.2 +0.03','QTY':'1 NO','STATUS 1':'LATHE COMPLETED, MOVE TO M1','STATUS 2':'MOVE TO STORES','INHOUSE/ VENDOR':'INHOUSE','OP':'READY','TIMESTAMP':'2026-04-15 19:20:04'},
+      {'SNO':'','PO NO':'','PO RECD DATE':'','SC':'1170','Product Name':'SP DIA 15.2 +0.03','QTY':'1 SET','STATUS 1':'SET MOVE TO FB','STATUS 2':'MOVE TO STORES','INHOUSE/ VENDOR':'INHOUSE','OP':'READY','TIMESTAMP':'2026-04-15 19:24:04'},
+      {'SNO':'','PO NO':'','PO RECD DATE':'','SC':'1170','Product Name':'M6 T CONNECTOR','QTY':'1 NO','STATUS 1':'INHOUSE','STATUS 2':'','INHOUSE/ VENDOR':'INHOUSE','OP':'STOCK','TIMESTAMP':'2026-03-30 11:03:33'},
+      {'SNO':2,'PO NO':'AGIPLPO14','PO RECD DATE':'2026-03-25','SC':'1187','Product Name':'APG DIA 24.0 -0.007/-0.028','QTY':'1 NO','STATUS 1':'MOVE TO FB','STATUS 2':'MOVE TO STORES','INHOUSE/ VENDOR':'INHOUSE','OP':'READY','TIMESTAMP':'2026-04-13 18:14:43'},
+      {'SNO':'','PO NO':'','PO RECD DATE':'','SC':'1187','Product Name':'SRG DIA 24.0 -0.007/-0.028','QTY':'1 NO','STATUS 1':'HT,SZ COMPLETED,MOVE TO SG','STATUS 2':'MOVE TO STORES','INHOUSE/ VENDOR':'INHOUSE','OP':'READY','TIMESTAMP':'2026-04-13 18:23:27'},
+      {'SNO':'','PO NO':'','PO RECD DATE':'','SC':'1187','Product Name':'VERTICAL BENCH MOUNT PLATE','QTY':'1 NO','STATUS 1':'INHOUSE','STATUS 2':'','INHOUSE/ VENDOR':'VENDOR','OP':'SDV','TIMESTAMP':'2026-04-13 17:01:58'},
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:10},{wch:30},{wch:8},{wch:35},{wch:20},{wch:14},{wch:10},{wch:22}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'stdtrack');
+    XLSX.writeFile(wb, 'velan_template.xlsx');
+  }
+
+  function exportCurrentData() {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Production');
+    const d = new Date();
+    const exportDate =
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+    XLSX.writeFile(wb, `velan_export_${exportDate}.xlsx`);
+  }
+
+  const statusColors = {
+    success:{bg:'rgba(0,230,118,0.1)',border:'rgba(0,230,118,0.4)',color:'var(--success)'},
+    error:  {bg:'rgba(255,61,90,0.1)', border:'rgba(255,61,90,0.4)',  color:'var(--danger)'},
+    warn:   {bg:'rgba(255,184,54,0.1)',border:'rgba(255,184,54,0.4)', color:'var(--warning)'},
+    loading:{bg:'rgba(0,201,255,0.08)',border:'rgba(0,201,255,0.3)',  color:'var(--accent1)'},
+  };
+
+  return (
+    <div>
+      <div className="section-title">Data <span>Upload</span><div className="section-line"/></div>
+
+      {/* Status Banner */}
+      {uploadStatus && (
+        <div style={{
+          background: statusColors[uploadStatus.type]?.bg || statusColors.loading.bg,
+          border: `1px solid ${statusColors[uploadStatus.type]?.border || statusColors.loading.border}`,
+          borderRadius:10, padding:'14px 18px', marginBottom:16,
+          display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12
+        }}>
+          <div>
+            <div style={{color: statusColors[uploadStatus.type]?.color || statusColors.loading.color, fontWeight:700, fontSize:14}}>
+              {uploadStatus.msg}
+            </div>
+            {uploadStatus.detail && (
+              <div style={{color:'var(--text-muted)', fontSize:11, fontFamily:'Share Tech Mono, monospace', marginTop:6, whiteSpace:'pre-line'}}>
+                {uploadStatus.detail}
+              </div>
+            )}
+          </div>
+          <button onClick={()=>setUploadStatus(null)} style={{background:'none',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:18,lineHeight:1,padding:0,flexShrink:0}}>✕</button>
+        </div>
+      )}
+
+      <div className="chart-grid" style={{gridTemplateColumns:'1fr 1fr'}}>
+        <div className="chart-card">
+          <div className="chart-title">Upload New Data</div>
+          <div className="chart-sub">EXCEL (.XLSX / .XLS), CSV, OR JSON — FLEXIBLE COLUMN NAMES SUPPORTED</div>
+          <div
+            className={`upload-zone${drag?' drag':''}`}
+            style={{marginTop:16}}
+            onDragOver={e=>{e.preventDefault();setDrag(true)}}
+            onDragLeave={()=>setDrag(false)}
+            onDrop={handleDrop}
+            onClick={()=>fileRef.current.click()}
+          >
+            <div className="upload-icon">{uploadStatus?.type==='loading'?'⏳':'📤'}</div>
+            <div className="upload-text">
+              {uploadStatus?.type==='loading' ? 'Processing file…' : 'Drag & Drop your file here'}
+            </div>
+            <div className="upload-sub">or click to browse — xlsx, xls, csv, json</div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.json"
+              style={{display:'none'}}
+              onChange={handleFileChange}
+            />
+          </div>
+
+          {/* ── GOOGLE SHEETS LIVE SYNC ── */}
+          <div style={{marginTop:14,padding:'14px 16px',background:'rgba(15,110,86,0.08)',border:'1px solid rgba(15,110,86,0.4)',borderRadius:8}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+              <span style={{fontSize:18}}>📊</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:'#00e676',letterSpacing:1}}>GOOGLE SHEETS LIVE SYNC</div>
+                <div style={{fontSize:10,color:'var(--text-muted)'}}>Paste any Google Sheets URL — share link, edit link, or CSV export</div>
+              </div>
+              {liveState?.active && (
+                <span style={{marginLeft:'auto',background:'rgba(0,230,118,0.15)',border:'1px solid rgba(0,230,118,0.4)',color:'var(--success)',borderRadius:20,padding:'3px 10px',fontSize:10,fontFamily:'Share Tech Mono',display:'flex',alignItems:'center',gap:5}}>
+                  <span style={{width:6,height:6,background:'var(--success)',borderRadius:'50%',animation:'pulse 1.5s infinite',display:'inline-block'}}/>LIVE
+                </span>
+              )}
+            </div>
+
+            <input
+              type="text"
+              value={liveConfig?.url || ''}
+              onChange={e=>setLiveConfig(prev=>({...prev,url:e.target.value}))}
+              placeholder="https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?output=csv  ← paste Publish to web CSV link"
+              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'9px 12px',fontSize:11,marginBottom:10,fontFamily:'Share Tech Mono,monospace'}}
+            />
+
+            <div style={{background:'rgba(0,0,0,0.2)',borderRadius:6,padding:'8px 12px',marginBottom:10,fontSize:10,color:'var(--text-muted)',lineHeight:1.8}}>
+              <div style={{color:'var(--text-secondary)',fontWeight:600,marginBottom:4}}>📋 How to get the Live Google Sheets CSV link:</div>
+<div>1. Open your Google Sheet → <strong style={{color:'var(--accent1)'}}>File → Share → Publish to web</strong></div>
+<div>2. Select <strong style={{color:'var(--success)'}}>Entire Document</strong> → set format to <strong style={{color:'var(--success)'}}>CSV (.csv)</strong></div>
+<div>3. Click <strong style={{color:'var(--accent5)'}}>Publish</strong> → Copy the link and paste above</div>
+<div style={{marginTop:4,color:'var(--accent3)'}}>✓ Link ends with /pub?output=csv — paste it directly, no changes needed</div>
+            </div>
+
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+              <input
+                type="number"
+                min="30"
+                value={liveConfig.intervalSec || 300}
+                onChange={e=>setLiveConfig(prev=>({...prev,intervalSec:Number(e.target.value)||300}))}
+                style={{width:80,background:'var(--bg-secondary)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text-primary)',padding:'6px 8px',fontSize:11,textAlign:'center'}}
+              />
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>sec refresh</span>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text-secondary)',marginLeft:'auto',cursor:'pointer'}}>
+                <input
+                  type="checkbox"
+                  checked={liveConfig.enabled === true}
+                  onChange={e=>setLiveConfig(prev=>({...prev,enabled:e.target.checked}))}
+                />
+                Auto-sync
+              </label>
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <button
+                className="filter-btn"
+                style={{flex:2,padding:'10px',background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.4)',color:'var(--success)',fontWeight:700}}
+                onClick={()=>onSyncNow(liveConfig?.url)}
+              >
+                🔄 Sync from Google Sheets Now
+              </button>
+              <button className="filter-btn" style={{flex:1,padding:'10px'}} onClick={()=>setLiveConfig({url:'',enabled:false,intervalSec:300})}>🧹 Clear</button>
+            </div>
+
+            <div style={{marginTop:8,display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
+              <span>LAST SYNC: {liveState?.lastSync || '—'}</span>
+              <span style={{color: liveState?.active ? 'var(--success)' : 'var(--text-muted)'}}>{liveState?.active ? '● CONNECTED' : '○ NOT SYNCED'}</span>
+            </div>
+            {liveState?.lastError && (
+              <div style={{marginTop:6,fontSize:10,color:'var(--danger)',fontFamily:'Share Tech Mono,monospace',whiteSpace:'pre-line',background:'rgba(255,61,90,0.05)',border:'1px solid rgba(255,61,90,0.2)',borderRadius:6,padding:'8px 10px'}}>
+                ⚠ {liveState.lastError}
+              </div>
+            )}
+          </div>
+
+          {/* Tips */}
+          <div style={{marginTop:12,padding:'10px 14px',background:'rgba(0,201,255,0.05)',border:'1px solid rgba(0,201,255,0.15)',borderRadius:8}}>
+            <div style={{fontSize:10,letterSpacing:2,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>SUPPORTED DATA SOURCES</div>
+            <ul style={{color:'var(--text-secondary)',fontSize:11,paddingLeft:16,lineHeight:1.9}}>
+              <li><span className="mono text-accent">Google Sheets (Publish to web)</span> — File → Share → Publish to web → Entire Document → CSV → Copy link. Backend proxy handles CORS automatically.</li>
+              <li><span className="mono text-accent">Excel (.xlsx/.xls)</span> — Drag & drop your Velan production workbook. Merged cells, PO fill-down, SNO/SC structure all parse correctly.</li>
+              <li><span className="mono text-accent">CSV / JSON</span> — Direct file upload or URL. Flexible column name detection.</li>
+              <li><span className="mono text-accent">No "type" column needed</span> — product type auto-detected from name prefix (APG, SRG, ARG, SP, etc.)</li>
+              <li>Required columns: <span className="mono text-accent">SC, PO NO, PO RECD DATE, Product Name, STATUS 1, INHOUSE/VENDOR, OP, TIMESTAMP</span></li>
+            </ul>
+          </div>
+
+          <div style={{display:'flex',gap:10,marginTop:14}}>
+            <button className="filter-btn" onClick={downloadTemplate} style={{flex:1,padding:'10px'}}>⬇ Download Template</button>
+            <button className="filter-btn" onClick={exportCurrentData} style={{flex:1,padding:'10px'}}>📊 Export Current ({data.length} rows)</button>
+          </div>
+        </div>
+
+        <div className="chart-card">
+          <div className="chart-title">Column Mapping Guide</div>
+          <div className="chart-sub">ACCEPTED COLUMN NAMES (ANY VARIATION WORKS)</div>
+          <div style={{fontSize:10,letterSpacing:2,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>YOUR EXCEL COLUMNS (VELAN FORMAT)</div>
+          <div style={{overflowX:'auto',marginTop:8}}>
+          <table>
+            <thead><tr><th>YOUR COLUMN</th><th>MAPS TO</th><th>NOTES</th></tr></thead>
+            <tbody>
+              {[
+                ['SC',              'Job Set No',       'Required. Fills down within each gauge set'],
+                ['PO NO',           'Purchase Order',   'Required. Fills down within each PO group'],
+                ['PO RECD DATE',    'PO Date',          'Date the PO was received'],
+                ['Product Name',    'Product',          'Required. Type is AUTO-DETECTED from name prefix'],
+                ['STATUS 1',        'Current Operation','What is happening now'],
+                ['STATUS 2',        'Next Operation',   'Where it moves after current op'],
+                ['INHOUSE/ VENDOR', 'Location',         '"INHOUSE" or "VENDOR"'],
+                ['OP',              'Current Stage',    'Stage code: READY, LATHE, CG, VA, STORES etc.'],
+                ['TIMESTAMP',       'Last Updated',     'Date-time of last status update'],
+                ['type column',     '(not needed)',     '✅ Auto-inferred from Product Name prefix (APG/SRG/ARG/SP...)'],
+              ].map(([col,maps,note],i)=>(
+                <tr key={i}>
+                  <td className="mono text-accent" style={{whiteSpace:'nowrap'}}>{col}</td>
+                  <td style={{fontSize:11,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{maps}</td>
+                  <td style={{fontSize:10,color:'var(--text-muted)'}}>{note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+      <div className="chart-card">
+        <div className="chart-title">Current Data Preview — {data.length} rows loaded</div>
+        <div className="chart-sub">FIRST 50 ROWS OF ACTIVE DATASET</div>
+        <div className="table-wrap" style={{marginTop:12,maxHeight:320}}>
+          <table>
+            <thead><tr><th>SC</th><th>PO</th><th>PRODUCT</th><th>TYPE</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th></tr></thead>
+            <tbody>{data.slice(0,50).map((r,i)=>(
+              <tr key={i}>
+                <td className="mono text-accent">{r.sc||'—'}</td>
+                <td style={{fontSize:11}}>{r.po}</td>
+                <td style={{fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                <td><span className="status-pill badge-blue">{r.type||'—'}</span></td>
+                <td>
+                  <span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>
+                    {r.currentStage||'—'}
+                  </span>
+                </td>
+                <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                <td className="mono" style={{fontSize:10}}>{r.timestamp?.substring(0,16)||'—'}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ─── MONTH / DAY VIEW PAGE ────────────────────────────────────────────────────
+function MonthDayPage({ liveData }) {
+  const todayDate = new Date();
+  const [viewMode, setViewMode] = useState('month');
+  const [selMonth, setSelMonth] = useState(todayDate.getMonth());
+  const [selYear]  = useState(todayDate.getFullYear());
+  const [selDay, setSelDay] = useState(
+    `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,'0')}-${String(todayDate.getDate()).padStart(2,'0')}`
+  );
+  const [expandedPO, setExpandedPO] = useState(null);
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const monthItems = useMemo(() => {
+    const prefix = `${selYear}-${String(selMonth+1).padStart(2,'0')}`;
+    return liveData.filter(r => r.poDate && r.poDate.startsWith(prefix));
+  }, [liveData, selMonth, selYear]);
+
+  const monthStats = useMemo(() => {
+    const pos    = new Set(monthItems.map(r=>r.po)).size;
+    const scs    = new Set(monthItems.map(r=>r.sc)).size;
+    const delayed = monthItems.filter(r => (r.pendingDays||0) > TARGET_DAYS).length;
+    const ready   = monthItems.filter(r => r.currentStage==='READY').length;
+    const stores  = monthItems.filter(r => r.currentStage==='STORES').length;
+    return { total:monthItems.length, pos, scs, delayed, ready, stores };
+  }, [monthItems]);
+
+  const dayItems = useMemo(() =>
+    liveData.filter(r => r.poDate === selDay),
+  [liveData, selDay]);
+
+  const groupByPO = items => {
+    const map = {};
+    items.forEach(r => {
+      if (!map[r.po]) map[r.po] = { po:r.po, poDate:r.poDate, scs:{} };
+      if (!map[r.po].scs[r.sc]) map[r.po].scs[r.sc] = [];
+      map[r.po].scs[r.sc].push(r);
+    });
+    return Object.values(map);
+  };
+
+  return (
+    <div>
+      <div className="section-title">Month / Day <span>View</span><div className="section-line"/></div>
+      <div className="tabs">
+        <div className={`tab ${viewMode==='month'?'active':''}`} onClick={()=>setViewMode('month')}>📅 Month View</div>
+        <div className={`tab ${viewMode==='day'?'active':''}`} onClick={()=>setViewMode('day')}>📆 Day View</div>
+      </div>
+
+      {viewMode==='month' && (
+        <div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
+            {MONTHS.map((m,i)=>(
+              <button key={i} className={`filter-btn ${selMonth===i?'active':''}`} onClick={()=>setSelMonth(i)}>
+                {m} {selYear}
+              </button>
+            ))}
+          </div>
+          <div className="kpi-grid" style={{marginBottom:16}}>
+            <div className="kpi-card"><div className="kpi-label">TOTAL ITEMS</div><div className="kpi-value">{monthStats.total}</div></div>
+            <div className="kpi-card"><div className="kpi-label">DISTINCT POs</div><div className="kpi-value">{monthStats.pos}</div></div>
+            <div className="kpi-card"><div className="kpi-label">DISTINCT SCs</div><div className="kpi-value">{monthStats.scs}</div></div>
+            <div className="kpi-card"><div className="kpi-label">DELAYED</div><div className="kpi-value" style={{color:'var(--danger)'}}>{monthStats.delayed}</div></div>
+            <div className="kpi-card"><div className="kpi-label">READY</div><div className="kpi-value" style={{color:'var(--success)'}}>{monthStats.ready}</div></div>
+            <div className="kpi-card"><div className="kpi-label">IN STORES</div><div className="kpi-value" style={{color:'var(--accent1)'}}>{monthStats.stores}</div></div>
+          </div>
+          <div className="table-card">
+            <div className="table-header">
+              <span style={{fontFamily:'Rajdhani',fontWeight:700}}>Items received in {MONTHS[selMonth]} {selYear}</span>
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>{monthItems.length} items</span>
+            </div>
+            <div className="table-wrap">
+              {monthItems.length === 0
+                ? <div style={{color:'var(--text-muted)',textAlign:'center',padding:40}}>No items received in {MONTHS[selMonth]} {selYear}</div>
+                : <table>
+                <thead><tr><th>PO</th><th>SC</th><th>PRODUCT</th><th>PO DATE</th><th>STAGE</th><th>TIMESTAMP</th><th>STATUS</th></tr></thead>
+                <tbody>{monthItems.map((r,i)=>(
+                  <tr key={i}>
+                    <td className="mono text-accent">{r.po||'—'}</td>
+                    <td className="mono">{r.sc||'—'}</td>
+                    <td style={{maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
+                    <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                    <td className="mono" style={{fontSize:10}}>{(r.timestamp||'').substring(0,16)||'—'}</td>
+                    <td><span className={`status-pill ${['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)?'s-ready':'s-wip'}`}>
+                      {['READY','STORES','STOCK','EXSTOCK'].includes(r.currentStage)?'DONE':'WIP'}
+                    </span></td>
+                  </tr>
+                ))}</tbody>
+              </table>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewMode==='day' && (
+        <div>
+          <div style={{marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
+            <input type="date" className="filter-input" value={selDay}
+              onChange={e=>{ setSelDay(e.target.value); setExpandedPO(null); }} style={{maxWidth:200}}/>
+            <span style={{fontSize:12,color:'var(--text-muted)'}}>{dayItems.length} items with PO date = {selDay}</span>
+          </div>
+          {groupByPO(dayItems).length === 0 && (
+            <div style={{color:'var(--text-muted)',textAlign:'center',padding:40}}>No items received on {selDay}</div>
+          )}
+          {groupByPO(dayItems).map(pg=>(
+            <div key={pg.po} className="chart-card" style={{marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}}
+                onClick={()=>setExpandedPO(expandedPO===pg.po?null:pg.po)}>
+                <span style={{fontFamily:'Rajdhani',fontWeight:700,fontSize:15}}>
+                  PO: <span className="text-accent">{pg.po||'—'}</span>
+                </span>
+                <span style={{fontSize:12,color:'var(--text-muted)'}}>
+                  {Object.keys(pg.scs).length} SCs · {Object.values(pg.scs).flat().length} items {expandedPO===pg.po?'▲':'▼'}
+                </span>
+              </div>
+              {expandedPO===pg.po && Object.entries(pg.scs).map(([sc,items])=>(
+                <div key={sc} style={{marginTop:10,paddingLeft:16,borderLeft:'2px solid var(--border-bright)'}}>
+                  <div style={{fontSize:12,color:'var(--accent1)',fontFamily:'Share Tech Mono,monospace',marginBottom:6}}>SC: {sc}</div>
+                  <table>
+                    <thead><tr><th>PRODUCT</th><th>STAGE</th><th>TIMESTAMP</th><th>INHOUSE</th><th>PENDING DAYS</th></tr></thead>
+                    <tbody>{items.map((r,i)=>(
+                      <tr key={i}>
+                        <td style={{fontSize:11}}>{r.product||'—'}</td>
+                        <td><span className="status-pill" style={{background:getStageColor(r.currentStage)+'22',color:getStageColor(r.currentStage)}}>{r.currentStage||'—'}</span></td>
+                        <td className="mono" style={{fontSize:10}}>{(r.timestamp||'').substring(0,16)||'—'}</td>
+                        <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                        <td style={{color:(r.pendingDays||0)>21?'var(--danger)':(r.pendingDays||0)>7?'var(--warning)':'var(--success)'}}>
+                          {r.pendingDays??'—'}d
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DATABASE PAGE ─────────────────────────────────────────────────────────────
+function DatabasePage({ data, historyRows, historyConfig, setHistoryConfig, onSyncHistory, importState, onResetDB, onUploadHistoryFile }) {
+  // --- State for filters ---
+  const [dateType, setDateType] = React.useState('poDate');
+  const [fromDate, setFromDate] = React.useState('');
+  const [toDate, setToDate] = React.useState('');
+  const [filters, setFilters] = React.useState({ po:'', stage:'', type:'', inhouse:'', category:'', search:'' });
+  const [selectedKPI, setSelectedKPI] = React.useState(null);
+  // --- Unique options ---
+  const uniquePOs = React.useMemo(()=>[...new Set(data.map(r=>r.po))].sort(),[data]);
+  const DONE_STAGES = /^(READY|STOCK|STORES?)$/i;
+  const normStage = s => {
+    if(!s) return '';
+    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+    if(/^STOCK[K]?$/.test(t)) return 'STOCK';
+    if(/^R[EAD]{2,4}Y$/.test(t)) return 'READY';
+    if(/^ST[OERATS]{2,5}$/.test(t)) return 'STORES';
+    return t;
+  };
+  const uniqueStages = React.useMemo(()=>
+    ['READY','STOCK','STORES']
+  ,[]);
+  const uniqueTypes = React.useMemo(()=>[...new Set(data.map(r=>r.type))].filter(Boolean).sort(),[data]);
+
+  // --- Date filter logic ---
+  function dateInRange(val) {
+    if (!val) return true;
+    const d = val.slice(0,10);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  }
+
+  // --- Filtered data ---
+  
+const isDoneStage = s => {
+    if(!s) return false;
+    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+    // Exact canonical matches (post-normalizeStage these are the only values)
+    if(t === 'READY') return true;
+    if(t === 'STORES') return true;
+    if(t === 'STOCK') return true;
+    if(t === 'EXSTOCK') return true;
+    if(t === 'VA') return true;    // VA is a terminal stage (value-added, dispatch-ready)
+    // Tolerate minor typos that normalizeStage may not have caught
+    if(/^STOCK{1,2}$/.test(t)) return true;
+    if(/^READ{1,2}Y$/.test(t)) return true;
+    if(t === 'STORE') return true; // singular alias
+    return false;
+  };
+  const normStageDB = s => {
+    if(!s) return '';
+    const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+    if(/^STOCK[K]?$/.test(t)) return 'STOCK';
+    if(t==='READY' || /^R[EAD]{2,4}Y$/.test(t)) return 'READY';
+    return 'STORES';
+  };
+  const filtered = React.useMemo(() => {
+    const result = data.filter(row => {
+      const dateVal = dateType==='poDate' ? row.poDate : row.timestamp;
+      if (!dateInRange(dateVal)) return false;
+      if(filters.po && row.po !== filters.po) return false;
+      if(filters.stage) {
+        if((row.currentStage||'').trim() !== filters.stage) return false;
+      }
+      if(filters.type && row.type !== filters.type) return false;
+      if(filters.inhouse && row.inhouse !== filters.inhouse) return false;
+      if(filters.category && getProductCategory && getProductCategory(row.type) !== filters.category) return false;
+      if(filters.search) {
+        const s = filters.search.trim().toLowerCase();
+        const scStr = String(row.sc||'').toLowerCase();
+        const poStr = String(row.po||'').toLowerCase();
+        const prodStr = String(row.product||'').toLowerCase();
+        // SC: exact match OR starts-with (so "1333" does NOT pull in SC 1322 via PO "1333 BUNCH")
+        const scMatch = scStr === s || scStr.startsWith(s);
+        const poMatch = poStr.includes(s);
+        const prodMatch = prodStr.includes(s);
+        if(!scMatch && !prodMatch && !poMatch) return false;
+        // If the only match is PO, ensure the SC itself also starts with the search term
+        // to prevent e.g. searching "1333" from showing SC 1322 whose PO is "1333 BUNCH"
+        if(!scMatch && !prodMatch && poMatch) {
+          if(!scStr.startsWith(s)) return false;
+        }
+      }
+      return true;
+    });
+    
+    // SORT BY PO RECEIVED DATE (ASCENDING)
+    return result.sort((a, b) => {
+      const dateA = a.poDate ? new Date(a.poDate).getTime() : 0;
+      const dateB = b.poDate ? new Date(b.poDate).getTime() : 0;
+      return dateA - dateB;
+    });
+  }, [data, filters, fromDate, toDate, dateType]);
+
+  // ── Component-level helpers shared by kpiStats AND the modal ──────────────
+  // allScItemsModal: full SC→rows map (entire data, no filters) for completion checks
+  const allScItemsModal = React.useMemo(() => {
+    const m = {};
+    data.forEach(r => {
+      if (!r.sc) return;
+      if (!m[r.sc]) m[r.sc] = [];
+      m[r.sc].push(r);
+    });
+    return m;
+  }, [data]);
+  // filteredScGroupsModal: SC→rows map restricted to current filtered view
+  const filteredScGroupsModal = React.useMemo(() => {
+    const m = {};
+    filtered.forEach(r => {
+      if (!r.sc) return;
+      if (!m[r.sc]) m[r.sc] = [];
+      m[r.sc].push(r);
+    });
+    return m;
+  }, [filtered]);
+  // hasNonDateFilter: true when any filter besides date is active (PO, search, type…)
+  const hasNonDateFilter = !!(filters.po || filters.search || filters.type || filters.inhouse || filters.category || filters.stage);
+
+  // --- KPI stats ---
+  const kpiStats = React.useMemo(() => {
+    const total = filtered.length;
+
+    // Total PO and SC counts — always from full data so history import doesn't shrink them.
+    // These are "database totals", not filtered totals.
+    const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
+    // For TOTAL SCs: count unique SC "families" from ALL data (history + live, no filters).
+    // 1211-1 and 1211-2 both belong to family "1211" → count as 1.
+    // 1231 (no suffix) → count as 1.
+    // Strip trailing "-<number>" suffix to get the family/prefix.
+    const _getScFamily = sc => String(sc).trim().replace(/-\d+$/, '');
+    const _scFamilySet = new Set();
+    data.forEach(r => { if (r.sc) _scFamilySet.add(_getScFamily(r.sc)); });
+    // Also include any SCs only present in liveRows (not yet in DB history)
+    // liveRows is included in allDbData which feeds `data`, so no extra pass needed.
+    const totalSCCount = _scFamilySet.size;
+    // Stage breakdown kept for sub-label display (counts completed SCs by stage, unchanged)
+    const _isDoneOrVA = s => {
+      if (!s) return false;
+      const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+      return ['READY','STORES','STORE','STOCK','EXSTOCK'].includes(t) ||
+             /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+    };
+    const _scFinalMap = {};
+    data.forEach(r => {
+      if (!r.sc) return;
+      if (!_scFinalMap[r.sc]) _scFinalMap[r.sc] = {};
+      const pkey = (r.product || '__none__').trim();
+      const ex = _scFinalMap[r.sc][pkey];
+      if (!ex) { _scFinalMap[r.sc][pkey] = r; return; }
+      const rDone  = _isDoneOrVA(r.currentStage);
+      const exDone = _isDoneOrVA(ex.currentStage);
+      if (rDone && !exDone) { _scFinalMap[r.sc][pkey] = r; return; }
+      if (!rDone && exDone) return;
+      if (r._isLive && !ex._isLive) { _scFinalMap[r.sc][pkey] = r; return; }
+      if (!r._isLive && ex._isLive) return;
+      if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[r.sc][pkey] = r;
+    });
+    const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0 };
+    Object.entries(_scFinalMap).forEach(([sc, prodMap]) => {
+      const latestRows = Object.values(prodMap);
+      if (latestRows.length > 0 && latestRows.every(r => _isDoneOrVA(r.currentStage))) {
+        const seenStages = new Set();
+        latestRows.forEach(r => {
+          const st = String(r.currentStage||'').trim().toUpperCase();
+          const norm = st === 'STORE' ? 'STORES' : /^STOCK[K]?$/.test(st) ? 'STOCK' : /^READ{1,2}Y$/.test(st) ? 'READY' : st;
+          if (_scStageCounts[norm] !== undefined) seenStages.add(norm);
+        });
+        seenStages.forEach(s => { _scStageCounts[s]++; });
+      }
+    });
+
+    // Filtered PO and SC counts (respects date/search filters)
+    const uniquePO = new Set(filtered.map(r=>r.po)).size;
+    const uniqueSC = new Set(filtered.map(r=>r.sc)).size;
+    const readyItemsCount = filtered.filter(r=>isDoneStage(r.currentStage)).length;
+
+    // SC Received: SCs where poDate falls within selected date range AND respects other filters
+    const scReceivedSet = new Set(
+      filtered.filter(r => r.poDate).map(r => r.sc).filter(Boolean)
+    );
+
+    // Build full SC -> items map from entire data
+    const allScItems = allScItemsModal;
+
+    // SC Completed: for each SC, get the LATEST row per unique product.
+    // History rows (old WIP stages) are ignored — only the latest state per product counts.
+    // If ALL latest product rows are READY/STOCK/STORES → SC is completed.
+    const filteredScGroups = filteredScGroupsModal;
+    // Helper: given rows for one SC, return the latest row per unique product.
+    // Priority order:
+    //   1. A DONE stage (READY/STOCK/STORES) beats any WIP stage — always.
+    //   2. Among DONE stages: _isLive (current Excel) beats DB history.
+    //   3. Among same source + same done/wip category: later timestamp wins.
+    //   4. Among WIP rows when no DONE row exists: _isLive beats DB, then timestamp.
+    const getLatestPerProduct = rows => {
+  const latestMap = {};
+  rows.forEach(r => {
+    const key = (r.product || '__none__').trim();
+    const ex = latestMap[key];
+    if (!ex) { latestMap[key] = r; return; }
+    const rDone = isDoneStage(r.currentStage);
+    const exDone = isDoneStage(ex.currentStage);
+    // Rule 1: DONE always beats WIP
+    if (rDone && !exDone) { latestMap[key] = r; return; }
+    if (!rDone && exDone) return;
+    // Both DONE or both WIP — apply secondary rules
+    // Rule 2: _isLive beats DB history
+    if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+    if (!r._isLive && ex._isLive) return;
+    // Rule 3: later timestamp wins
+    if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+  });
+  return Object.values(latestMap);
+};
+
+const getLatestPerProductForVA = rows => {
+  const latestMap = {};
+  rows.forEach(r => {
+    const key = (r.product || '__none__').trim();
+    const ex = latestMap[key];
+    if (!ex) { latestMap[key] = r; return; }
+    const rDone = isDoneOrVAStage(r.currentStage);
+    const exDone = isDoneOrVAStage(ex.currentStage);
+    if (rDone && !exDone) { latestMap[key] = r; return; }
+    if (!rDone && exDone) return;
+    if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+    if (!r._isLive && ex._isLive) return;
+    if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+  });
+  return Object.values(latestMap);
+};
+
+    // Determine which SCs to evaluate for completion:
+    // - WHICH SCs are in scope: respect search/PO/type/stage/inhouse filters (non-date)
+    //   but NOT date filters — an SC completed outside the date window is still completed.
+    // - HOW to evaluate each SC: ALWAYS use allScItems (all rows for that SC across all
+    //   history + live), so that a READY row imported as history is never hidden by the
+    //   date window or stage filter.
+    const scsToCheck = hasNonDateFilter
+      ? Object.keys(filteredScGroups)   // non-date filter active: limit WHICH SCs
+      : Object.keys(allScItems);        // date-only or no filter: evaluate ALL SCs
+
+    const scCompletedSet = new Set(
+      scsToCheck.filter(sc => {
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProduct(allRowsForSC);
+        if (!(latestRows.length > 0 && latestRows.every(r => isDoneStage(r.currentStage)))) return false;
+        // When date filter active: SC must have at least one done row in the date range
+        if (fromDate || toDate) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          return latestRows.some(r => {
+            const d = (r[dateField] || '').slice(0,10);
+            if (!d) return false;
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+        }
+        return true;
+      })
+    );
+    const scReadySet = scCompletedSet;
+    // SC Set prefix: strip trailing letters (e.g. "24050001A" → "24050001")
+    const getScPrefix = sc => String(sc).trim().replace(/-\d+$/, '');
+
+    // SC Sets Received: unique SC set prefixes where at least one SC has PO date in range
+    const scSetsReceivedSet = new Set(
+      [...scReceivedSet].map(sc => getScPrefix(sc)).filter(Boolean)
+    );
+
+    // SC Sets Completed: unique SC set prefixes where ALL SCs with that prefix
+    // have every LATEST item done AND at least one timestamp in range.
+    // Use getLatestPerProduct so old WIP history rows don't block completion.
+    const allPrefixes = [...new Set(
+      data.filter(r => r.sc).map(r => getScPrefix(r.sc)).filter(Boolean)
+    )];
+    const scSetsCompletedSet = new Set(
+      allPrefixes.filter(prefix => {
+        const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
+        if (prefixSCs.length === 0) return false;
+        const allDone = prefixSCs.every(sc => {
+          const latest = getLatestPerProduct(allScItems[sc] || []);
+          return latest.length > 0 && latest.every(i => isDoneStage(i.currentStage));
+        });
+        if (!allDone) return false;
+        return prefixSCs.some(sc =>
+          (allScItems[sc] || []).some(i => {
+            if (!i.timestamp) return false;
+            const d = i.timestamp.slice(0,10);
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          })
+        );
+      })
+    );
+    // SC Sets Completed TOTAL: ALL completed sets from history + live (NO date filter)
+    // Use getLatestPerProduct so old WIP history rows don't block completion.
+    const scSetsCompletedTotal = new Set(
+      allPrefixes.filter(prefix => {
+        const prefixSCs = Object.keys(allScItems).filter(sc => getScPrefix(sc) === prefix);
+        if (prefixSCs.length === 0) return false;
+        return prefixSCs.every(sc => {
+          const latest = getLatestPerProduct(allScItems[sc] || []);
+          return latest.length > 0 && latest.every(i => isDoneStage(i.currentStage));
+        });
+      })
+    );
+
+    // ── SC COMPLETED + VA ─────────────────────────────────────────────────────
+    // NEW metric: READY + STOCK + STORES + VA
+    // The original scCompletedSet (READY/STOCK/STORES) is NOT modified.
+    // This is a separate, isolated calculation using a wider done-stage check.
+    const isDoneOrVAStage = s => {
+      if (!s) return false;
+      const t = String(s).trim().toUpperCase().replace(/\s+/g, '');
+      if (t === 'READY')  return true;
+      if (t === 'STORES') return true;
+      if (t === 'STOCK')  return true;
+      if (t === 'EXSTOCK') return true;
+      if (t === 'STORE')  return true;
+      if (/^STOCK[K]?$/.test(t)) return true;
+      if (/^READ{1,2}Y$/.test(t)) return true;
+      if (t === 'VA')     return true;  // <-- VA included ONLY here
+      return false;
+    };
+
+    // Build scCompletedPlusVASet:
+    // - Scope: same scsToCheck (respects date/PO/search filters for WHICH SCs are in scope)
+    // - Source: always allScItems (ALL rows for the SC, not just filtered rows),
+    //   so VA rows are never hidden by the date window or stage filter.
+    // - Priority: getLatestPerProductForVA (VA is treated as a terminal state, not WIP)
+    const scCompletedPlusVASet = new Set(
+      scsToCheck.filter(sc => {
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProductForVA(allRowsForSC);
+        if (!(latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage)))) return false;
+        // When date filter active: every latest row must fall within the date range
+        if (fromDate || toDate) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          return latestRows.every(r => {
+            const d = (r[dateField] || '').slice(0, 10);
+            if (!d) return false;
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+        }
+        return true;
+      })
+    );
+
+    // Breakdown counts for the +VA popup — only SCs in scCompletedPlusVASet (date-filtered)
+    const vaBreakdown = (() => {
+      const counts = { READY: 0, STOCK: 0, STORES: 0, EXSTOCK: 0, VA: 0 };
+      scCompletedPlusVASet.forEach(sc => {
+        const allRowsForSC = allScItems[sc] || [];
+        const latestRows = getLatestPerProductForVA(allRowsForSC);
+        if (latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage))) {
+          latestRows.forEach(r => {
+            // Respect date filter per individual row
+            if (fromDate || toDate) {
+              const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+              const d = (r[dateField] || '').slice(0, 10);
+              if (!d) return;
+              if (fromDate && d < fromDate) return;
+              if (toDate && d > toDate) return;
+            }
+            const st = String(r.currentStage || '').trim().toUpperCase();
+            if (st === 'READY')  counts.READY++;
+            else if (st === 'STOCK')  counts.STOCK++;
+            else if (st === 'EXSTOCK') counts.EXSTOCK++;
+            else if (st === 'STORES' || st === 'STORE') counts.STORES++;
+            else if (st === 'VA')   counts.VA++;
+          });
+        }
+      });
+      return counts;
+    })();
+
+    return {
+      total, uniquePO, uniqueSC, readyItemsCount,
+      totalPOCount, totalSCCount, scStageCounts: _scStageCounts,
+      scReceived: scReceivedSet.size,
+      scCompleted: scCompletedSet.size,
+      scReady: scReadySet.size,
+      scSetsReceived: scSetsReceivedSet.size,
+      scSetsCompleted: scSetsCompletedSet.size,
+      scSetsCompletedTotal: scSetsCompletedTotal.size,
+      // NEW — isolated from scCompleted; VA only appears here
+      scCompletedPlusVA: scCompletedPlusVASet.size,
+      scCompletedPlusVASet,
+      vaBreakdown,
+    };
+  }, [filtered, data, fromDate, toDate, dateType, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
+  // --- Export handlers ---
+  function exportJSON() {
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filtered_data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportCSV() {
+    const header = Object.keys(filtered[0]||{});
+    const rows = filtered.map(r=>header.map(h=>`"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+    const csv = [header.join(','),...rows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filtered_data.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+    // Only export READY / STORES / STOCK — no WIP
+    const exportRows = filtered.filter(r => isDoneStage(r.currentStage));
+
+    const columns = [
+      { header: 'SC',        dataKey: 'sc' },
+      { header: 'PO',        dataKey: 'po' },
+      { header: 'PO DATE',   dataKey: 'poDate' },
+      { header: 'PRODUCT',   dataKey: 'product' },
+      { header: 'STAGE',     dataKey: 'currentStage' },
+      { header: 'INHOUSE',   dataKey: 'inhouse' },
+      { header: 'TIMESTAMP', dataKey: 'timestamp' },
+    ];
+
+    const rows = exportRows.map(r => ({
+      sc:           r.sc || '',
+      po:           r.po || '',
+      poDate:       r.poDate ? fmtDate(r.poDate) : '',
+      product:      r.product || '',
+      currentStage: r.currentStage || '',
+      inhouse:      r.inhouse || '',
+      timestamp:    r.timestamp ? fmtTs(r.timestamp) : '',
+    }));
+
+    doc.setFontSize(14);
+    doc.text('Velan Metrology \u2013 Database Export', 40, 36);
+    doc.setFontSize(9);
+    doc.setTextColor(80, 80, 80);
+    const dateRange = (fromDate || toDate) ? ` | Date range: ${fromDate||'-'} to ${toDate||'-'}` : '';
+    doc.text(`Exported Rows: ${rows.length}  (READY / STORES / STOCK only)${dateRange}`, 40, 52);
+    doc.text(
+      `Unique POs: ${kpiStats.uniquePO}   SC Sets: ${kpiStats.uniqueSC}   SC Received: ${kpiStats.scReceived}   SC Completed: ${kpiStats.scCompleted}   SC Ready: ${kpiStats.scReady}`,
+      40, 66
+    );
+
+    doc.autoTable({
+      columns,
+      body: rows,
+      startY: 82,
+      styles:      { fontSize: 8, cellPadding: 3 },
+      headStyles:  { fillColor: [0, 100, 180] },
+      theme:       'grid',
+      margin:      { left: 40, right: 40 },
+      tableWidth:  'auto',
+      bodyStyles:  { textColor: 20 },
+    });
+    doc.save('database_export.pdf');
+  }
+
+  // --- Quick date buttons ---
+  function setQuickDays(days) {
+    const today = new Date();
+    const to = today.toISOString().slice(0,10);
+    const from = new Date(today.getTime() - (days*24*60*60*1000));
+    setFromDate(from.toISOString().slice(0,10));
+    setToDate(to);
+  }
+
+  return (
+    <div>
+      <div className="section-title">Database <span>Archive</span><div className="section-line"/></div>
+      {/* ── HISTORY DATA MODULE ─────────────────────────────────────────── */}
+      <div className="chart-card" style={{marginBottom:18,background:'rgba(10,15,40,0.95)',border:'1px solid rgba(100,120,255,0.35)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:20}}>🗃</span>
+            <div>
+              <div className="chart-title" style={{marginBottom:0,color:'var(--accent3)'}}>History Archive Import</div>
+              <div className="chart-sub">IMPORT PAST RECORDS — PERMANENTLY STORED IN DATABASE</div>
+            </div>
+          </div>
+          {(historyRows||[]).length > 0 && (
+            <span style={{background:'rgba(100,120,255,0.15)',border:'1px solid rgba(100,120,255,0.4)',color:'var(--accent3)',borderRadius:20,padding:'4px 14px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
+              🗂 {(historyRows||[]).length} history rows in DB
+              {((historyRows||[]).length !== (data||[]).length) && (
+                <span style={{marginLeft:8,opacity:0.7}}>· {(data||[]).length} total (incl. live)</span>
+              )}
+            </span>
+          )}
+        </div>
+ 
+        {/* OPTION 1: Upload File from Device */}
+        <div style={{marginBottom:16,padding:16,background:'rgba(15,110,86,0.08)',border:'2px dashed rgba(0,230,118,0.4)',borderRadius:8,textAlign:'center',cursor:'pointer'}} 
+          onDragOver={e=>{e.preventDefault();e.target.style.borderColor='rgba(0,230,118,0.8)'}}
+          onDragLeave={e=>{e.target.style.borderColor='rgba(0,230,118,0.4)'}}
+          onDrop={e=>{e.preventDefault();handleHistoryDragDrop(e);}}
+          onClick={()=>document.getElementById('historyFileInput')?.click()}
+        >
+          <div style={{fontSize:24,marginBottom:8}}>📤</div>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--success)',marginBottom:4,letterSpacing:1}}>
+            DRAG & DROP BACKUP FILE HERE
+          </div>
+          <div style={{fontSize:10,color:'var(--text-muted)'}}>
+            or click to browse — supports .xlsx, .xls, .csv, .json
+          </div>
+          <input
+            id="historyFileInput"
+            type="file"
+            accept=".xlsx,.xls,.csv,.json"
+            style={{display:'none'}}
+            onChange={e=>handleHistoryFileUpload(e.target.files?.[0])}
+          />
+        </div>
+ 
+        {/* OPTION 2: Paste Google Sheets URL */}
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'flex-end'}}>
+          <div style={{flex:2,minWidth:280}}>
+            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6,letterSpacing:1}}>OR PASTE GOOGLE SHEETS CSV URL</div>
+            <input
+              type="text"
+              value={historyConfig?.url || ''}
+              onChange={e=>setHistoryConfig(prev=>({...prev,url:e.target.value}))}
+              placeholder="https://docs.google.com/spreadsheets/d/YOUR_ID/export?format=csv"
+              style={{width:'100%',background:'var(--bg-secondary)',border:'1px solid rgba(100,120,255,0.4)',borderRadius:6,color:'var(--text-primary)',padding:'9px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}
+            />
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+            <button
+              className="filter-btn"
+              style={{padding:'10px 18px',background:importState?.loading?'rgba(100,120,255,0.08)':'rgba(100,120,255,0.18)',border:'1px solid rgba(100,120,255,0.5)',color:'var(--accent3)',fontWeight:700}}
+              onClick={onSyncHistory}
+              disabled={importState?.loading}
+            >
+              {importState?.loading ? '⏳ Importing…' : '📥 Import from URL'}
+            </button>
+            <button className="filter-btn" style={{padding:'10px'}} onClick={()=>setHistoryConfig({url:''})}>🧹 Clear</button>
+          </div>
+        </div>
+ 
+        {/* Status Message */}
+        {importState?.lastMsg && (
+          <div style={{
+            marginTop:10,
+            background:importState.lastMsg.startsWith('✅')?'rgba(0,230,118,0.07)':importState.lastMsg.startsWith('❌')?'rgba(255,61,90,0.07)':'rgba(0,201,255,0.07)',
+            border:`1px solid ${importState.lastMsg.startsWith('✅')?'rgba(0,230,118,0.3)':importState.lastMsg.startsWith('❌')?'rgba(255,61,90,0.3)':'rgba(0,201,255,0.25)'}`,
+            borderRadius:7,padding:'9px 14px',
+            color:importState.lastMsg.startsWith('✅')?'var(--success)':importState.lastMsg.startsWith('❌')?'var(--danger)':'var(--accent1)',
+            fontSize:11,fontFamily:'Share Tech Mono,monospace'
+          }}>
+            {importState.lastMsg}
+          </div>
+        )}
+ 
+        {/* Database Reset Button */}
+        <div style={{marginTop:12,display:'flex',justifyContent:'flex-end'}}>
+          <button
+            className="filter-btn"
+            style={{padding:'10px 18px',background:'rgba(255,61,90,0.12)',border:'1px solid rgba(255,61,90,0.5)',color:'var(--danger)',fontWeight:700}}
+            onClick={onResetDB}
+            disabled={importState?.loading}
+          >
+            🗑 Reset Entire DB (WARNING)
+          </button>
+        </div>
+ 
+        {/* Info Box */}
+        <div style={{marginTop:12,fontSize:10,color:'var(--text-muted)',lineHeight:1.7,padding:'8px 12px',background:'rgba(100,120,255,0.04)',border:'1px solid rgba(100,120,255,0.1)',borderRadius:7}}>
+          <strong style={{color:'var(--accent3)'}}>ℹ Database-only:</strong> Imported history rows are stored permanently in Neon PostgreSQL and visible <strong>only on this page</strong>. They do not appear in Production, Stage/WIP, or any other module. Duplicates are automatically skipped.
+        </div>
+      </div>
+
+      {/* FILTER BAR */}
+      <div className="chart-card" style={{marginBottom:16,background:'rgba(0,20,40,0.9)'}}>
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
+          <div style={{display:'flex',gap:4}}>
+            <button className={`filter-btn${dateType==='poDate'?' active':''}`} onClick={()=>setDateType('poDate')}>PO Received Date</button>
+            <button className={`filter-btn${dateType==='timestamp'?' active':''}`} onClick={()=>setDateType('timestamp')}>Last Updated Timestamp</button>
+          </div>
+          <input type="date" className="filter-input" value={fromDate} onChange={e=>setFromDate(e.target.value)} placeholder="From"/>
+          <input type="date" className="filter-input" value={toDate} onChange={e=>setToDate(e.target.value)} placeholder="To"/>
+          <button className="filter-btn reset" onClick={()=>{setFromDate('');setToDate('');}}>✕ Reset</button>
+          <div style={{display:'flex',gap:4,marginLeft:8}}>
+            <button className="filter-btn" onClick={()=>setQuickDays(7)}>Last 7 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(14)}>Last 14 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(30)}>Last 30 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(60)}>Last 60 Days</button>
+            <button className="filter-btn" onClick={()=>setQuickDays(90)}>Last 90 Days</button>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
+          <select className="filter-select" value={filters.po} onChange={e=>setFilters(f=>({...f,po:e.target.value}))}>
+            <option value="">All POs</option>
+            {uniquePOs.map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+          <select className="filter-select" value={filters.stage} onChange={e=>setFilters(f=>({...f,stage:e.target.value}))}>
+            <option value="">All Stages</option>
+            {['STORES', 'STOCK', 'READY'].map(s=>(
+              <option key={s} value={s}>{s}</option>
+            ))}
+            </select>
+          <select className="filter-select" value={filters.type} onChange={e=>setFilters(f=>({...f,type:e.target.value}))}>
+            <option value="">All Types</option>
+            {uniqueTypes.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="filter-select" value={filters.category} onChange={e=>setFilters(f=>({...f,category:e.target.value}))}>
+            <option value="">All Categories</option>
+            <option value="AIRPLUG">Airplug (APG/ARG)</option>
+            <option value="MASTER">Master (SRG/SP/SPG)</option>
+            <option value="ACCESSORY">Accessories</option>
+          </select>
+          <select className="filter-select" value={filters.inhouse} onChange={e=>setFilters(f=>({...f,inhouse:e.target.value}))}>
+            <option value="">Inhouse + Vendor</option>
+            <option value="INHOUSE">Inhouse Only</option>
+            <option value="VENDOR">Vendor Only</option>
+          </select>
+          <input className="filter-input" placeholder="Search SC / Product / PO..." value={filters.search} onChange={e=>setFilters(f=>({...f,search:e.target.value}))} style={{minWidth:200}}/>
+          <button className="filter-btn reset" onClick={()=>setFilters({po:'',stage:'',type:'',inhouse:'',category:'',search:''})}>✕ Reset</button>
+          <span style={{marginLeft:'auto',fontFamily:'Share Tech Mono',fontSize:11,color:'var(--text-muted)'}}>{filtered.length} filtered · {data.length} total</span>
+        </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12,marginBottom:18}}>
+        <div className="kpi-card" style={{'--c1':'#00c9ff','--c2':'#0fa8e0'}}>
+          <div className="kpi-label">TOTAL POs</div>
+          <div className="kpi-value">{kpiStats.totalPOCount}</div>
+          <div className="kpi-sub">
+            all POs in database
+            {(fromDate||toDate) && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--accent1)'}}>{kpiStats.uniquePO} in selected range</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#b24bff','--c2':'#00c9ff'}}>
+          <div className="kpi-label">TOTAL SCs</div>
+          <div className="kpi-value">{kpiStats.totalSCCount}</div>
+          <div className="kpi-sub">
+            unique SC sets in database (1211-1 &amp; 1211-2 = 1 set)
+            <span style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+              {[
+                {label:'READY',   val:kpiStats.scStageCounts?.READY,   c:'var(--success)'},
+                {label:'STORES',  val:kpiStats.scStageCounts?.STORES,  c:'var(--accent1)'},
+                {label:'STOCK',   val:kpiStats.scStageCounts?.STOCK,   c:'var(--warning)'},
+                {label:'EXSTOCK', val:kpiStats.scStageCounts?.EXSTOCK, c:'var(--accent6)'},
+              ].map(s=>(
+                <span key={s.label} style={{fontSize:9,fontFamily:'Share Tech Mono,monospace',color:s.val>0?s.c:'var(--text-muted)',background:s.val>0?s.c+'22':'rgba(255,255,255,0.04)',borderRadius:4,padding:'1px 5px'}}>
+                  {s.label}: {s.val||0}
+                </span>
+              ))}
+            </span>
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#ffd60a','--c2':'#ff6b35'}}>
+          <div className="kpi-label">SC RECEIVED</div>
+          <div className="kpi-value" style={{color:'var(--accent5)'}}>{kpiStats.scReceived}</div>
+          <div className="kpi-sub">
+            SCs with PO date in range
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
+          </div>
+        </div>
+        <div className="kpi-card" style={{'--c1':'#00e676','--c2':'#00c9ff', cursor:'pointer'}} onClick={() => setSelectedKPI('scCompleted')}>
+          <div className="kpi-label">SC COMPLETED</div>
+          <div className="kpi-value" style={{color:'var(--success)'}}>{kpiStats.scCompleted}</div>
+          <div className="kpi-sub">
+            all items READY/STOCK/STORES/EXSTOCK
+            {fromDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>from {fromDate}</span>}
+            {toDate && <span style={{display:'block',fontSize:9,color:'var(--text-muted)'}}>to {toDate}</span>}
+            {!fromDate && !toDate && <span style={{display:'block',fontSize:9,marginTop:3,color:'var(--text-muted)'}}>all dates</span>}
+          </div>
+          {/* NEW: +VA View — separate modal, does NOT modify SC COMPLETED above */}
+          <button
+            onClick={e => { e.stopPropagation(); setSelectedKPI('scCompletedPlusVA'); }}
+            style={{
+              marginTop:10, padding:'4px 10px',
+              border:'1px solid rgba(255,107,53,0.5)',
+              background:'rgba(255,107,53,0.1)',
+              color:'var(--accent4)', borderRadius:6,
+              fontSize:10, fontWeight:700, cursor:'pointer',
+              fontFamily:'Share Tech Mono,monospace', letterSpacing:0.5,
+            }}
+            title="View SC Completed including VA stage"
+          >+VA View ({kpiStats.scCompletedPlusVA})</button>
+        </div>
+      </div>
+
+      {/* EXPORT BUTTONS */}
+      <div style={{display:'flex',gap:10,marginBottom:18}}>
+        <button className="filter-btn" style={{background:'rgba(0,201,255,0.08)',color:'var(--accent1)',fontWeight:700}} onClick={exportJSON}>⬇ JSON</button>
+        <button className="filter-btn" style={{background:'rgba(0,255,100,0.08)',color:'var(--success)',fontWeight:700}} onClick={exportCSV}>⬇ CSV</button>
+        <button className="filter-btn" style={{background:'rgba(255,61,90,0.08)',color:'var(--danger)',fontWeight:700}} onClick={exportPDF}>⬇ PDF</button>
+        <span style={{fontSize:12,color:'var(--text-muted)',marginLeft:8}}>EXPORT COMPLETED ITEMS ({(() => {
+          const dm = {};
+          filtered.forEach(r => {
+            const k = (r.sc||'')+'||'+(r.product||'').trim();
+            const ex = dm[k];
+            if(!ex){dm[k]=r;return;}
+            const rD=isDoneStage(r.currentStage),eD=isDoneStage(ex.currentStage);
+            if(rD&&!eD){dm[k]=r;return;}if(!rD&&eD)return;
+            if(r._isLive&&!ex._isLive){dm[k]=r;return;}if(!r._isLive&&ex._isLive)return;
+            if(r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))dm[k]=r;
+          });
+          return Object.values(dm).filter(r=>isDoneStage(r.currentStage)).length;
+        })()} rows — READY / STOCK / STORES / EXSTOCK only):</span>
+      </div>
+{/* DATA TABLE — READY / STOCK / STORES only (completed items, deduplicated) */}
+      {(() => {
+        // Deduplicate: for each SC+product in filtered, pick the latest/best row
+        // using the same DONE-beats-WIP + _isLive + timestamp rules.
+        // This ensures READY history rows appear instead of old WIP rows.
+        const dedupeMap = {};
+        filtered.forEach(r => {
+          const key = (r.sc||'') + '||' + (r.product||'__none__').trim();
+          const ex = dedupeMap[key];
+          if (!ex) { dedupeMap[key] = r; return; }
+          const rDone = isDoneStage(r.currentStage);
+          const exDone = isDoneStage(ex.currentStage);
+          if (rDone && !exDone) { dedupeMap[key] = r; return; }
+          if (!rDone && exDone) return;
+          if (r._isLive && !ex._isLive) { dedupeMap[key] = r; return; }
+          if (!r._isLive && ex._isLive) return;
+          if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dedupeMap[key] = r;
+        });
+        const deduped = Object.values(dedupeMap).sort((a,b) => {
+          const da = a.poDate ? new Date(a.poDate).getTime() : 0;
+          const db = b.poDate ? new Date(b.poDate).getTime() : 0;
+          return da - db;
+        });
+        const tableRows = deduped.filter(r => isDoneStage(r.currentStage));
+        const wipCount = deduped.length - tableRows.length;
+        return (
+          <div className="chart-card" style={{marginBottom:16}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:4}}>
+              <div>
+                <div className="chart-title">Completed Items — {tableRows.length} shown</div>
+                <div className="chart-sub">READY / STOCK / STORES / EXSTOCK ONLY · {wipCount} in-process items hidden · HISTORY + LIVE COMBINED · LATEST STATE PER PRODUCT</div>
+              </div>
+              <div style={{display:'flex',gap:8,flexShrink:0}}>
+                <span style={{background:'rgba(0,230,118,0.12)',border:'1px solid rgba(0,230,118,0.3)',color:'var(--success)',borderRadius:20,padding:'3px 12px',fontSize:11,fontFamily:'Share Tech Mono,monospace'}}>
+                  ✓ {tableRows.length} DONE
+                </span>
+              </div>
+            </div>
+            <div className="table-wrap" style={{marginTop:12,maxHeight:500}}>
+              <table>
+                <thead>
+                  <tr><th>SC</th><th>PO</th><th>PO DATE</th><th>PRODUCT</th><th>STAGE</th><th>INHOUSE</th><th>TIMESTAMP</th></tr>
+                </thead>
+                <tbody>{tableRows.map((r,i)=>(
+                  <tr key={i}>
+                    <td className="mono text-accent">{r.sc||'—'}</td>
+                    <td style={{fontSize:11}}>{r.po||'—'}</td>
+                    <td className="mono" style={{fontSize:10}}>{fmtDate(r.poDate)}</td>
+                    <td style={{fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                    <td><span className="status-pill" style={{
+                      background: r.currentStage==='READY' ? 'rgba(0,230,118,0.15)' : r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' : r.currentStage==='EXSTOCK' ? 'rgba(178,75,255,0.15)' : 'rgba(255,214,10,0.15)',
+                      color: r.currentStage==='READY' ? 'var(--success)' : r.currentStage==='STORES' ? 'var(--accent1)' : r.currentStage==='EXSTOCK' ? 'var(--accent6)' : 'var(--warning)'
+                    }}>{r.currentStage||'—'}</span></td>
+                    <td><span className={`status-pill ${r.inhouse==='VENDOR'?'s-vendor':'badge-blue'}`}>{r.inhouse}</span></td>
+                    <td className="mono" style={{fontSize:10}}>{fmtTs(r.timestamp)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* DETAIL MODAL - Show completed SCs details */}
+      {selectedKPI === 'scCompleted' && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+          <div style={{background:'var(--bg-card)',border:'2px solid var(--accent3)',borderRadius:12,padding:24,maxWidth:800,maxHeight:'80vh',overflow:'auto',width:'90%'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div>
+                <div style={{fontSize:18,fontWeight:700,color:'var(--accent3)',marginBottom:4}}>SC COMPLETED ({kpiStats.scCompleted})</div>
+                <div style={{fontSize:11,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>All items READY/STOCK/STORES/EXSTOCK</div>
+              </div>
+              <button onClick={() => setSelectedKPI(null)} style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}>CLOSE</button>
+            </div>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--border)'}}>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>SC</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>PO</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>PRODUCT</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>STAGE</th>
+                  <th style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono',fontSize:10}}>TIMESTAMP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  // Use filtered SCs to respect all active filters
+                  // Only show SCs that appear in the filtered results
+                  const scsInView = Object.keys(filteredScGroupsModal);
+
+                  const completedSCs = scsInView
+                    .map(sc => {
+                      // Use FILTERED rows, not all rows from the SC
+                      const filteredRows = filteredScGroupsModal[sc] || [];
+                      if (filteredRows.length === 0) return null;
+                      
+                      const latestMap = {};
+                      filteredRows.forEach(r => {
+                        const key = (r.product || '__none__').trim();
+                        const ex = latestMap[key];
+                        if (!ex) { latestMap[key] = r; return; }
+                        const rDone = isDoneStage(r.currentStage);
+                        const exDone = isDoneStage(ex.currentStage);
+                        if (rDone && !exDone) { latestMap[key] = r; return; }
+                        if (!rDone && exDone) return;
+                        if (r._isLive && !ex._isLive) { latestMap[key] = r; return; }
+                        if (!r._isLive && ex._isLive) return;
+                        if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
+                      });
+                      const latestRows = Object.values(latestMap);
+                      return latestRows.length > 0 ? [sc, latestRows] : null;
+                    })
+                    .filter(item => item !== null)
+                    .filter(([, latestRows]) => latestRows.every(r => isDoneStage(r.currentStage)));
+
+                  if (completedSCs.length === 0) {
+                    return (
+                      <tr><td colSpan="5" style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:12}}>
+                        No completed SC sets found for the current filters.
+                      </td></tr>
+                    );
+                  }
+
+                  return completedSCs.map(([sc, latestRows], i) => (
+                    latestRows.map((r, j) => (
+                      <tr key={sc+'-'+j} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(0,201,255,0.02)':'transparent'}}>
+                        <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono',fontWeight:700}}>{j===0 ? sc : ''}</td>
+                        <td style={{padding:'10px',fontSize:11}}>{r.po || '—'}</td>
+                        <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product || '—'}</td>
+                        <td style={{padding:'10px'}}>
+                          <span style={{
+                            background: r.currentStage==='READY' ? 'rgba(0,230,118,0.15)' : r.currentStage==='STORES' ? 'rgba(0,201,255,0.15)' : 'rgba(255,214,10,0.15)',
+                            color: r.currentStage==='READY' ? 'var(--success)' : r.currentStage==='STORES' ? 'var(--accent1)' : 'var(--warning)',
+                            padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700
+                          }}>{r.currentStage || '—'}</span>
+                        </td>
+                        <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono'}}>{r.timestamp ? r.timestamp.slice(0,10) : '—'}</td>
+                      </tr>
+                    ))
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {/* DETAIL MODAL — SC COMPLETED + VA BREAKDOWN */}
+      {selectedKPI === 'scCompletedPlusVA' && (() => {
+        // Export helpers scoped to this modal
+        function exportModalJSON() {
+          const blob = new Blob([JSON.stringify(completedPlusVARows, null, 2)], {type:'application/json'});
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+          a.download = 'sc_completed_plus_va.json'; a.click();
+        }
+        function exportModalCSV() {
+          const header = ['sc','po','product','currentStage','inhouse','timestamp'];
+          const rows = completedPlusVARows.map(r => header.map(h => `"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+          const blob = new Blob([[header.join(','), ...rows].join('\n')], {type:'text/csv'});
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+          a.download = 'sc_completed_plus_va.csv'; a.click();
+        }
+        function exportModalPDF() {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
+          doc.setFontSize(14);
+          doc.text('Velan Metrology \u2013 SC COMPLETED + VA', 40, 36);
+          doc.setFontSize(9); doc.setTextColor(80,80,80);
+          doc.text(
+            `READY: ${kpiStats.vaBreakdown.READY}  STOCK: ${kpiStats.vaBreakdown.STOCK}  STORES: ${kpiStats.vaBreakdown.STORES}  SC COMPLETED: ${kpiStats.scCompleted}  VA: ${kpiStats.vaBreakdown.VA}  SC COMPLETED+VA: ${kpiStats.scCompletedPlusVA}`,
+            40, 52
+          );
+          doc.autoTable({
+            columns:[
+              {header:'SC',dataKey:'sc'},{header:'PO',dataKey:'po'},
+              {header:'PRODUCT',dataKey:'product'},{header:'STAGE',dataKey:'currentStage'},
+              {header:'INHOUSE',dataKey:'inhouse'},{header:'TIMESTAMP',dataKey:'timestamp'},
+            ],
+            body: completedPlusVARows.map(r=>({
+              sc:r.sc||'', po:r.po||'', product:r.product||'',
+              currentStage:r.currentStage||'', inhouse:r.inhouse||'',
+              timestamp:r.timestamp ? fmtTs(r.timestamp) : '',
+            })),
+            startY:68, styles:{fontSize:8,cellPadding:3},
+            headStyles:{fillColor:[255,107,53]}, theme:'grid',
+            margin:{left:40,right:40},
+          });
+          doc.save('sc_completed_plus_va.pdf');
+        }
+
+        // Build the row list for the popup from filteredScGroupsModal
+        // Includes all SCs where every latest item is in READY/STOCK/STORES/VA
+        const isDoneOrVA = s => {
+          if (!s) return false;
+          const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
+          return ['READY','STOCK','STORES','STORE','EXSTOCK','VA'].includes(t) || /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
+        };
+        const getLatestPP = rows => {
+  const m = {};
+  rows.forEach(r => {
+    const key = (r.product||'__none__').trim();
+    const ex = m[key];
+    if (!ex) { m[key]=r; return; }
+    const rD=isDoneOrVA(r.currentStage), eD=isDoneOrVA(ex.currentStage);
+    if (rD&&!eD){m[key]=r;return;} if(!rD&&eD)return;
+    if (r._isLive&&!ex._isLive){m[key]=r;return;} if(!r._isLive&&ex._isLive)return;
+    if (r.timestamp&&(!ex.timestamp||r.timestamp>ex.timestamp))m[key]=r;
+  });
+  return Object.values(m);
+};
+        // Only show SCs that are in scCompletedPlusVASet (already date-filtered in kpiStats)
+        const completedPlusVASCs = [...kpiStats.scCompletedPlusVASet].map(sc => {
+            const rows = (allScItemsModal[sc] || []);
+            if (rows.length === 0) return null;
+            const latest = getLatestPP(rows).filter(r => {
+              if (!fromDate && !toDate) return true;
+              const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+              const d = (r[dateField] || '').slice(0, 10);
+              if (!d) return false;
+              if (fromDate && d < fromDate) return false;
+              if (toDate && d > toDate) return false;
+              return true;
+            });
+            if (latest.length > 0 && latest.every(r => isDoneOrVA(r.currentStage))) return [sc, latest];
+            return null;
+          })
+          .filter(Boolean);
+
+        // Flat row list for exports
+        const completedPlusVARows = completedPlusVASCs.flatMap(([, rows]) => rows);
+
+        return (
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+            <div style={{background:'var(--bg-card)',border:'2px solid var(--accent4)',borderRadius:12,padding:24,maxWidth:860,maxHeight:'85vh',overflow:'auto',width:'92%'}}>
+              {/* Header */}
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16,gap:12}}>
+                <div>
+                  <div style={{fontSize:18,fontWeight:700,color:'var(--accent4)',marginBottom:6,fontFamily:'Rajdhani,sans-serif',letterSpacing:1}}>
+                    SC COMPLETED + VA BREAKDOWN
+                  </div>
+                  <div style={{display:'flex',gap:18,flexWrap:'wrap',marginBottom:4}}>
+                    {[
+                      {label:'READY',   val:kpiStats.vaBreakdown.READY,   c:'var(--success)'},
+                      {label:'STOCK',   val:kpiStats.vaBreakdown.STOCK,   c:'var(--warning)'},
+                      {label:'STORES',  val:kpiStats.vaBreakdown.STORES,  c:'var(--accent1)'},
+                      {label:'EXSTOCK', val:kpiStats.vaBreakdown.EXSTOCK, c:'var(--accent6)'},
+                    ].map(s=>(
+                      <span key={s.label} style={{fontSize:12,fontFamily:'Share Tech Mono,monospace'}}>
+                        <span style={{color:'var(--text-muted)'}}>{s.label}: </span>
+                        <span style={{color:s.c,fontWeight:700}}>{s.val}</span>
+                      </span>
+                    ))}
+                    <span style={{fontSize:12,fontFamily:'Share Tech Mono,monospace',borderLeft:'1px solid var(--border)',paddingLeft:18}}>
+                      <span style={{color:'var(--text-muted)'}}>SC COMPLETED: </span>
+                      <span style={{color:'var(--success)',fontWeight:700}}>{kpiStats.scCompleted}</span>
+                    </span>
+                    <span style={{fontSize:12,fontFamily:'Share Tech Mono,monospace'}}>
+                      <span style={{color:'var(--text-muted)'}}>VA: </span>
+                      <span style={{color:'var(--accent4)',fontWeight:700}}>{kpiStats.vaBreakdown.VA}</span>
+                    </span>
+                    <span style={{fontSize:12,fontFamily:'Share Tech Mono,monospace',borderLeft:'1px solid var(--border)',paddingLeft:18}}>
+                      <span style={{color:'var(--text-muted)'}}>SC COMPLETED + VA: </span>
+                      <span style={{color:'var(--accent4)',fontWeight:700}}>{kpiStats.scCompletedPlusVA}</span>
+                    </span>
+                  </div>
+                  <div style={{fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>
+                    {completedPlusVASCs.length} sets · includes READY / STOCK / STORES / EXSTOCK / VA
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,flexShrink:0,flexWrap:'wrap'}}>
+                  <button onClick={exportModalJSON} style={{padding:'5px 11px',border:'1px solid rgba(0,201,255,0.4)',background:'rgba(0,201,255,0.08)',color:'var(--accent1)',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>⬇ JSON</button>
+                  <button onClick={exportModalCSV}  style={{padding:'5px 11px',border:'1px solid rgba(0,230,118,0.4)',background:'rgba(0,230,118,0.08)',color:'var(--success)',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>⬇ CSV</button>
+                  <button onClick={exportModalPDF}  style={{padding:'5px 11px',border:'1px solid rgba(255,61,90,0.4)',background:'rgba(255,61,90,0.08)',color:'var(--danger)',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>⬇ PDF</button>
+                  <button onClick={() => setSelectedKPI(null)} style={{background:'none',border:'1px solid var(--border)',color:'var(--text-muted)',borderRadius:6,padding:'5px 12px',cursor:'pointer',fontSize:11,fontWeight:600}}>CLOSE</button>
+                </div>
+              </div>
+
+              {/* Item Table */}
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                <thead>
+                  <tr style={{borderBottom:'2px solid var(--border)'}}>
+                    {['SC','PO','PRODUCT','STAGE','TIMESTAMP'].map(h=>(
+                      <th key={h} style={{padding:'10px',textAlign:'left',color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace',fontSize:10}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {completedPlusVASCs.length === 0 ? (
+                    <tr><td colSpan="5" style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:12}}>
+                      No SC+VA completed sets found for the current filters.
+                    </td></tr>
+                  ) : completedPlusVASCs.map(([sc, latestRows], i) =>
+                    latestRows.map((r, j) => (
+                      <tr key={sc+'-'+j} style={{borderBottom:'1px solid var(--border)',backgroundColor:i%2?'rgba(255,107,53,0.02)':'transparent'}}>
+                        <td style={{padding:'10px',color:'var(--accent1)',fontFamily:'Share Tech Mono,monospace',fontWeight:700}}>{j===0 ? sc : ''}</td>
+                        <td style={{padding:'10px',fontSize:11}}>{r.po||'—'}</td>
+                        <td style={{padding:'10px',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.product||'—'}</td>
+                        <td style={{padding:'10px'}}>
+                          <span style={{
+                            background:
+                              r.currentStage==='READY'   ? 'rgba(0,230,118,0.15)' :
+                              r.currentStage==='STORES'  ? 'rgba(0,201,255,0.15)' :
+                              r.currentStage==='EXSTOCK' ? 'rgba(178,75,255,0.15)' :
+                              r.currentStage==='VA'      ? 'rgba(255,107,53,0.15)' :
+                                                           'rgba(255,214,10,0.15)',
+                            color:
+                              r.currentStage==='READY'   ? 'var(--success)'  :
+                              r.currentStage==='STORES'  ? 'var(--accent1)'  :
+                              r.currentStage==='EXSTOCK' ? 'var(--accent6)'  :
+                              r.currentStage==='VA'      ? 'var(--accent4)'  :
+                                                           'var(--warning)',
+                            padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,
+                          }}>{r.currentStage||'—'}</span>
+                        </td>
+                        <td style={{padding:'10px',fontSize:10,color:'var(--text-muted)',fontFamily:'Share Tech Mono,monospace'}}>{r.timestamp ? r.timestamp.slice(0,10) : '—'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+function KPICard({label,value,sub,color1,color2,badge,action}) {
+  return (
+    <div className="kpi-card" style={{'--c1':color1,'--c2':color2}}>
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value">{value}</div>
+      {sub&&<div className="kpi-sub">{sub}</div>}
+      {badge&&<div className={`kpi-badge ${badge.cls}`}>{badge.text}</div>}
+      {action && (
+        <button
+          onClick={action.onClick}
+          style={{
+            marginTop:12,
+            padding:'8px 12px',
+            border:'1px solid rgba(255,255,255,0.12)',
+            background:'rgba(255,255,255,0.05)',
+            color:'var(--text-primary)',
+            borderRadius:8,
+            fontSize:11,
+            fontWeight:700,
+            cursor:'pointer'
+          }}
+        >
+          {action.text}
+        </button>
+      )}
+    </div>
+  );
+}
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('[ErrorBoundary]', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{padding:40,fontFamily:'Share Tech Mono,monospace',color:'#ff3d5a',background:'#050b14',minHeight:'100vh'}}>
+          <div style={{fontSize:20,marginBottom:16}}>⚠ Dashboard Error</div>
+          <div style={{fontSize:12,color:'#7ba7cc',marginBottom:12}}>An unexpected error occurred. Please refresh the page.</div>
+          <div style={{fontSize:11,color:'#3d6080',background:'rgba(255,61,90,0.08)',border:'1px solid rgba(255,61,90,0.2)',borderRadius:8,padding:16}}>
+            {String(this.state.error)}
+          </div>
+          <button onClick={() => this.setState({hasError:false,error:null})}
+            style={{marginTop:20,padding:'10px 20px',background:'rgba(0,201,255,0.1)',border:'1px solid rgba(0,201,255,0.3)',color:'#00c9ff',borderRadius:8,cursor:'pointer',fontSize:12}}>
+            🔄 Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── MOUNT ────────────────────────────────────────────────────────────────────
+ReactDOM.render(<ErrorBoundary><App/></ErrorBoundary>, document.getElementById('root'));
