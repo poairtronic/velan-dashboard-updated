@@ -825,10 +825,19 @@ function App() {
         const res = await fetch(`${apiBase}/api/data`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = await res.json();
+        // Normalize rows coming from server — poDate and timestamp must be ISO strings
+        // so dateInRange(.slice(0,10)) comparisons work correctly.
+        const normalizeServerRow = r => ({
+          ...r,
+          poDate:    r.poDate    ? toIsoDateString(r.poDate)    : r.poDate,
+          timestamp: r.timestamp ? normalizeTimestamp(r.timestamp) : r.timestamp,
+          currentStage: r.currentStage ? correctStageName(r.currentStage) : r.currentStage,
+          inhouse: normalizeInhouse(r.inhouse),
+        });
         // Historical warehouse
-        setData(Array.isArray(payload.rows) ? payload.rows : []);
+        setData((Array.isArray(payload.rows) ? payload.rows : []).map(normalizeServerRow));
         // Current live operational rows
-        setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
+        setLiveRows((Array.isArray(payload.liveRows) ? payload.liveRows : []).map(normalizeServerRow));
         if (payload.lastSync) setLastSync(payload.lastSync);
         setServerStatus('ready');
       } catch (err) {
@@ -4694,17 +4703,18 @@ const isDoneStage = s => {
     // Total PO and SC counts — always from full data so history import doesn't shrink them.
     // These are "database totals", not filtered totals.
     const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
-    // For TOTAL SCs: count unique SC "families" from ALL data (history + live, no filters).
-    // 1211-1 and 1211-2 both belong to family "1211" → count as 1.
-    // 1231 (no suffix) → count as 1.
-    // Strip trailing "-<number>" suffix to get the family/prefix.
-    const _getScFamily = sc => String(sc).trim().replace(/-\d+$/, '');
-    const _scFamilySet = new Set();
-    data.forEach(r => { if (r.sc) _scFamilySet.add(_getScFamily(r.sc)); });
-    // Also include any SCs only present in liveRows (not yet in DB history)
-    // liveRows is included in allDbData which feeds `data`, so no extra pass needed.
-    const totalSCCount = _scFamilySet.size;
-    // Stage breakdown kept for sub-label display (counts completed SCs by stage, unchanged)
+
+    // TOTAL SCs: count unique SC SET prefixes across ALL data (history + live).
+    // 1211-1 and 1211-2 both belong to prefix "1211" → counted as 1 SC set.
+    // 1334 (no dash suffix) → prefix "1334" → counted as 1 SC set.
+    // No completion filter — ALL SCs in the database are counted regardless of stage.
+    const _scPrefixFn = sc => String(sc).trim().replace(/-\d+[A-Za-z]?$/, '');
+    const _allSCPrefixes = new Set(
+      data.filter(r => r.sc).map(r => _scPrefixFn(r.sc)).filter(Boolean)
+    );
+    const totalSCCount = _allSCPrefixes.size;
+
+    // Keep _scStageCounts for the breakdown display (READY/STORES/STOCK/EXSTOCK sub-labels)
     const _isDoneOrVA = s => {
       if (!s) return false;
       const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
@@ -4712,6 +4722,7 @@ const isDoneStage = s => {
              /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
     };
     const _scFinalMap = {};
+    const _dateFilterActive = !!(fromDate || toDate);
     data.forEach(r => {
       if (!r.sc) return;
       if (!_scFinalMap[r.sc]) _scFinalMap[r.sc] = {};
@@ -4730,6 +4741,17 @@ const isDoneStage = s => {
     Object.entries(_scFinalMap).forEach(([sc, prodMap]) => {
       const latestRows = Object.values(prodMap);
       if (latestRows.length > 0 && latestRows.every(r => _isDoneOrVA(r.currentStage))) {
+        if (_dateFilterActive) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          const anyInRange = latestRows.some(r => {
+            const d = (r[dateField] || '').slice(0,10);
+            if (!d) return false;
+            if (fromDate && d < fromDate) return false;
+            if (toDate && d > toDate) return false;
+            return true;
+          });
+          if (!anyInRange) return;
+        }
         const seenStages = new Set();
         latestRows.forEach(r => {
           const st = String(r.currentStage||'').trim().toUpperCase();
@@ -4910,7 +4932,7 @@ const getLatestPerProductForVA = rows => {
         if (fromDate || toDate) {
           const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
           return latestRows.some(r => {
-            const d = parseDateTime(r[dateField] || '');
+            const d = (r[dateField] || '').slice(0, 10);
             if (!d) return false;
             if (fromDate && d < fromDate) return false;
             if (toDate && d > toDate) return false;
@@ -5208,7 +5230,8 @@ const getLatestPerProductForVA = rows => {
           <div className="kpi-label">TOTAL SCs</div>
           <div className="kpi-value">{kpiStats.totalSCCount}</div>
           <div className="kpi-sub">
-            unique SC sets in database (1211-1 &amp; 1211-2 = 1 set)
+            unique SC sets in database
+            (1211-1 &amp; 1211-2 = 1 set)
             <span style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
               {[
                 {label:'READY',   val:kpiStats.scStageCounts?.READY,   c:'var(--success)'},
