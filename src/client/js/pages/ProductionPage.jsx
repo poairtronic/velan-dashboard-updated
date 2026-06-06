@@ -164,7 +164,7 @@ function ProductionPage() {
                   return (
                     <tr key={i}>
                       <td className="mono text-accent fw7">{sg.sc}</td>
-                      <td style={{ fontSize: 11 }}>{poGroup?.po || sg.po}</td>
+                      <td style={{ fontSize: 11 }}>{sg.po}</td>
                       <td style={{ fontSize: 10, color: 'var(--text-muted)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sg.items.map(item => item.product).join(' · ')}</td>
                       <td className="mono" style={{ fontSize: 10 }}>{fmtDate(lastTs)}</td>
                       <td><span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 17, color: (days || 0) > 21 ? 'var(--danger)' : 'var(--success)' }}>{days ?? '—'}</span></td>
