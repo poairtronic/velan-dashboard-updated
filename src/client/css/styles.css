@@ -19,6 +19,37 @@
   --success: #00e676;
   --glow1: rgba(0,201,255,0.15);
   --glow2: rgba(0,255,157,0.12);
+  --header-bg: linear-gradient(135deg, #070f1e 0%, #0a1a30 100%);
+  --body-radial: radial-gradient(ellipse at 20% 20%, rgba(0,100,180,0.08) 0%, transparent 60%),
+                 radial-gradient(ellipse at 80% 80%, rgba(0,200,120,0.05) 0%, transparent 60%);
+  --bg-bar-empty: rgba(255, 255, 255, 0.05);
+}
+
+body.light-theme {
+  --bg-primary: #f1f5f9;
+  --bg-secondary: #e2e8f0;
+  --bg-card: #ffffff;
+  --bg-card2: #f8fafc;
+  --border: #cbd5e1;
+  --border-bright: #94a3b8;
+  --accent1: #0284c7;
+  --accent2: #0369a1;
+  --accent3: #16a34a;
+  --accent4: #ea580c;
+  --accent5: #ca8a04;
+  --accent6: #9333ea;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --glow1: rgba(2, 132, 199, 0.1);
+  --glow2: rgba(34, 197, 94, 0.08);
+  --header-bg: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  --body-radial: radial-gradient(ellipse at 20% 20%, rgba(2, 132, 199, 0.06) 0%, transparent 60%),
+                 radial-gradient(ellipse at 80% 80%, rgba(34, 197, 94, 0.04) 0%, transparent 60%);
+  --bg-bar-empty: rgba(15, 23, 42, 0.08);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -32,8 +63,7 @@ body::before {
   content:'';
   position:fixed;
   inset:0;
-  background: radial-gradient(ellipse at 20% 20%, rgba(0,100,180,0.08) 0%, transparent 60%),
-              radial-gradient(ellipse at 80% 80%, rgba(0,200,120,0.05) 0%, transparent 60%);
+  background: var(--body-radial);
   pointer-events:none;
   z-index:0;
 }
@@ -41,7 +71,7 @@ body::before {
 
 /* HEADER */
 .header {
-  background: linear-gradient(135deg, #070f1e 0%, #0a1a30 100%);
+  background: var(--header-bg);
   border-bottom: 1px solid var(--border-bright);
   padding: 0 24px;
   display: flex;
@@ -229,7 +259,7 @@ tr:hover td { background:rgba(0,201,255,0.04); }
 .vendor-bar-wrap { display:flex; flex-direction:column; gap:8px; }
 .vendor-row { display:flex; align-items:center; gap:10px; }
 .vendor-name { width:90px; font-size:12px; color:var(--text-secondary); font-family:'Share Tech Mono',monospace; flex-shrink:0; }
-.vendor-bar-bg { flex:1; height:18px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; }
+.vendor-bar-bg { flex:1; height:18px; background:var(--bg-bar-empty); border-radius:4px; overflow:hidden; }
 .vendor-bar-fill { height:100%; border-radius:4px; transition:width 0.8s ease; }
 .vendor-val { width:50px; text-align:right; font-size:11px; color:var(--text-muted); }
 
@@ -285,4 +315,64 @@ tr:hover td { background:rgba(0,201,255,0.04); }
 .text-warning { color:var(--warning); }
 .fw7 { font-weight:700; }
 .mono { font-family:'Share Tech Mono',monospace; }
+
+/* ── LIGHT THEME OVERRIDES ───────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-primary: #f2f5fa;
+  --bg-secondary: #e4ebf5;
+  --bg-card: #ffffff;
+  --bg-card2: #fcfdfe;
+  --border: #d3dfec;
+  --border-bright: #b8cddf;
+  --accent1: #0088cc;
+  --accent2: #006fa3;
+  --accent3: #009e5b;
+  --accent4: #e04b12;
+  --accent5: #c79600;
+  --accent6: #8c32bf;
+  --text-primary: #12243d;
+  --text-secondary: #455f7b;
+  --text-muted: #738da7;
+  --danger: #d31a38;
+  --warning: #cc8400;
+  --success: #00994c;
+  --glow1: rgba(0, 136, 204, 0.06);
+  --glow2: rgba(0, 153, 76, 0.04);
+}
+
+[data-theme="light"] body::before {
+  background: radial-gradient(ellipse at 20% 20%, rgba(0, 136, 204, 0.04) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 80%, rgba(0, 153, 76, 0.03) 0%, transparent 60%);
+}
+
+[data-theme="light"] .header {
+  background: linear-gradient(135deg, #e3eefa 0%, #cfdef0 100%);
+  border-bottom-color: #b8cddf;
+  box-shadow: 0 2px 16px rgba(18, 36, 61, 0.08);
+}
+
+[data-theme="light"] .sidebar {
+  border-right-color: #d3dfec;
+}
+
+[data-theme="light"] .kpi-card,
+[data-theme="light"] .chart-card,
+[data-theme="light"] .table-card,
+[data-theme="light"] .filter-bar {
+  box-shadow: 0 4px 18px rgba(18, 36, 61, 0.05);
+}
+
+[data-theme="light"] tr:hover td {
+  background: rgba(0, 136, 204, 0.03);
+}
+
+[data-theme="light"] td {
+  border-bottom-color: rgba(211, 223, 236, 0.7);
+}
+
+[data-theme="light"] .tab.active {
+  background: rgba(0, 136, 204, 0.08);
+  border-color: rgba(0, 136, 204, 0.25);
+}
+
 

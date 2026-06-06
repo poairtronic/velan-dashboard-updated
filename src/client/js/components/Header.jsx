@@ -1,7 +1,7 @@
 // ─── HEADER UI COMPONENT ──────────────────────────────────────────────────────
 
 function Header() {
-  const { liveState, now, setActiveNav } = useDashboard();
+  const { liveState, now, setActiveNav, theme, toggleTheme } = useDashboard();
 
   return (
     <div className="header">
@@ -44,6 +44,37 @@ function Header() {
           &nbsp;
           {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
         </div>
+        <button
+          onClick={toggleTheme}
+          style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '5px 10px',
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+            e.currentTarget.style.borderColor = 'var(--border-bright)';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+          }}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent5)' }}>
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent6)' }}>
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+          )}
+        </button>
         <button
           onClick={() => setActiveNav('upload')}
           style={{

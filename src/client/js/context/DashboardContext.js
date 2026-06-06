@@ -19,6 +19,24 @@ function DashboardProvider({ children }) {
   const [serverStatus, setServerStatus] = React.useState('loading');
   const [now] = React.useState(new Date());
 
+  const [theme, setTheme] = React.useState(() => {
+    return localStorage.getItem('velan_theme') || 'dark';
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('velan_theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+  }, [theme]);
+
+  const toggleTheme = React.useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  }, []);
+
   // Local state for uploads and background sync configs
   const [uploadStatus, setUploadStatus] = React.useState(null);
   const [liveConfig, setLiveConfig] = React.useState(() => {
@@ -707,6 +725,8 @@ function DashboardProvider({ children }) {
     uniquePOs,
     uniqueStages,
     uniqueTypes,
+    theme,
+    toggleTheme,
   };
 
   return (
