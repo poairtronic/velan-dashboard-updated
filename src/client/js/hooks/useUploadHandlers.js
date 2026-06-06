@@ -46,7 +46,7 @@ function useUploadHandlers(options) {
 
     const missingStage = normalizedRows.filter(r => !r.currentStage).length;
     setLiveRows(normalizedRows);
-    saveRowsToServer(normalizedRows);
+    saveRowsToServer(normalizedRows, 'Manual Upload');
 
     setUploadStatus({
       type: 'success',

@@ -38,17 +38,108 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-// ── Create table if it doesn't exist ─────────────────────────────────────────
+// ── Create tables and indices if they don't exist ─────────────────────────────
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS velan_rows (
-      id       SERIAL PRIMARY KEY,
-      row_key  TEXT UNIQUE NOT NULL,
-      data     JSONB NOT NULL,
-      added_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  console.log('[DB] Neon table ready');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // 1. Create velan_rows table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS velan_rows (
+        id       SERIAL PRIMARY KEY,
+        row_key  TEXT UNIQUE NOT NULL,
+        data     JSONB NOT NULL,
+        added_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // 2. Create velan_live_rows table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS velan_live_rows (
+        id       SERIAL PRIMARY KEY,
+        row_key  TEXT UNIQUE NOT NULL,
+        data     JSONB NOT NULL,
+        added_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // 3. Create sync_logs table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sync_logs (
+        id         SERIAL PRIMARY KEY,
+        sync_type  TEXT NOT NULL,
+        row_count  INTEGER NOT NULL,
+        status     TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // 4. Create indices for speed optimization
+    await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_velan_live_rows_key ON velan_live_rows (row_key)');
+
+    await client.query('COMMIT');
+    console.log('[DB] Neon tables and indices initialized successfully');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DB] Neon initialization failed:', err.message);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Migration: Converts old row keys and deduplicates data ──────────────────
+async function runKeyMigration() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Create temporary table with deduplicated latest entries
+    await client.query(`
+      CREATE TEMP TABLE temp_latest_rows AS
+      SELECT DISTINCT ON (
+        COALESCE(data->>'sc', ''), 
+        COALESCE(data->>'po', ''), 
+        COALESCE(data->>'product', ''), 
+        COALESCE(data->>'currentStage', data->>'op', data->>'OP', '')
+      ) id, data, added_at
+      FROM velan_rows
+      ORDER BY 
+        COALESCE(data->>'sc', ''), 
+        COALESCE(data->>'po', ''), 
+        COALESCE(data->>'product', ''), 
+        COALESCE(data->>'currentStage', data->>'op', data->>'OP', ''), 
+        added_at DESC
+    `);
+
+    // Truncate existing rows
+    await client.query('TRUNCATE velan_rows');
+
+    // Re-insert deduplicated rows with the new key format
+    await client.query(`
+      INSERT INTO velan_rows (row_key, data, added_at)
+      SELECT 
+        COALESCE(data->>'sc', '') || '||' || 
+        COALESCE(data->>'po', '') || '||' || 
+        COALESCE(data->>'product', '') || '||' || 
+        COALESCE(data->>'currentStage', data->>'op', data->>'OP', ''),
+        data,
+        added_at
+      FROM temp_latest_rows
+    `);
+
+    await client.query('DROP TABLE temp_latest_rows');
+    await client.query('COMMIT');
+    console.log('[DB] Key migration completed successfully.');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DB] Key migration failed:', err.message);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Load all rows from Neon into memory ───────────────────────────────────────
@@ -70,24 +161,61 @@ async function loadDB() {
   });
 }
 
-// ── Insert only NEW rows into Neon (skips duplicates via row_key) ─────────────
-const makeKey = r =>
-  `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}||${r.timestamp||''}`;
+// ── Load all live operational rows from Neon ─────────────────────────
+async function loadLiveDB() {
+  const res = await pool.query('SELECT data FROM velan_live_rows ORDER BY id');
+  return res.rows.map(r => {
+    const d = r.data;
+    if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
+    if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
+    return d;
+  });
+}
 
+// ── Insert Sync Log ───────────────────────────────────────────────────────────
+async function logSync(syncType, rowCount, status) {
+  try {
+    await pool.query(
+      `INSERT INTO sync_logs (sync_type, row_count, status)
+       VALUES ($1, $2, $3)`,
+      [syncType, rowCount, status]
+    );
+  } catch (err) {
+    console.error('[logSync] Failed to log sync:', err.message);
+  }
+}
+
+// ── Refactored Row Key Generator ──────────────────────────────────────────────
+const makeKey = r =>
+  `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}`;
+
+// ── Bulk Upsert archive rows into Neon ─────────────────────────────────────────
 async function insertRows(rows) {
   if (!rows.length) return 0;
   const client = await pool.connect();
-  let inserted = 0;
+  let upserted = 0;
   try {
     await client.query('BEGIN');
-    for (const row of rows) {
-      const res = await client.query(
-        `INSERT INTO velan_rows (row_key, data)
-         VALUES ($1, $2)
-         ON CONFLICT (row_key) DO NOTHING`,
-        [makeKey(row), JSON.stringify(row)]
-      );
-      if (res.rowCount > 0) inserted++;
+    const chunkSize = 500;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const valueStrings = [];
+      const values = [];
+      
+      chunk.forEach((row, idx) => {
+        const valIdx1 = idx * 2 + 1;
+        const valIdx2 = idx * 2 + 2;
+        valueStrings.push(`($${valIdx1}, $${valIdx2})`);
+        values.push(makeKey(row), JSON.stringify(row));
+      });
+      
+      const queryText = `
+        INSERT INTO velan_rows (row_key, data)
+        VALUES ${valueStrings.join(', ')}
+        ON CONFLICT (row_key) DO UPDATE SET data = EXCLUDED.data, added_at = NOW()
+      `;
+      const res = await client.query(queryText, values);
+      upserted += res.rowCount;
     }
     await client.query('COMMIT');
   } catch (e) {
@@ -96,7 +224,42 @@ async function insertRows(rows) {
   } finally {
     client.release();
   }
-  return inserted;
+  return upserted;
+}
+
+// ── Bulk Replace/Upsert operational live snapshot rows in Neon ────────────────
+async function saveLiveRows(rows) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('TRUNCATE velan_live_rows');
+    if (rows.length > 0) {
+      const chunkSize = 500;
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const chunk = rows.slice(i, i + chunkSize);
+        const valueStrings = [];
+        const values = [];
+        chunk.forEach((row, idx) => {
+          const valIdx1 = idx * 2 + 1;
+          const valIdx2 = idx * 2 + 2;
+          valueStrings.push(`($${valIdx1}, $${valIdx2})`);
+          values.push(makeKey(row), JSON.stringify(row));
+        });
+        const queryText = `
+          INSERT INTO velan_live_rows (row_key, data)
+          VALUES ${valueStrings.join(', ')}
+          ON CONFLICT (row_key) DO UPDATE SET data = EXCLUDED.data, added_at = NOW()
+        `;
+        await client.query(queryText, values);
+      }
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // ── In-memory state ───────────────────────────────────────────────────────────
@@ -259,64 +422,75 @@ const server = http.createServer(async (req, res) => {
 
   // ── GET /api/data ─────────────────────────────────────────────────────────
   if (pathname === '/api/data' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({
-      rows:     _db,
-      liveRows: _liveRows.length > 0 ? _liveRows : _db,
-      lastSync: _lastSync,
-      total:    _db.length,
-    }));
+    try {
+      const dbRows = await loadDB();
+      const liveDbRows = await loadLiveDB();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        rows:     dbRows,
+        liveRows: liveDbRows.length > 0 ? liveDbRows : dbRows,
+        lastSync: _lastSync,
+        total:    dbRows.length,
+      }));
+    } catch (err) {
+      console.error('[GET /api/data] failed:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
   }
 
   // ── POST /api/data — replace live snapshot AND save new rows to Neon ──────
   if (pathname === '/api/data' && req.method === 'POST') {
+    let syncType = 'Manual Upload';
+    let incomingLength = 0;
     try {
       const body     = await readBody(req);
       const payload  = JSON.parse(body);
       const incoming = Array.isArray(payload.rows) ? payload.rows : [];
+      incomingLength = incoming.length;
 
-      // 1. Replace the live snapshot
+      // Extract sync_type query parameter if present
+      const queryType = parsed.searchParams.get('sync_type');
+      if (queryType) {
+        syncType = queryType;
+      }
+
+      // 1. Replace the live snapshot table in database
+      await saveLiveRows(incoming);
       _liveRows = incoming;
 
-      // 2. Find new rows not already in _db (dedup in memory)
-      const existingKeys = new Set(_db.map(makeKey));
-      const newRows = [];
-      incoming.forEach(row => {
-        const k = makeKey(row);
-        if (!existingKeys.has(k)) {
-          _db.push(row);
-          existingKeys.add(k);
-          newRows.push(row);
-        }
-      });
-
-      // 3. Save only new rows to Neon
-      const saved = await insertRows(newRows);
+      // 2. Save/Upsert new rows to velan_rows in Neon
+      const saved = await insertRows(incoming);
+      
+      _db = await loadDB();
       _lastSync = new Date().toLocaleString('en-IN');
 
-      console.log(`[POST /api/data] Live: ${_liveRows.length} | DB: ${_db.length} (+${saved} new to Neon)`);
+      // 3. Log the successful sync
+      await logSync(syncType, incomingLength, 'success');
+
+      console.log(`[POST /api/data] Live: ${incoming.length} | DB: ${_db.length} (+${saved} upserted to Neon)`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
         success:   true,
-        liveTotal: _liveRows.length,
+        liveTotal: incoming.length,
         total:     _db.length,
         newRows:   saved,
         lastSync:  _lastSync,
       }));
     } catch (err) {
-      console.error('[POST /api/data]', err.message);
+      console.error('[POST /api/data] failed:', err.message);
+      await logSync(syncType, incomingLength, 'failed');
       res.writeHead(400, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
 
-  // ── POST /api/import — append to Neon DB with dedup ──────────────────────
-
   // ── DELETE /api/data — wipe all rows from Neon ────────────────────────────
   if (pathname === '/api/data' && req.method === 'DELETE') {
     try {
       await pool.query('DELETE FROM velan_rows');
+      await pool.query('DELETE FROM velan_live_rows');
       _db       = [];
       _liveRows = [];
       _lastSync = '';
@@ -335,6 +509,7 @@ const server = http.createServer(async (req, res) => {
     try {
       // 1. Wipe Neon
       await pool.query('DELETE FROM velan_rows');
+      await pool.query('DELETE FROM velan_live_rows');
       _db       = [];
       _liveRows = [];
       _lastSync = '';
@@ -355,17 +530,22 @@ const server = http.createServer(async (req, res) => {
       _db       = await loadDB();
       _lastSync = new Date().toLocaleString('en-IN');
 
+      await logSync('History Import', rows.length, 'success');
+
       console.log(`[POST /api/reset] Re-imported ${imported} rows | DB now: ${_db.length}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: true, imported, total: _db.length, lastSync: _lastSync }));
     } catch (err) {
       console.error('[POST /api/reset]', err.message);
+      await logSync('History Import', 0, 'failed');
       res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
 
+  // ── POST /api/import — append to Neon DB with dedup ──────────────────────
   if (pathname === '/api/import' && req.method === 'POST') {
+    let incomingLength = 0;
     try {
       const body    = await readBody(req);
       const payload = JSON.parse(body);
@@ -383,44 +563,53 @@ const server = http.createServer(async (req, res) => {
         incoming  = parseCSV(raw);
         console.log(`[POST /api/import] Parsed ${incoming.length} rows from CSV`);
       }
+      incomingLength = incoming.length;
 
       // If replace=true, wipe Neon first
       if (payload.replace === true) {
         await pool.query('DELETE FROM velan_rows');
+        await pool.query('DELETE FROM velan_live_rows');
         _db       = [];
         _liveRows = [];
         console.log('[POST /api/import] replace=true → wiped existing Neon rows');
       }
 
-      // Dedup against in-memory _db
-      const existingKeys = new Set(_db.map(makeKey));
-      const newRows = [];
-      incoming.forEach(row => {
-        const k = makeKey(row);
-        if (!existingKeys.has(k)) {
-          _db.push(row);
-          existingKeys.add(k);
-          newRows.push(row);
-        }
-      });
-
-      const imported = await insertRows(newRows);
-      const skipped  = incoming.length - newRows.length;
+      const imported = await insertRows(incoming);
+      _db = await loadDB();
       _lastSync = new Date().toLocaleString('en-IN');
 
-      console.log(`[POST /api/import] Imported: ${imported} | Skipped: ${skipped} | DB: ${_db.length}`);
+      await logSync('History Import', incomingLength, 'success');
+
+      console.log(`[POST /api/import] Imported/Updated: ${imported} | DB: ${_db.length}`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
         success:  true,
         imported,
-        skipped,
+        skipped:  incomingLength - imported,
         total:    _db.length,
         lastSync: _lastSync,
       }));
     } catch (err) {
-      console.error('[POST /api/import]', err.message);
+      console.error('[POST /api/import] failed:', err.message);
+      await logSync('History Import', incomingLength, 'failed');
       res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+  }
+
+  // ── GET /api/sync-status — retrieve sync logs ────────────────────────────
+  if (pathname === '/api/sync-status' && req.method === 'GET') {
+    try {
+      const logsRes = await pool.query('SELECT sync_type, row_count, status, created_at FROM sync_logs ORDER BY created_at DESC LIMIT 50');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        success: true,
+        logs: logsRes.rows,
+      }));
+    } catch (err) {
+      console.error('[GET /api/sync-status] failed:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
@@ -449,7 +638,7 @@ const server = http.createServer(async (req, res) => {
           }
           if (changed) {
             // Also update the row_key since currentStage changed
-            const newKey = `${d.sc||''}||${d.po||''}||${d.product||''}||${d.currentStage||''}||${d.timestamp||''}`;
+            const newKey = `${d.sc||''}||${d.po||''}||${d.product||''}||${d.currentStage||''}`;
             await client.query(
               'UPDATE velan_rows SET data = $1, row_key = $2 WHERE id = $3',
               [JSON.stringify(d), newKey, row.id]
@@ -515,18 +704,21 @@ const server = http.createServer(async (req, res) => {
     }));
   }
   if (pathname === '/api/health') {
-    let dbStatus = 'ok';
-    try { await pool.query('SELECT 1'); } catch (e) { dbStatus = 'error: ' + e.message; }
+    let database = 'connected';
+    let rows = 0;
+    try {
+      const dbRes = await pool.query('SELECT COUNT(*) FROM velan_rows');
+      rows = Number(dbRes.rows[0].count);
+    } catch (e) {
+      database = 'disconnected: ' + e.message;
+    }
+    const uptime = Math.round(process.uptime()) + 's';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
-      status:   'ok',
-      port:     PORT,
-      dbRows:   _db.length,
-      liveRows: _liveRows.length,
+      database,
+      rows,
       lastSync: _lastSync || 'never',
-      dbStatus,
-      storage:  'neon-postgresql',
-      cacheAge: _cache.ts ? Math.round((Date.now() - _cache.ts) / 1000) : null,
+      uptime,
     }));
   }
 
@@ -573,8 +765,30 @@ async function startup() {
   }
   console.log('\n[DB] Connecting to Neon PostgreSQL…');
   await initDB();
+
+  // Run migration check automatically at startup
+  try {
+    const checkRes = await pool.query("SELECT COUNT(*) FROM velan_rows WHERE row_key LIKE '%||%||%||%||%'");
+    if (Number(checkRes.rows[0].count) > 0) {
+      console.log('[DB] Migration needed: Converting old row keys and deduplicating...');
+      await runKeyMigration();
+    }
+  } catch (err) {
+    console.error('[DB] Pre-startup migration check failed:', err.message);
+  }
+
+  // Load last sync timestamp from logs
+  try {
+    const syncRes = await pool.query("SELECT created_at FROM sync_logs WHERE status = 'success' ORDER BY created_at DESC LIMIT 1");
+    if (syncRes.rows.length > 0) {
+      _lastSync = new Date(syncRes.rows[0].created_at).toLocaleString('en-IN');
+    }
+  } catch (_) {}
+
   _db = await loadDB();
-  console.log(`[DB] Loaded ${_db.length} rows from Neon`);
+  const liveDb = await loadLiveDB();
+  _liveRows = liveDb;
+  console.log(`[DB] Loaded ${_db.length} archive rows and ${_liveRows.length} live rows from Neon`);
 
   server.listen(PORT, () => {
     console.log(`\n┌─────────────────────────────────────────────────┐`);
@@ -587,7 +801,7 @@ async function startup() {
     console.log(`│  Health: http://localhost:${PORT}/api/health        │`);
     console.log(`└─────────────────────────────────────────────────┘`);
     console.log(`  Storage: Neon PostgreSQL (no local file needed)`);
-    console.log(`  DB rows: ${_db.length} rows loaded`);
+    console.log(`  DB rows: ${_db.length} archive rows | ${_liveRows.length} live rows`);
     console.log(`  LIVE_URL:    ${LIVE_URL    ? LIVE_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
     console.log(`  HISTORY_URL: ${HISTORY_URL ? HISTORY_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
     console.log('');

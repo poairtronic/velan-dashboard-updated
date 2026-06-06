@@ -72,9 +72,9 @@ function DashboardProvider({ children }) {
   }, [historyConfig]);
 
   // Network actions
-  const saveRowsToServer = React.useCallback((rows) => {
+  const saveRowsToServer = React.useCallback((rows, syncType = 'Manual Upload') => {
     if (!rows || rows.length === 0) return;
-    apiSaveRows(rows)
+    apiSaveRows(rows, syncType)
       .then(result => {
         if (result && result.success) {
           if (result.lastSync) setLastSync(result.lastSync);
@@ -241,7 +241,7 @@ function DashboardProvider({ children }) {
 
       const missingStage = normalizedRows.filter(r => !r.currentStage).length;
       setLiveRows(normalizedRows);
-      saveRowsToServer(normalizedRows);
+      saveRowsToServer(normalizedRows, 'Google Sheets Sync');
 
       const sourceName = isGSheets ? 'GOOGLE SHEETS (LIVE)' : 'LIVE SOURCE';
       setUploadStatus({

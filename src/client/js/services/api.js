@@ -10,8 +10,8 @@ async function apiFetchData() {
   return await res.json();
 }
 
-async function apiSaveRows(rows) {
-  const res = await fetch(`${apiBase}/api/data`, {
+async function apiSaveRows(rows, syncType = 'Manual Upload') {
+  const res = await fetch(`${apiBase}/api/data?sync_type=${encodeURIComponent(syncType)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rows }),
