@@ -4906,11 +4906,11 @@ const getLatestPerProductForVA = rows => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (!(latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage)))) return false;
-        // When date filter active: SC must have at least one done/VA row in the date range
+        // When date filter active: every latest row must fall within the date range
         if (fromDate || toDate) {
           const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-          return latestRows.some(r => {
-            const d = parseDateTime(r[dateField] || '');
+          return latestRows.every(r => {
+            const d = (r[dateField] || '').slice(0, 10);
             if (!d) return false;
             if (fromDate && d < fromDate) return false;
             if (toDate && d > toDate) return false;
