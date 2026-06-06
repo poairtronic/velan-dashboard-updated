@@ -1,60 +1,13 @@
+// ─── DATE UTILITIES ──────────────────────────────────────────────────────────
 
-// ─── RAW CSV PARSER ────────────────────────────────────────────────────────────
-// Parses CSV text → array-of-arrays WITHOUT any type coercion.
-// All cell values are preserved as raw strings so date columns like
-// "06/05/2026" (DD/MM/YYYY) are NOT auto-converted to US-format Date objects
-// by SheetJS (which would silently flip day↔month for values where both parts ≤ 12).
-function parseRawCsv(text) {
-  const rows = [];
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const cells = [];
-    let inQuote = false, cell = '';
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { cell += '"'; i++; }  // escaped ""
-        else { inQuote = !inQuote; }
-      } else if (ch === ',' && !inQuote) {
-        cells.push(cell.trim());
-        cell = '';
-      } else {
-        cell += ch;
-      }
-    }
-    cells.push(cell.trim());
-    rows.push(cells);
-  }
-  return rows;
-}
-
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
-// ─── SINGLE CANONICAL DATE PARSER — DD/MM/YYYY is the Velan/Indian standard ───
-// ALL date parsing in the entire app MUST go through this one function.
-// Supports: Date objects | ISO YYYY-MM-DD | DD/MM/YYYY | DD-MM-YYYY | Excel serial numbers
-//
-// ROOT-CAUSE FIX (May 2026):
-//   SheetJS auto-detects "06/05/2026" in CSV as June 5 (US MM/DD format) and formats
-//   it back as "6/5/26" (2-digit year). This caused May dates to appear in June.
-//   Fix: All CSV/Google Sheets data is now parsed through parseRawCsv() which preserves
-//   raw strings. "06/05/2026" therefore arrives here as-is and the DD/MM default gives
-//   the correct ISO date 2026-05-06. Excel uploads still use cellDates:true → Date objects.
-//
-// Resolution rule for ambiguous A/B/YYYY or A/B/YY where A≤12 and B≤12:
+// Resolution rule for ambiguous A/B/YYYY or A/B/YY where A<=12 and B<=12:
 //   → Default to DD/MM/YYYY (Indian / Velan Excel standard)
 //   Date objects from XLSX (cellDates:true) are always correct and handled first.
-
-// Sub-helper: given p0/p1/year (all integers, year is 4-digit), return ISO string.
-// slashSep=true means original delimiter was '/'.
-// Velan standard is DD/MM/YYYY (Indian format). Google Sheets CSV is fetched via
-// parseRawCsv() which preserves the raw string, so "06/05/2026" arrives here as p0=6,
-// p1=5 and the DD/MM default correctly returns 2026-05-06 (6 May).
 function _resolveSlashDate(p0, p1, year, slashSep) {
   // Unambiguous: only one interpretation is valid
   if (p0 > 12 && p1 <= 12) return `${year}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;  // DD/MM
   if (p1 > 12 && p0 <= 12) return `${year}-${String(p0).padStart(2,'0')}-${String(p1).padStart(2,'0')}`;  // MM/DD
-  // Both ≤ 12 — default DD/MM/YYYY (Velan/Indian standard) for ALL separators.
+  // Both <= 12 — default DD/MM/YYYY (Velan/Indian standard) for ALL separators.
   return `${year}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;  // DD/MM/YYYY default
 }
 
@@ -81,8 +34,6 @@ function toIsoDateString(value) {
   const ySpace = text.match(/^(\d{4})\s+(\d{1,2})\s+(\d{1,2})(?:\s|$)/);
   if (ySpace) return `${ySpace[1]}-${ySpace[2].padStart(2,'0')}-${ySpace[3].padStart(2,'0')}`;
   // DD/MM/YY — 2-digit year, Velan/Indian standard: day first
-  // (Even if SheetJS re-formats a date as M/D/YY the _resolveSlashDate DD/MM
-  //  default below will reconstruct the correct Velan date.)
   const shortSlash = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:\s|$|\/)/);
   if (shortSlash) {
     const p0 = parseInt(shortSlash[1], 10);
@@ -93,12 +44,11 @@ function toIsoDateString(value) {
       return `${yr}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;
     if (p1 > 12 && p0 <= 12) // MM/DD
       return `${yr}-${String(p0).padStart(2,'0')}-${String(p1).padStart(2,'0')}`;
-    // Both ≤ 12 — default DD/MM (Indian / Velan standard)
+    // Both <= 12 — default DD/MM (Indian / Velan standard)
     if (p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 12)
       return `${yr}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;
   }
   // D/M/YYYY or DD/MM/YYYY with optional time — slash separator, 4-digit year
-  // ALSO catches Google Sheets M/D/YYYY — resolved by _resolveSlashDate
   const slashFull = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[T ]|$)/);
   if (slashFull) {
     const p0   = parseInt(slashFull[1], 10);
@@ -136,7 +86,6 @@ function toIsoDateString(value) {
         return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
       }
     }
-    // Fallback epoch math if SSF unavailable
     const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
     const y2  = epoch.getFullYear();
     const mo2 = String(epoch.getMonth() + 1).padStart(2, '0');
@@ -145,20 +94,21 @@ function toIsoDateString(value) {
   }
   return '';
 }
-// ── Display helpers: convert stored ISO → DD/MM/YYYY ─────────────────────────
+
 function fmtDate(isoStr) {
   if (!isoStr) return '—';
-  const s = String(isoStr).trim().substring(0, 10); // "YYYY-MM-DD"
+  const s = String(isoStr).trim().substring(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
     return `${s.substring(8,10)}/${s.substring(5,7)}/${s.substring(0,4)}`;
   }
   return s || '—';
 }
+
 function fmtTs(tsStr) {
   if (!tsStr) return '—';
   const s = String(tsStr).trim();
-  const datePart = s.substring(0, 10); // "YYYY-MM-DD"
-  const timePart = s.substring(11, 16); // "HH:MM"
+  const datePart = s.substring(0, 10);
+  const timePart = s.substring(11, 16);
   const d = fmtDate(datePart);
   return timePart ? `${d} ${timePart}` : d;
 }

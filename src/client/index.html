@@ -26,16 +26,53 @@
   <!--
     ── App Source Files ────────────────────────────────────────────────────
     Loaded in dependency order. Babel transpiles JSX in-browser (no build step).
-
-    constants.js  →  AIRPLUG_TYPES, MASTER_TYPES, TARGET_DAYS, COMPANY_HOLIDAYS,
-                     stage helpers, color helpers, chart hook, CSV parser
-    utils.js      →  Date parsers (toIsoDateString, _resolveSlashDate),
-                     fmtDate, fmtTs, workingDaysBetween, process-time helpers
-    app.js        →  React App component, all page components, KPICard,
-                     ErrorBoundary, ReactDOM.render mount
   -->
-  <script type="text/babel" src="js/constants.js"></script>
-  <script type="text/babel" src="js/utils.js"></script>
+  <!-- 1. Utilities -->
+  <script type="text/babel" src="js/utils/dateUtils.js"></script>
+  <script type="text/babel" src="js/utils/calculationUtils.js"></script>
+  <script type="text/babel" src="js/utils/chartUtils.js"></script>
+
+  <!-- 2. Services -->
+  <script type="text/babel" src="js/services/googleSheets.js"></script>
+  <script type="text/babel" src="js/services/api.js"></script>
+  <script type="text/babel" src="js/services/dataNormalizer.js"></script>
+  <script type="text/babel" src="js/services/stageResolver.js"></script>
+  <script type="text/babel" src="js/services/excelParser.js"></script>
+
+  <!-- 3. Hooks -->
+  <script type="text/babel" src="js/hooks/useFilters.js"></script>
+  <script type="text/babel" src="js/hooks/useDashboardData.js"></script>
+  <script type="text/babel" src="js/hooks/useLiveSync.js"></script>
+  <script type="text/babel" src="js/hooks/useUploadHandlers.js"></script>
+
+  <!-- 4. Context Provider -->
+  <script type="text/babel" src="js/context/DashboardContext.js"></script>
+
+  <!-- 5. UI Components -->
+  <script type="text/babel" src="js/components/ErrorBoundary.jsx"></script>
+  <script type="text/babel" src="js/components/LoadingScreen.jsx"></script>
+  <script type="text/babel" src="js/components/Header.jsx"></script>
+  <script type="text/babel" src="js/components/Sidebar.jsx"></script>
+  <script type="text/babel" src="js/components/FilterBar.jsx"></script>
+  <script type="text/babel" src="js/components/KPICard.jsx"></script>
+  <script type="text/babel" src="js/components/DataTable.jsx"></script>
+  <script type="text/babel" src="js/components/Modal.jsx"></script>
+  <script type="text/babel" src="js/components/ChartCard.jsx"></script>
+
+  <!-- 6. Page Layouts -->
+  <script type="text/babel" src="js/pages/OverviewPage.jsx"></script>
+  <script type="text/babel" src="js/pages/MonthDayPage.jsx"></script>
+  <script type="text/babel" src="js/pages/DatabasePage.jsx"></script>
+  <script type="text/babel" src="js/pages/ProductionPage.jsx"></script>
+  <script type="text/babel" src="js/pages/WIPPage.jsx"></script>
+  <script type="text/babel" src="js/pages/CycleTimePage.jsx"></script>
+  <script type="text/babel" src="js/pages/BottleneckPage.jsx"></script>
+  <script type="text/babel" src="js/pages/POPage.jsx"></script>
+  <script type="text/babel" src="js/pages/SCPage.jsx"></script>
+  <script type="text/babel" src="js/pages/VendorPage.jsx"></script>
+  <script type="text/babel" src="js/pages/UploadPage.jsx"></script>
+
+  <!-- 7. Main Entry -->
   <script type="text/babel" src="js/app.js"></script>
 </body>
 </html>
