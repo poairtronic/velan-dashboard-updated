@@ -4694,23 +4694,24 @@ const isDoneStage = s => {
     // Total PO and SC counts — always from full data so history import doesn't shrink them.
     // These are "database totals", not filtered totals.
     const totalPOCount = new Set(data.filter(r=>r.po).map(r=>r.po)).size;
-    // For Total SCs: count only UNIQUE SCs where the latest state per product is a
-    // terminal/done stage (READY / STORES / STOCK / EXSTOCK / VA).
-    // Build SC → { product → best-row } map using the same priority rules:
-    //   1. Done stage beats WIP  2. _isLive beats DB history  3. Later timestamp wins
-    // Then keep only SCs where ALL latest-per-product rows are in a done/VA stage.
+    // For TOTAL SCs: count unique SC "families" from ALL data (history + live, no filters).
+    // 1211-1 and 1211-2 both belong to family "1211" → count as 1.
+    // 1231 (no suffix) → count as 1.
+    // Strip trailing "-<number>" suffix to get the family/prefix.
+    const _getScFamily = sc => String(sc).trim().replace(/-\d+$/, '');
+    const _scFamilySet = new Set();
+    data.forEach(r => { if (r.sc) _scFamilySet.add(_getScFamily(r.sc)); });
+    // Also include any SCs only present in liveRows (not yet in DB history)
+    // liveRows is included in allDbData which feeds `data`, so no extra pass needed.
+    const totalSCCount = _scFamilySet.size;
+    // Stage breakdown kept for sub-label display (counts completed SCs by stage, unchanged)
     const _isDoneOrVA = s => {
       if (!s) return false;
       const t = String(s).trim().toUpperCase().replace(/\s+/g,'');
-      // TOTAL SCs counts READY/STORES/STOCK/EXSTOCK only (VA excluded here)
       return ['READY','STORES','STORE','STOCK','EXSTOCK'].includes(t) ||
              /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
     };
-    // For TOTAL SCs: build SC->product->best-row map.
-    // When a date filter is active, only count SCs whose DONE rows fall in range.
-    // When no date filter, use all data.
     const _scFinalMap = {};
-    const _dateFilterActive = !!(fromDate || toDate);
     data.forEach(r => {
       if (!r.sc) return;
       if (!_scFinalMap[r.sc]) _scFinalMap[r.sc] = {};
@@ -4725,28 +4726,10 @@ const isDoneStage = s => {
       if (!r._isLive && ex._isLive) return;
       if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[r.sc][pkey] = r;
     });
-    // Count breakdown by stage for display
     const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0 };
-    let _totalSCCompleted = 0;
     Object.entries(_scFinalMap).forEach(([sc, prodMap]) => {
       const latestRows = Object.values(prodMap);
-      // SC qualifies only if ALL its latest-per-product rows are in a done stage
       if (latestRows.length > 0 && latestRows.every(r => _isDoneOrVA(r.currentStage))) {
-        // When date filter is active: only count if at least one done row falls in range
-        if (_dateFilterActive) {
-          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-          const anyInRange = latestRows.some(r => {
-            const d = (r[dateField] || '').slice(0,10);
-            if (!d) return false;
-            if (fromDate && d < fromDate) return false;
-            if (toDate && d > toDate) return false;
-            return true;
-          });
-          if (!anyInRange) return;
-        }
-        _totalSCCompleted++;
-        // Tally ALL stages present across this SC's products (not just top stage)
-        // Each SC can contribute to multiple stage counts if it has mixed READY+STORES etc.
         const seenStages = new Set();
         latestRows.forEach(r => {
           const st = String(r.currentStage||'').trim().toUpperCase();
@@ -4756,7 +4739,6 @@ const isDoneStage = s => {
         seenStages.forEach(s => { _scStageCounts[s]++; });
       }
     });
-    const totalSCCount = _totalSCCompleted;
 
     // Filtered PO and SC counts (respects date/search filters)
     const uniquePO = new Set(filtered.map(r=>r.po)).size;
@@ -5226,7 +5208,7 @@ const getLatestPerProductForVA = rows => {
           <div className="kpi-label">TOTAL SCs</div>
           <div className="kpi-value">{kpiStats.totalSCCount}</div>
           <div className="kpi-sub">
-            unique completed SCs (READY/STORES/STOCK/EXSTOCK)
+            unique SC sets in database (1211-1 &amp; 1211-2 = 1 set)
             <span style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
               {[
                 {label:'READY',   val:kpiStats.scStageCounts?.READY,   c:'var(--success)'},
