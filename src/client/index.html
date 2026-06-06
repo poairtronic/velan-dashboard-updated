@@ -4921,17 +4921,23 @@ const getLatestPerProductForVA = rows => {
       })
     );
 
-    // Breakdown counts for the +VA popup (stage-level item counts from filtered rows)
-    // These count individual items (rows), not SC sets, for the breakdown display
+    // Breakdown counts for the +VA popup (stage-level item counts)
+    // Only counts SCs that are in scCompletedPlusVASet (respects date filter)
     const vaBreakdown = (() => {
       const counts = { READY: 0, STOCK: 0, STORES: 0, EXSTOCK: 0, VA: 0 };
-      scsToCheck.forEach(sc => {
-        // Use all rows for this SC (not just filtered) so VA rows outside the date
-        // window are still counted in the breakdown display
+      scCompletedPlusVASet.forEach(sc => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage))) {
+          // For each item, check the date field — only count if within the date range
           latestRows.forEach(r => {
+            if (fromDate || toDate) {
+              const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+              const d = parseDateTime(r[dateField] || '');
+              if (!d) return;
+              if (fromDate && d < fromDate) return;
+              if (toDate && d > toDate) return;
+            }
             const st = String(r.currentStage || '').trim().toUpperCase();
             if (st === 'READY')  counts.READY++;
             else if (st === 'STOCK')  counts.STOCK++;
