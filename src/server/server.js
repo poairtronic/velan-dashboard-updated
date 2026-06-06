@@ -192,13 +192,25 @@ const makeKey = r =>
 // ── Bulk Upsert archive rows into Neon ─────────────────────────────────────────
 async function insertRows(rows) {
   if (!rows.length) return 0;
+  
+  // Deduplicate rows in-memory to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time" PostgreSQL error
+  const uniqueMap = new Map();
+  rows.forEach(r => {
+    const key = makeKey(r);
+    const existing = uniqueMap.get(key);
+    if (!existing || (r.timestamp && (!existing.timestamp || r.timestamp > existing.timestamp))) {
+      uniqueMap.set(key, r);
+    }
+  });
+  const uniqueRows = Array.from(uniqueMap.values());
+
   const client = await pool.connect();
   let upserted = 0;
   try {
     await client.query('BEGIN');
     const chunkSize = 500;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
+    for (let i = 0; i < uniqueRows.length; i += chunkSize) {
+      const chunk = uniqueRows.slice(i, i + chunkSize);
       const valueStrings = [];
       const values = [];
       
@@ -233,10 +245,22 @@ async function saveLiveRows(rows) {
   try {
     await client.query('BEGIN');
     await client.query('TRUNCATE velan_live_rows');
+    
     if (rows.length > 0) {
+      // Deduplicate rows in-memory to prevent duplicate key constraint errors inside a single VALUES statement
+      const uniqueMap = new Map();
+      rows.forEach(r => {
+        const key = makeKey(r);
+        const existing = uniqueMap.get(key);
+        if (!existing || (r.timestamp && (!existing.timestamp || r.timestamp > existing.timestamp))) {
+          uniqueMap.set(key, r);
+        }
+      });
+      const uniqueRows = Array.from(uniqueMap.values());
+
       const chunkSize = 500;
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize);
+      for (let i = 0; i < uniqueRows.length; i += chunkSize) {
+        const chunk = uniqueRows.slice(i, i + chunkSize);
         const valueStrings = [];
         const values = [];
         chunk.forEach((row, idx) => {
