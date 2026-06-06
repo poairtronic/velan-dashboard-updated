@@ -4921,19 +4921,18 @@ const getLatestPerProductForVA = rows => {
       })
     );
 
-    // Breakdown counts for the +VA popup (stage-level item counts)
-    // Only counts SCs that are in scCompletedPlusVASet (respects date filter)
+    // Breakdown counts for the +VA popup — only SCs in scCompletedPlusVASet (date-filtered)
     const vaBreakdown = (() => {
       const counts = { READY: 0, STOCK: 0, STORES: 0, EXSTOCK: 0, VA: 0 };
       scCompletedPlusVASet.forEach(sc => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (latestRows.length > 0 && latestRows.every(r => isDoneOrVAStage(r.currentStage))) {
-          // For each item, check the date field — only count if within the date range
           latestRows.forEach(r => {
+            // Respect date filter per individual row
             if (fromDate || toDate) {
               const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-              const d = parseDateTime(r[dateField] || '');
+              const d = (r[dateField] || '').slice(0, 10);
               if (!d) return;
               if (fromDate && d < fromDate) return;
               if (toDate && d > toDate) return;
@@ -4961,6 +4960,7 @@ const getLatestPerProductForVA = rows => {
       scSetsCompletedTotal: scSetsCompletedTotal.size,
       // NEW — isolated from scCompleted; VA only appears here
       scCompletedPlusVA: scCompletedPlusVASet.size,
+      scCompletedPlusVASet,
       vaBreakdown,
     };
   }, [filtered, data, fromDate, toDate, dateType, allScItemsModal, filteredScGroupsModal, hasNonDateFilter]);
@@ -5492,18 +5492,19 @@ const getLatestPerProductForVA = rows => {
   });
   return Object.values(m);
 };
-        // Use allScItemsModal (all rows, no date filter) so VA rows outside the
-        // date window are still visible in the popup table. scsToCheck already
-        // scopes WHICH SCs are in view; here we just need ALL rows for those SCs.
-        const scsInView = Object.keys(filteredScGroupsModal);
-        const completedPlusVASCs = scsInView
-          .map(sc => {
-            // Pull from allScItemsModal so VA rows aren't hidden by the date filter
-            const rows = (allScItemsModal[sc] || []).length > 0
-              ? allScItemsModal[sc]
-              : (filteredScGroupsModal[sc] || []);
+        // Only show SCs that are in scCompletedPlusVASet (already date-filtered in kpiStats)
+        const completedPlusVASCs = [...kpiStats.scCompletedPlusVASet].map(sc => {
+            const rows = (allScItemsModal[sc] || []);
             if (rows.length === 0) return null;
-            const latest = getLatestPP(rows);
+            const latest = getLatestPP(rows).filter(r => {
+              if (!fromDate && !toDate) return true;
+              const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+              const d = (r[dateField] || '').slice(0, 10);
+              if (!d) return false;
+              if (fromDate && d < fromDate) return false;
+              if (toDate && d > toDate) return false;
+              return true;
+            });
             if (latest.length > 0 && latest.every(r => isDoneOrVA(r.currentStage))) return [sc, latest];
             return null;
           })
