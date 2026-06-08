@@ -308,14 +308,27 @@ const server = http.createServer(async (req, res) => {
   if (fs.existsSync(staticFile) && fs.statSync(staticFile).isFile()) {
     const ext  = path.extname(staticFile);
     const mime = {
-      '.html': 'text/html',
-      '.js':   'text/javascript',
-      '.css':  'text/css',
-      '.json': 'application/json',
-      '.svg':  'image/svg+xml',
-      '.png':  'image/png',
-      '.ico':  'image/x-icon',
-      '.woff2':'font/woff2',
+      '.html':  'text/html',
+      '.js':    'text/javascript',
+      '.jsx':   'text/javascript',
+      '.ts':    'text/javascript',
+      '.tsx':   'text/javascript',
+      '.mjs':   'text/javascript',
+      '.css':   'text/css',
+      '.json':  'application/json',
+      '.svg':   'image/svg+xml',
+      '.png':   'image/png',
+      '.jpg':   'image/jpeg',
+      '.jpeg':  'image/jpeg',
+      '.gif':   'image/gif',
+      '.webp':  'image/webp',
+      '.ico':   'image/x-icon',
+      '.woff':  'font/woff',
+      '.woff2': 'font/woff2',
+      '.ttf':   'font/ttf',
+      '.eot':   'application/vnd.ms-fontobject',
+      '.map':   'application/json',
+      '.txt':   'text/plain',
     }[ext] || 'application/octet-stream';
     res.writeHead(200, { 'Content-Type': mime });
     return res.end(fs.readFileSync(staticFile));
