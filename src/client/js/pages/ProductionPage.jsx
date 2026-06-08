@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { getStageColor } from '../services/dataNormalizer';
-import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
+import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
@@ -94,7 +94,7 @@ function ProductionPage() {
         <KPICard label="READY ITEMS" value={kpis.ready} sub="individual items ready" color1="#00e676" color2="#0fa8e0"/>
         <KPICard label="ITEMS → STORES" value={kpis.stores} sub="individual items in stores" color1="#00c9ff" color2="#0fa8e0"/>
         <KPICard label="AIRPLUG OUTPUT" value={filtered.filter(r => AIRPLUG_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length} sub="APG/ARG items done" color1="#00c9ff" color2="#b24bff"/>
-        <KPICard label="MASTER OUTPUT" value={filtered.filter(r => ['SPG', 'SRG', 'SP'].includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length} sub="SRG/SP items done" color1="#00ff9d" color2="#00c9ff"/>
+        <KPICard label="MASTER OUTPUT" value={filtered.filter(r => MASTER_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length} sub="SRG/SP items done" color1="#00ff9d" color2="#00c9ff"/>
       </div>
 
       <div className="chart-grid">

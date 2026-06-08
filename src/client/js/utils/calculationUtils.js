@@ -92,8 +92,8 @@ function daysBetween(d1Str, d2Str) {
 }
 
 function getProductCategory(type) {
-  if (['APG','ARG'].includes(type)) return 'AIRPLUG';
-  if (['SPG','SRG','SP'].includes(type)) return 'MASTER';
+  if (AIRPLUG_TYPES.includes(type)) return 'AIRPLUG';
+  if (MASTER_TYPES.includes(type)) return 'MASTER';
   return 'ACCESSORY';
 }
 
@@ -203,4 +203,4 @@ function getSCLastTimestamp(items) {
   return ts;
 }
 
-export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp, TARGET_DAYS };
+export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp, TARGET_DAYS, AIRPLUG_TYPES, MASTER_TYPES };
