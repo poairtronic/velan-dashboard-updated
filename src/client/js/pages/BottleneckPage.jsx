@@ -9,6 +9,7 @@ import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {

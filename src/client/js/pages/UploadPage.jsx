@@ -6,6 +6,7 @@ import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
+import * as XLSX from 'xlsx';
 // ─── UPLOAD DATA PAGE COMPONENT ───────────────────────────────────────────────
 
 function UploadPage() {
