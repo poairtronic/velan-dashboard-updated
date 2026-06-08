@@ -69,4 +69,4 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
   );
 }
 
-export default Modal;
+export default React.memo(Modal);

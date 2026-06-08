@@ -1,4 +1,5 @@
 import React from 'react';
+import debounce from 'lodash/debounce';
 import { useDashboard } from '../context/DashboardContext';
 // ─── FILTERBAR UI COMPONENT ───────────────────────────────────────────────────
 
@@ -15,6 +16,47 @@ function FilterBar() {
     data,
     resetFilters,
   } = useDashboard();
+
+  // Local state tracks raw input value for instant visual feedback
+  const [searchInput, setSearchInput] = React.useState(filters.search);
+
+  // Debounced function: only commits the search term to context after 300ms idle
+  const debouncedSearch = React.useMemo(
+    () =>
+      debounce((value) => {
+        setFilters(f => ({ ...f, search: value }));
+      }, 300),
+    [setFilters]
+  );
+
+  // Cancel pending debounce calls on unmount to prevent memory leaks
+  React.useEffect(() => {
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [debouncedSearch]);
+
+  // Keep local input in sync when external reset clears filters
+  React.useEffect(() => {
+    if (filters.search === '') {
+      setSearchInput('');
+    }
+  }, [filters.search]);
+
+  const handleSearchChange = React.useCallback(
+    (e) => {
+      const value = e.target.value;
+      setSearchInput(value);       // instant — updates input display
+      debouncedSearch(value);      // debounced — triggers filter computation
+    },
+    [debouncedSearch]
+  );
+
+  const handleReset = React.useCallback(() => {
+    debouncedSearch.cancel();       // discard any pending debounce
+    setSearchInput('');             // clear local input state
+    resetFilters();                 // clear all context filters
+  }, [debouncedSearch, resetFilters]);
 
   if (activeNav === 'database' || activeNav === 'upload') {
     return null;
@@ -75,12 +117,12 @@ function FilterBar() {
       <input
         className="filter-input"
         placeholder="Search SC / Product / PO..."
-        value={filters.search}
-        onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+        value={searchInput}
+        onChange={handleSearchChange}
         style={{ minWidth: 200 }}
       />
 
-      <button className="filter-btn reset" onClick={resetFilters}>✕ Reset</button>
+      <button className="filter-btn reset" onClick={handleReset}>✕ Reset</button>
       
       <span style={{
         marginLeft: 'auto',
@@ -94,4 +136,4 @@ function FilterBar() {
   );
 }
 
-export default FilterBar;
+export default React.memo(FilterBar);

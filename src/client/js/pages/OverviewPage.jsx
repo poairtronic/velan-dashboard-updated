@@ -10,6 +10,28 @@ import useChart from '../utils/chartUtils';
 import ErrorBoundary from '../components/ErrorBoundary';
 // ─── OVERVIEW PAGE COMPONENT ──────────────────────────────────────────────────
 
+// Stable todayStr — computed once at module level (single page load)
+const _now = new Date();
+const MODULE_TODAY_STR =
+  _now.getFullYear() + '-' +
+  String(_now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(_now.getDate()).padStart(2, '0');
+
+// ── Pure helper — stable reference, defined outside component ─────────────
+function groupByPO(items) {
+  const grouped = {};
+  items.forEach(item => {
+    if (!grouped[item.po]) grouped[item.po] = [];
+    grouped[item.po].push(item);
+  });
+  return Object.entries(grouped).map(([po, poItems]) => ({
+    po,
+    scs: [...new Set(poItems.map(i => i.sc))],
+    items: poItems,
+    count: poItems.length
+  }));
+}
+
 function OverviewPage() {
   const { kpis, filtered, liveData, data } = useDashboard();
   const [selectedCategory, setSelectedCategory] = React.useState(null);
@@ -19,67 +41,100 @@ function OverviewPage() {
   const donutRef = React.useRef();
   const typeChartRef = React.useRef();
 
-  const now = new Date();
-  const todayStr =
-    now.getFullYear() + '-' +
-    String(now.getMonth() + 1).padStart(2, '0') + '-' +
-    String(now.getDate()).padStart(2, '0');
+  const todayStr = MODULE_TODAY_STR;
 
-  // 1. Daily Set: POs where all SCs are completed (READY/STORES/STOCK) and completed today
-  const poGroupsLive = {};
-  liveData.forEach(item => {
-    if (!item.po) return;
-    if (!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
-    poGroupsLive[item.po].push(item);
-  });
-  const dailySetPOs = Object.entries(poGroupsLive).filter(([po, items]) => {
-    // All SCs completed
-    const allDone = items.every(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
-    // Completed today (last updated today)
-    const completedToday = items.some(i => i.timestamp && i.timestamp.slice(0, 10) === todayStr);
-    return allDone && completedToday;
-  });
-  const dailySetItems = dailySetPOs.flatMap(([_, items]) => items);
+  // ── MEMOIZED: PO grouping and daily/delayed/inProgress buckets ────────────
+  const { dailyPOs, delayedPOs, inProgressPOs, dailySetItems, delayedPOItems, inProgressItems } =
+    React.useMemo(() => {
+      const poGroupsLive = {};
+      liveData.forEach(item => {
+        if (!item.po) return;
+        if (!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
+        poGroupsLive[item.po].push(item);
+      });
 
-  // 2. Delayed PO: not completed AND poDate > 21 working days ago
-  const delayedPOItems = liveData.filter(i => {
-    if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
-    if (!i.poDate) return false;
-    const days = workingDaysBetween(i.poDate, todayStr);
-    return days !== null && days > 21;
-  });
+      const dailySetPOs = Object.entries(poGroupsLive).filter(([po, items]) => {
+        const allDone = items.every(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
+        const completedToday = items.some(i => i.timestamp && i.timestamp.slice(0, 10) === todayStr);
+        return allDone && completedToday;
+      });
+      const dailySetItems = dailySetPOs.flatMap(([_, items]) => items);
 
-  // 3. In Progress: not completed AND within 21 working days from PO date
-  const inProgressItems = liveData.filter(i => {
-    if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
-    const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
-    return days === null || days <= 21;
-  });
+      const delayedPOItems = liveData.filter(i => {
+        if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
+        if (!i.poDate) return false;
+        const days = workingDaysBetween(i.poDate, todayStr);
+        return days !== null && days > 21;
+      });
 
-  // Group items by PO for modal display
-  function groupByPO(items) {
-    const grouped = {};
-    items.forEach(item => {
-      if (!grouped[item.po]) grouped[item.po] = [];
-      grouped[item.po].push(item);
+      const inProgressItems = liveData.filter(i => {
+        if (['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)) return false;
+        const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
+        return days === null || days <= 21;
+      });
+
+      return {
+        dailySetItems,
+        delayedPOItems,
+        inProgressItems,
+        dailyPOs: groupByPO(dailySetItems),
+        delayedPOs: groupByPO(delayedPOItems),
+        inProgressPOs: groupByPO(inProgressItems),
+      };
+    }, [liveData, todayStr]);
+
+  // ── MEMOIZED: Ready items for "View ready details" modal ──────────────────
+  const readyPOs = React.useMemo(() => {
+    const readyItems = liveData.filter(i => i.currentStage === 'READY');
+    return groupByPO(readyItems);
+  }, [liveData]);
+
+  // ── MEMOIZED: Inhouse/vendor counts for donut chart ───────────────────────
+  const { inhouseCount, vendorCount } = React.useMemo(() => ({
+    inhouseCount: filtered.filter(r => r.inhouse === 'INHOUSE').length,
+    vendorCount:  filtered.filter(r => r.inhouse === 'VENDOR').length,
+  }), [filtered]);
+
+  // ── MEMOIZED: Product type counts for pie chart ───────────────────────────
+  const typeCounts = React.useMemo(() => {
+    const counts = {};
+    filtered.forEach(r => {
+      const cat = getProductCategory(r.type);
+      counts[cat] = (counts[cat] || 0) + 1;
     });
-    return Object.entries(grouped).map(([po, poItems]) => ({
-      po,
-      scs: [...new Set(poItems.map(i => i.sc))],
-      items: poItems,
-      count: poItems.length
-    }));
-  }
+    return counts;
+  }, [filtered]);
 
-  const dailyPOs = groupByPO(dailySetItems);
-  const delayedPOs = groupByPO(delayedPOItems);
-  const inProgressPOs = groupByPO(inProgressItems);
+  // ── MEMOIZED: Stage distribution for bar chart ────────────────────────────
+  const stages = React.useMemo(
+    () => Object.entries(kpis.stageCounts).sort((a, b) => b[1] - a[1]).slice(0, 12),
+    [kpis.stageCounts]
+  );
 
-  // Define readyPOs so the "View ready details" modal works
-  const readyItems = liveData.filter(i => i.currentStage === 'READY');
-  const readyPOs = groupByPO(readyItems);
+  // ── MEMOIZED: Category card definitions ───────────────────────────────────
+  const categoryCards = React.useMemo(() => [
+    { id: 'daily',      label: 'DAILY SET',   value: dailySetItems.length,    sub: 'items created today',     color1: '#00c9ff', color2: '#0fa8e0', data: dailyPOs },
+    { id: 'delayed',    label: 'DELAYED SC',  value: delayedPOItems.length,   sub: 'items in delayed POs',    color1: '#ff3d5a', color2: '#ff6b35', data: delayedPOs },
+    { id: 'inprogress', label: 'INPROGRESS',  value: inProgressItems.length,  sub: 'items in production',     color1: '#ffd60a', color2: '#b24bff', data: inProgressPOs },
+  ], [dailySetItems, delayedPOItems, inProgressItems, dailyPOs, delayedPOs, inProgressPOs]);
 
-  const stages = Object.entries(kpis.stageCounts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  // ── Stable callbacks for category card interactions ───────────────────────
+  const handleCategoryClick = React.useCallback((id) => {
+    setSelectedCategory(id);
+    setOpenPOIds({});
+  }, []);
+
+  const handleCategoryClose = React.useCallback(() => {
+    setSelectedCategory(null);
+  }, []);
+
+  const handleReadyDetailsClose = React.useCallback(() => {
+    setShowReadyDetails(false);
+  }, []);
+
+  const handleShowReady = React.useCallback(() => {
+    setShowReadyDetails(true);
+  }, []);
 
   useChart(stageChartRef, {
     type: 'bar',
@@ -100,10 +155,8 @@ function OverviewPage() {
         y: { ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' } }
       }
     }
-  }, [kpis]);
+  }, [stages]);
 
-  const inhouseCount = filtered.filter(r => r.inhouse === 'INHOUSE').length;
-  const vendorCount = filtered.filter(r => r.inhouse === 'VENDOR').length;
   useChart(donutRef, {
     type: 'doughnut',
     data: {
@@ -111,10 +164,8 @@ function OverviewPage() {
       datasets: [{ data: [inhouseCount, vendorCount], backgroundColor: ['#00c9ff99', '#b24bff99'], borderColor: ['#00c9ff', '#b24bff'], borderWidth: 2, hoverOffset: 4 }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#7ba7cc', font: { size: 11 } } } } }
-  }, [kpis, filtered]);
+  }, [inhouseCount, vendorCount]);
 
-  const typeCounts = {};
-  filtered.forEach(r => { typeCounts[getProductCategory(r.type)] = (typeCounts[getProductCategory(r.type)] || 0) + 1; });
   useChart(typeChartRef, {
     type: 'pie',
     data: {
@@ -122,7 +173,7 @@ function OverviewPage() {
       datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#00c9ff99', '#00ff9d99', '#ffd60a99'], borderColor: ['#00c9ff', '#00ff9d', '#ffd60a'], borderWidth: 2 }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#7ba7cc', font: { size: 11 } } } } }
-  }, [filtered]);
+  }, [typeCounts]);
 
   return (
     <div>
@@ -137,7 +188,7 @@ function OverviewPage() {
           color1="#00e676"
           color2="#00c9ff"
           badge={{ text: `+${kpis.stores} to stores`, cls: 'badge-blue' }}
-          action={{ text: 'View ready details', onClick: () => setShowReadyDetails(true) }}
+          action={{ text: 'View ready details', onClick: handleShowReady }}
         />
         <KPICard label="IN PROGRESS (WIP)" value={kpis.wip} sub="items active in production" color1="#ffd60a" color2="#ff6b35"/>
         <KPICard label="ON-TIME COMPLETION" value={`${kpis.onTimePct}%`} sub={`${kpis.onTime} of ${kpis.totalPOs} POs within 3 weeks`} color1="#00ff9d" color2="#00c9ff" badge={{ text: `${kpis.delayed} delayed`, cls: 'badge-red' }}/>
@@ -147,14 +198,10 @@ function OverviewPage() {
 
       {/* Category Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
-        {[
-          { id: 'daily', label: 'DAILY SET', value: dailySetItems.length, sub: 'items created today', color1: '#00c9ff', color2: '#0fa8e0', data: dailyPOs },
-          { id: 'delayed', label: 'DELAYED SC', value: delayedPOItems.length, sub: 'items in delayed POs', color1: '#ff3d5a', color2: '#ff6b35', data: delayedPOs },
-          { id: 'inprogress', label: 'INPROGRESS', value: inProgressItems.length, sub: 'items in production', color1: '#ffd60a', color2: '#b24bff', data: inProgressPOs },
-        ].map(cat => (
+        {categoryCards.map(cat => (
           <button
             key={cat.id}
-            onClick={() => { setSelectedCategory(cat.id); setOpenPOIds({}); }}
+            onClick={() => handleCategoryClick(cat.id)}
             style={{
               background: `linear-gradient(135deg,${cat.color1}15,${cat.color2}08)`,
               border: `1px solid ${cat.color1}40`,
@@ -185,7 +232,7 @@ function OverviewPage() {
       {selectedCategory && (
         <Modal
           isOpen={!!selectedCategory}
-          onClose={() => setSelectedCategory(null)}
+          onClose={handleCategoryClose}
           title={selectedCategory === 'daily' ? '📅 DAILY SET' : selectedCategory === 'delayed' ? '⚠️ DELAYED POs' : '⏳ INPROGRESS'}
           width={750}
         >
@@ -209,7 +256,7 @@ function OverviewPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowReadyDetails(false)}
+              onClick={handleReadyDetailsClose}
               style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
             >
               CLOSE
@@ -288,13 +335,13 @@ function OverviewStatsModal({ category, data, todayStr }) {
   const [expandedPOs, setExpandedPOs] = React.useState({});
   const [expandedSCs, setExpandedSCs] = React.useState({});
 
-  const togglePO = (po) => {
+  const togglePO = React.useCallback((po) => {
     setExpandedPOs(prev => ({ ...prev, [po]: !prev[po] }));
-  };
+  }, []);
 
-  const toggleSC = (sc) => {
+  const toggleSC = React.useCallback((sc) => {
     setExpandedSCs(prev => ({ ...prev, [sc]: !prev[sc] }));
-  };
+  }, []);
 
   if (!data || data.length === 0) {
     return <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No items found for this category.</div>;

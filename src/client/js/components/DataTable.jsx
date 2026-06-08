@@ -22,4 +22,4 @@ function DataTable({ headers, children, style, className = 'db-table' }) {
   );
 }
 
-export default DataTable;
+export default React.memo(DataTable);

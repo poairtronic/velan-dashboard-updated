@@ -16,18 +16,50 @@ function ProductionPage() {
   const catRef   = React.useRef();
   const [tab, setTab] = React.useState('sets'); // 'sets' | 'items'
 
-  // Daily items chart
-  const byDate = {};
-  filtered.forEach(r => {
-    if (!r.timestamp) return;
-    const d = r.timestamp.substring(0, 10);
-    if (!byDate[d]) byDate[d] = { date: d, ready: 0, stores: 0, wip: 0 };
-    if (r.currentStage === 'READY') byDate[d].ready++;
-    else if (r.currentStage === 'STORES') byDate[d].stores++;
-    else byDate[d].wip++;
-  });
-  const dateSeries = Object.keys(byDate).sort().map(d => byDate[d]);
+  // ── MEMOIZED: Daily items aggregation by date ─────────────────────────────
+  const dateSeries = React.useMemo(() => {
+    const byDate = {};
+    filtered.forEach(r => {
+      if (!r.timestamp) return;
+      const d = r.timestamp.substring(0, 10);
+      if (!byDate[d]) byDate[d] = { date: d, ready: 0, stores: 0, wip: 0 };
+      if (r.currentStage === 'READY') byDate[d].ready++;
+      else if (r.currentStage === 'STORES') byDate[d].stores++;
+      else byDate[d].wip++;
+    });
+    return Object.keys(byDate).sort().map(d => byDate[d]);
+  }, [filtered]);
 
+  // ── MEMOIZED: Product category breakdown for doughnut chart ───────────────
+  const cats = React.useMemo(() => {
+    const result = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
+    filtered.forEach(r => { result[getProductCategory(r.type)]++; });
+    return result;
+  }, [filtered]);
+
+  // ── MEMOIZED: Sets and items derived data ─────────────────────────────────
+  const displaySets = React.useMemo(() => {
+    if (tab !== 'sets') return null;
+    return kpis.readySets.concat(kpis.storeSets);
+  }, [kpis.readySets, kpis.storeSets, tab]);
+
+  const readyItems = React.useMemo(
+    () => filtered.filter(r => r.currentStage === 'READY'),
+    [filtered]
+  );
+
+  // ── MEMOIZED: KPI values for AIRPLUG and MASTER output ────────────────────
+  const airplugOutputCount = React.useMemo(
+    () => filtered.filter(r => AIRPLUG_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length,
+    [filtered]
+  );
+
+  const masterOutputCount = React.useMemo(
+    () => filtered.filter(r => MASTER_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length,
+    [filtered]
+  );
+
+  // Daily items chart
   useChart(dailyRef, {
     type: 'bar',
     data: {
@@ -46,7 +78,7 @@ function ProductionPage() {
       },
       plugins: { legend: { labels: { color: '#7ba7cc' } } }
     }
-  }, [filtered]);
+  }, [dateSeries]);
 
   // SC Sets daily output chart
   const scDaily = kpis.scDailyOutput;
@@ -69,8 +101,6 @@ function ProductionPage() {
     }
   }, [kpis]);
 
-  const cats = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
-  filtered.forEach(r => { cats[getProductCategory(r.type)]++; });
   useChart(catRef, {
     type: 'doughnut',
     data: {
@@ -78,12 +108,10 @@ function ProductionPage() {
       datasets: [{ data: Object.values(cats), backgroundColor: ['#00c9ff88', '#00ff9d88', '#ffd60a88'], borderColor: ['#00c9ff', '#00ff9d', '#ffd60a'], borderWidth: 2 }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#7ba7cc', font: { size: 11 } } } } }
-  }, [filtered]);
+  }, [cats]);
 
   const readySets   = kpis.readySets;
   const storeSets   = kpis.storeSets;
-  const displaySets = tab === 'sets' ? (readySets.concat(storeSets)) : null;
-  const readyItems  = filtered.filter(r => r.currentStage === 'READY');
 
   return (
     <div>
@@ -93,8 +121,8 @@ function ProductionPage() {
         <KPICard label="SETS → STORES" value={storeSets.length} sub="full sets moved to stores" color1="#00c9ff" color2="#0fa8e0" badge={{ text: 'STORES', cls: 'badge-blue' }}/>
         <KPICard label="READY ITEMS" value={kpis.ready} sub="individual items ready" color1="#00e676" color2="#0fa8e0"/>
         <KPICard label="ITEMS → STORES" value={kpis.stores} sub="individual items in stores" color1="#00c9ff" color2="#0fa8e0"/>
-        <KPICard label="AIRPLUG OUTPUT" value={filtered.filter(r => AIRPLUG_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length} sub="APG/ARG items done" color1="#00c9ff" color2="#b24bff"/>
-        <KPICard label="MASTER OUTPUT" value={filtered.filter(r => MASTER_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)).length} sub="SRG/SP items done" color1="#00ff9d" color2="#00c9ff"/>
+        <KPICard label="AIRPLUG OUTPUT" value={airplugOutputCount} sub="APG/ARG items done" color1="#00c9ff" color2="#b24bff"/>
+        <KPICard label="MASTER OUTPUT" value={masterOutputCount} sub="SRG/SP items done" color1="#00ff9d" color2="#00c9ff"/>
       </div>
 
       <div className="chart-grid">

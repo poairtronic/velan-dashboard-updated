@@ -747,8 +747,9 @@ function DashboardProvider({ children }) {
   const uniqueStages  = React.useMemo(() => [...new Set(liveData.map(r => r.currentStage))].filter(Boolean).sort(), [liveData]);
   const uniqueTypes   = React.useMemo(() => [...new Set(liveData.map(r => r.type))].filter(Boolean).sort(), [liveData]);
 
-  // Context value object containing all shared variables
-  const contextValue = {
+  // Context value object containing all shared variables — memoized to prevent
+  // all consumers from re-rendering when unrelated state changes in the provider.
+  const contextValue = React.useMemo(() => ({
     data, setData,
     liveRows, setLiveRows,
     isLoading, setIsLoading,
@@ -785,7 +786,16 @@ function DashboardProvider({ children }) {
     uniqueTypes,
     theme,
     toggleTheme,
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    data, liveRows, isLoading, lastSync, activeNav, selectedPONum,
+    filters, dateRange, serverStatus, now,
+    uploadStatus, liveConfig, liveState, historyConfig, importState,
+    saveRowsToServer, importRowsToDb, syncHistorySheet, resetDB,
+    resetFilters, handleFileUpload, handleHistoryFileUpload, handleHistoryDragDrop,
+    syncLiveDataNow, processedData, allDbData, liveData, filtered, scGroups,
+    poGroups, kpiStats, uniquePOs, uniqueStages, uniqueTypes, theme, toggleTheme,
+  ]);
 
   return (
     <DashboardContext.Provider value={contextValue}>

@@ -30,4 +30,4 @@ function KPICard({ label, value, sub, color1, color2, badge, action }) {
   );
 }
 
-export default KPICard;
+export default React.memo(KPICard);
