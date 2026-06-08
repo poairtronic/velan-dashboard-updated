@@ -22,21 +22,101 @@ const http  = require('http');
 const https = require('https');
 const path  = require('path');
 const fs    = require('fs');
-const { Pool } = require('pg');
 
 const PORT       = process.env.PORT       || 10000;
 const LIVE_URL    = process.env.LIVE_URL    || process.env.SHEETS_URL || '';
 const HISTORY_URL = process.env.HISTORY_URL || '';
 const CACHE_TTL   = Number(process.env.CACHE_TTL) || 60; // seconds
 
-// ── Neon PostgreSQL connection ────────────────────────────────────────────────
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 5,                  // max 5 concurrent connections (Neon free tier safe)
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
+// ── Neon PostgreSQL connection (with MockPool fallback for local testing) ─────
+let pool;
+const isMock = !process.env.DATABASE_URL || process.env.DATABASE_URL === 'mock';
+
+if (!isMock) {
+  const { Pool } = require('pg');
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 5,                  // max 5 concurrent connections (Neon free tier safe)
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+} else {
+  class MockPool {
+    constructor() {
+      this.rows = [];
+      this.liveRows = [];
+      this.syncLogs = [];
+    }
+    async connect() {
+      return {
+        query: async (sql, params) => this.query(sql, params),
+        release: () => {}
+      };
+    }
+    async query(sql, params) {
+      const cleanSql = sql.trim().replace(/\s+/g, ' ').toUpperCase();
+      if (cleanSql.includes('CREATE TABLE') || cleanSql.includes('CREATE INDEX') || cleanSql.includes('BEGIN') || cleanSql.includes('COMMIT') || cleanSql.includes('DROP TABLE')) {
+        return { rowCount: 0, rows: [] };
+      }
+      if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS WHERE ROW_KEY')) {
+        return { rows: [{ count: 0 }] };
+      }
+      if (cleanSql.includes('SELECT CREATED_AT FROM SYNC_LOGS')) {
+        return { rows: this.syncLogs.slice(0, 1) };
+      }
+      if (cleanSql.includes('SELECT DATA FROM VELAN_ROWS')) {
+        return { rows: this.rows };
+      }
+      if (cleanSql.includes('SELECT DATA FROM VELAN_LIVE_ROWS')) {
+        return { rows: this.liveRows };
+      }
+      if (cleanSql.includes('SELECT SYNC_TYPE')) {
+        return { rows: this.syncLogs };
+      }
+      if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS')) {
+        return { rows: [{ count: this.rows.length }] };
+      }
+      if (cleanSql.includes('TRUNCATE VELAN_LIVE_ROWS') || cleanSql.includes('DELETE FROM VELAN_LIVE_ROWS')) {
+        this.liveRows = [];
+        return { rowCount: 0, rows: [] };
+      }
+      if (cleanSql.includes('DELETE FROM VELAN_ROWS')) {
+        this.rows = [];
+        return { rowCount: 0, rows: [] };
+      }
+      if (cleanSql.includes('INSERT INTO VELAN_LIVE_ROWS') || cleanSql.includes('INSERT INTO VELAN_ROWS')) {
+        if (params) {
+          for (let i = 0; i < params.length; i += 2) {
+            const key = params[i];
+            if (!params[i+1]) continue;
+            const data = JSON.parse(params[i+1]);
+            const rowObj = { row_key: key, data };
+            if (cleanSql.includes('VELAN_LIVE_ROWS')) {
+              const idx = this.liveRows.findIndex(r => r.row_key === key);
+              if (idx >= 0) this.liveRows[idx] = rowObj;
+              else this.liveRows.push(rowObj);
+            } else {
+              const idx = this.rows.findIndex(r => r.row_key === key);
+              if (idx >= 0) this.rows[idx] = rowObj;
+              else this.rows.push(rowObj);
+            }
+          }
+        }
+        return { rowCount: params ? params.length / 2 : 0, rows: [] };
+      }
+      if (cleanSql.includes('INSERT INTO SYNC_LOGS')) {
+        const [sync_type, row_count, status] = params;
+        const log = { sync_type, row_count, status, created_at: new Date().toISOString() };
+        this.syncLogs.unshift(log);
+        return { rowCount: 1, rows: [] };
+      }
+      return { rows: [] };
+    }
+    async end() {}
+  }
+  pool = new MockPool();
+}
 
 // ── Create tables and indices if they don't exist ─────────────────────────────
 async function initDB() {
@@ -286,6 +366,73 @@ async function saveLiveRows(rows) {
   }
 }
 
+// ── Security Helpers & Middlewares ───────────────────────────────────────────
+
+function requireApiKey(req, res) {
+  if (!process.env.API_SECRET) return true;
+  const key = req.headers['x-api-key'];
+  if (key === process.env.API_SECRET) return true;
+
+  res.writeHead(401, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ success: false, error: 'Unauthorized: Invalid API Key' }));
+  return false;
+}
+
+function validateSheetsUrl(urlString) {
+  try {
+    const parsedUrl = new URL(urlString);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    
+    // Whitelist docs.google.com and docs.googleusercontent.com
+    const isWhitelisted = hostname === 'docs.google.com' || hostname === 'docs.googleusercontent.com';
+    if (!isWhitelisted) return false;
+
+    // Explicit SSRF protection against loopbacks
+    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) return false;
+
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+const rateLimitStore = new Map();
+
+function rateLimiter(req, res, maxRequests = 10, windowMs = 60000) {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anonymous';
+  const now = Date.now();
+  if (!rateLimitStore.has(ip)) rateLimitStore.set(ip, []);
+  
+  const timestamps = rateLimitStore.get(ip);
+  const activeTimestamps = timestamps.filter(ts => now - ts < windowMs);
+  
+  if (activeTimestamps.length >= maxRequests) {
+    res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': Math.round(windowMs / 1000) });
+    res.end(JSON.stringify({ success: false, error: 'Too Many Requests. Rate limit exceeded.' }));
+    return false;
+  }
+  
+  activeTimestamps.push(now);
+  rateLimitStore.set(ip, activeTimestamps);
+  return true;
+}
+
+function applySecurityHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Content-Security-Policy', 
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "connect-src 'self' https://docs.google.com https://docs.googleusercontent.com; " +
+    "img-src 'self' data:; " +
+    "frame-ancestors 'none';"
+  );
+}
+
 // ── In-memory state ───────────────────────────────────────────────────────────
 let _db       = [];   // full archive — loaded from Neon at startup
 let _liveRows = [];   // current operational snapshot — replaced on every upload
@@ -438,11 +585,40 @@ const server = http.createServer(async (req, res) => {
   }
   const pathname = parsed.pathname;
 
+  // ── Apply Security Headers ────────────────────────────────────────────────
+  applySecurityHeaders(res);
+
   // ── CORS headers ──────────────────────────────────────────────────────────
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || '';
+  const origin = req.headers.origin || '';
+  
+  if (allowedOrigin) {
+    const isLocal = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+    if (origin === allowedOrigin || isLocal) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+  // ── Rate Limiting ─────────────────────────────────────────────────────────
+  const rateLimitedPaths = [
+    '/api/data',
+    '/api/import',
+    '/api/reset',
+    '/api/migrate',
+    '/api/sheets',
+    '/api/security-status'
+  ];
+  
+  if (rateLimitedPaths.includes(pathname)) {
+    const limit = (pathname === '/api/data' && req.method === 'GET') ? 60 : 10;
+    if (!rateLimiter(req, res, limit, 60000)) return;
+  }
 
   // ── GET /api/data ─────────────────────────────────────────────────────────
   if (pathname === '/api/data' && req.method === 'GET') {
@@ -465,6 +641,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── POST /api/data — replace live snapshot AND save new rows to Neon ──────
   if (pathname === '/api/data' && req.method === 'POST') {
+    if (!requireApiKey(req, res)) return;
     let syncType = 'Manual Upload';
     let incomingLength = 0;
     try {
@@ -512,6 +689,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── DELETE /api/data — wipe all rows from Neon ────────────────────────────
   if (pathname === '/api/data' && req.method === 'DELETE') {
+    if (!requireApiKey(req, res)) return;
     try {
       await pool.query('DELETE FROM velan_rows');
       await pool.query('DELETE FROM velan_live_rows');
@@ -530,6 +708,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── POST /api/reset — wipe Neon + optionally re-import from HISTORY_URL ──
   if (pathname === '/api/reset' && req.method === 'POST') {
+    if (!requireApiKey(req, res)) return;
     try {
       // 1. Wipe Neon
       await pool.query('DELETE FROM velan_rows');
@@ -569,6 +748,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── POST /api/import — append to Neon DB with dedup ──────────────────────
   if (pathname === '/api/import' && req.method === 'POST') {
+    if (!requireApiKey(req, res)) return;
     let incomingLength = 0;
     try {
       const body    = await readBody(req);
@@ -642,6 +822,7 @@ const server = http.createServer(async (req, res) => {
   // One-time operation: updates all Neon rows where currentStage is empty
   // but op/OP field contains the stage value (rows imported before field mapping fix).
   if (pathname === '/api/migrate' && req.method === 'POST') {
+    if (!requireApiKey(req, res)) return;
     try {
       // Fetch all rows
       const allRes = await pool.query('SELECT id, row_key, data FROM velan_rows');
@@ -699,6 +880,15 @@ const server = http.createServer(async (req, res) => {
         hint:  'Publish to web → Entire Document → CSV → copy the /pub?output=csv link',
       }));
     }
+    
+    // Validate target URL to prevent SSRF
+    if (!validateSheetsUrl(sheetUrl)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        error: 'Forbidden: Host is not whitelisted. Only Google Sheets URLs are permitted.',
+        hint: 'Enter a valid URL from docs.google.com or docs.googleusercontent.com'
+      }));
+    }
     try {
       const result = await getSheetData(sheetUrl);
       res.writeHead(200, {
@@ -725,6 +915,17 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({
       liveUrl:    LIVE_URL    || null,
       historyUrl: HISTORY_URL || null,
+    }));
+  }
+
+  // ── GET /api/security-status — retrieve security status ──────────────────
+  if (pathname === '/api/security-status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      apiSecretEnabled:       !!process.env.API_SECRET,
+      corsRestricted:         !!process.env.ALLOWED_ORIGIN,
+      sheetsWhitelistEnabled: true,
+      rateLimitingEnabled:    true
     }));
   }
   if (pathname === '/api/health') {
@@ -782,12 +983,11 @@ const server = http.createServer(async (req, res) => {
 
 // ── Startup: init Neon table → load rows → start listening ───────────────────
 async function startup() {
-  if (!process.env.DATABASE_URL) {
-    console.error('\n[FATAL] DATABASE_URL is not set.');
-    console.error('  → Go to Render → Environment → Add: DATABASE_URL = <your Neon connection string>\n');
-    process.exit(1);
+  if (isMock) {
+    console.warn('\n[WARNING] DATABASE_URL is not set or set to mock. Running with in-memory MockPool database.');
+  } else {
+    console.log('\n[DB] Connecting to Neon PostgreSQL…');
   }
-  console.log('\n[DB] Connecting to Neon PostgreSQL…');
   await initDB();
 
   // Run migration check automatically at startup

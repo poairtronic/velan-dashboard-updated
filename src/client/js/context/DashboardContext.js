@@ -16,12 +16,15 @@ function DashboardProvider({ children }) {
   const [isLoading, setIsLoading] = React.useState(true);
   const [lastSync, setLastSync] = React.useState('');
   const [activeNav, setActiveNav] = React.useState('overview');
+  const [selectedPONum, setSelectedPONum] = React.useState(null);
   const [serverStatus, setServerStatus] = React.useState('loading');
   const [now] = React.useState(new Date());
 
   const [theme, setTheme] = React.useState(() => {
     return localStorage.getItem('velan_theme') || 'dark';
   });
+
+  const [adminKey, setAdminKey] = React.useState('');
 
   React.useEffect(() => {
     localStorage.setItem('velan_theme', theme);
@@ -72,9 +75,11 @@ function DashboardProvider({ children }) {
   }, [historyConfig]);
 
   // Network actions
-  const saveRowsToServer = React.useCallback((rows, syncType = 'Manual Upload') => {
+  const saveRowsToServer = React.useCallback((rows, syncType = 'Manual Upload', keyOverride = '') => {
     if (!rows || rows.length === 0) return;
-    apiSaveRows(rows, syncType)
+    
+    const activeKey = keyOverride || adminKey;
+    apiSaveRows(rows, syncType, activeKey)
       .then(result => {
         if (result && result.success) {
           if (result.lastSync) setLastSync(result.lastSync);
@@ -89,19 +94,35 @@ function DashboardProvider({ children }) {
           });
         }
       })
-      .catch(() => {
-        setUploadStatus({
-          type: 'warn',
-          msg: '⚠ Backend save failed',
-          detail: 'Data is loaded locally, but backend storage is unavailable.',
-        });
+      .catch(err => {
+        if (err.status === 401) {
+          const pass = prompt('Authentication Required: Please enter the API Key to save data:');
+          if (pass) {
+            setAdminKey(pass);
+            saveRowsToServer(rows, syncType, pass);
+          } else {
+            setUploadStatus({
+              type: 'error',
+              msg: 'Authentication failed',
+              detail: 'Invalid or missing API key.',
+            });
+          }
+        } else {
+          setUploadStatus({
+            type: 'warn',
+            msg: '⚠ Backend save failed',
+            detail: 'Data is loaded locally, but backend storage is unavailable.',
+          });
+        }
       });
-  }, []);
+  }, [adminKey]);
 
-  const importRowsToDb = React.useCallback((rows) => {
+  const importRowsToDb = React.useCallback((rows, keyOverride = '') => {
     if (!rows || rows.length === 0) return;
     setImportState({ loading: true, lastMsg: 'Importing…' });
-    apiImportRows(rows)
+    
+    const activeKey = keyOverride || adminKey;
+    apiImportRows(rows, activeKey)
       .then(result => {
         const msg = result.success
           ? '✅ Imported ' + result.imported + ' new rows to DB (' + result.skipped + ' duplicates skipped). Total DB: ' + result.total
@@ -111,8 +132,20 @@ function DashboardProvider({ children }) {
           setData(Array.isArray(payload.rows) ? payload.rows : []);
         });
       })
-      .catch(err => setImportState({ loading: false, lastMsg: '❌ ' + String(err) }));
-  }, []);
+      .catch(err => {
+        if (err.status === 401) {
+          const pass = prompt('Authentication Required: Please enter the API Key to import data:');
+          if (pass) {
+            setAdminKey(pass);
+            importRowsToDb(rows, pass);
+          } else {
+            setImportState({ loading: false, lastMsg: '❌ Authentication failed: Invalid or missing API key.' });
+          }
+        } else {
+          setImportState({ loading: false, lastMsg: '❌ ' + String(err.message || err) });
+        }
+      });
+  }, [adminKey]);
 
   const syncHistorySheet = React.useCallback(async () => {
     const url = String(historyConfig.url || '').trim();
@@ -152,11 +185,13 @@ function DashboardProvider({ children }) {
     }
   }, [historyConfig.url, importRowsToDb]);
 
-  const resetDB = React.useCallback(async () => {
+  const resetDB = React.useCallback(async (keyOverride = '') => {
     if (!window.confirm('⚠️ DANGER: This will permanently DELETE ALL rows from the Neon database.\n\nThis CANNOT be undone.\n\nClick OK only if you want to clear history and start fresh.')) return;
     setImportState({ loading: true, lastMsg: '⏳ Clearing database…' });
+    
+    const activeKey = keyOverride || adminKey;
     try {
-      const json = await apiResetDB();
+      const json = await apiResetDB(activeKey);
       if (json.success) {
         setData([]);
         setImportState({ loading: false, lastMsg: '✅ Database cleared. All history rows deleted. Re-import your 2K dataset using History Import above.' });
@@ -164,9 +199,20 @@ function DashboardProvider({ children }) {
         setImportState({ loading: false, lastMsg: '❌ Reset failed: ' + (json.error || 'Unknown error') });
       }
     } catch (err) {
-      setImportState({ loading: false, lastMsg: '❌ Reset error: ' + String(err) });
+      if (err.status === 401) {
+        const pass = prompt('Authentication Required: Please enter the API Key to clear the database:');
+        if (pass) {
+          setAdminKey(pass);
+          setImportState({ loading: false, lastMsg: '' });
+          resetDB(pass);
+        } else {
+          setImportState({ loading: false, lastMsg: '❌ Authentication failed: Invalid or missing API key.' });
+        }
+      } else {
+        setImportState({ loading: false, lastMsg: '❌ Reset error: ' + String(err) });
+      }
     }
-  }, []);
+  }, [adminKey]);
 
   // Filter hooks
   const filterManager = useFilters();
@@ -496,7 +542,7 @@ function DashboardProvider({ children }) {
     const stageAvgDuration = {};
     Object.entries(stageDurations).forEach(([stage, durations]) => {
       const avg = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
-      stageAvgDuration[stage] = Math.round(avg * 10) / 10;
+      stageAvgDuration[stage] = Math.round(avg);
     });
 
     const stageAccum = {};
@@ -510,7 +556,7 @@ function DashboardProvider({ children }) {
 
     const stageAvgToReach = {};
     Object.entries(stageAccum).forEach(([stage, vals]) => {
-      stageAvgToReach[stage] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
+      stageAvgToReach[stage] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
     });
 
     const stageCycleTimes = Object.entries(stageAvgDuration).map(([stage, duration]) => {
@@ -525,7 +571,7 @@ function DashboardProvider({ children }) {
       .map(r => dateDiff(r.poDate, r.timestamp))
       .filter(d => d !== null && d >= 0);
     const avgOverallCycle = itemCycleDays.length > 0
-      ? Math.round((itemCycleDays.reduce((a, b) => a + b, 0) / itemCycleDays.length) * 10) / 10
+      ? Math.round(itemCycleDays.reduce((a, b) => a + b, 0) / itemCycleDays.length)
       : null;
 
     const bottleneckStages = Object.entries(stageCounts)
@@ -697,6 +743,7 @@ function DashboardProvider({ children }) {
     isLoading, setIsLoading,
     lastSync, setLastSync,
     activeNav, setActiveNav,
+    selectedPONum, setSelectedPONum,
     filters, setFilters,
     dateRange, setDateRange,
     serverStatus, setServerStatus,

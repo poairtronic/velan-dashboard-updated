@@ -2,6 +2,7 @@
 
 function CycleTimePage() {
   const { kpis, filtered } = useDashboard();
+  const [selectedStage, setSelectedStage] = React.useState(null);
   const ctBarRef  = React.useRef();
   const ctLineRef = React.useRef();
 
@@ -121,6 +122,7 @@ function CycleTimePage() {
                 <th>VS 21-DAY TARGET</th>
                 <th>RATING</th>
                 <th>BAR</th>
+                <th>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -143,6 +145,15 @@ function CycleTimePage() {
                         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4 }}/>
                       </div>
                     </td>
+                    <td>
+                      <button 
+                        onClick={() => setSelectedStage(c.stage)}
+                        className="filter-btn"
+                        style={{ padding: '4px 8px', fontSize: 10, minWidth: 'auto' }}
+                      >
+                        Full Details
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -150,6 +161,58 @@ function CycleTimePage() {
           </table>
         </div>
       </div>
+
+      {selectedStage && (
+        <Modal
+          isOpen={!!selectedStage}
+          onClose={() => setSelectedStage(null)}
+          title={`Stage ${selectedStage} — Active Items`}
+          width={800}
+        >
+          <div className="table-wrap" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>PO</th>
+                  <th>SC</th>
+                  <th>PRODUCT</th>
+                  <th>PENDING DAYS</th>
+                  <th>CYCLE TIME</th>
+                  <th>LAST UPDATE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.filter(item => item.currentStage === selectedStage).length === 0 ? (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px' }}>
+                      No active items found in stage {selectedStage} for current view.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.filter(item => item.currentStage === selectedStage).map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="mono" style={{ fontSize: 11 }}>{item.po}</td>
+                      <td className="mono text-accent" style={{ fontSize: 11 }}>{item.sc || '—'}</td>
+                      <td style={{ fontSize: 11, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.product}</td>
+                      <td>
+                        <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 14, color: (item.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)' }}>
+                          {item.pendingDays != null ? `${Math.round(item.pendingDays)}d` : '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 14, color: 'var(--accent1)' }}>
+                          {item.cycleTime != null ? `${Math.round(item.cycleTime)}d` : '—'}
+                        </span>
+                      </td>
+                      <td className="mono" style={{ fontSize: 10 }}>{fmtTs(item.timestamp)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

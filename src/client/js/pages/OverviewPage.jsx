@@ -173,64 +173,18 @@ function OverviewPage() {
 
       {/* Category Modal */}
       {selectedCategory && (
-        <div className="table-card" style={{ marginBottom: 20, border: '2px solid var(--accent1)', boxShadow: '0 0 30px rgba(0,201,255,0.2)' }}>
-          <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,201,255,0.05)' }}>
-            <div>
-              <div className="chart-title" style={{ color: 'var(--accent1)' }}>
-                {selectedCategory === 'daily' ? '📅 DAILY SET' : selectedCategory === 'delayed' ? '⚠️ DELAYED POs' : '⏳ INPROGRESS'}
-              </div>
-              <div className="chart-sub">
-                {selectedCategory === 'daily' ? 'Items created today' : selectedCategory === 'delayed' ? 'Items with >21 days pending' : 'All items in production'}
-              </div>
-            </div>
-            <button
-              onClick={() => setSelectedCategory(null)}
-              style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
-            >
-              CLOSE
-            </button>
-          </div>
-          <div style={{ padding: '16px 18px', maxHeight: '500px', overflowY: 'auto' }}>
-            {(selectedCategory === 'daily' ? dailyPOs : selectedCategory === 'delayed' ? delayedPOs : inProgressPOs).map((poGroup, poIdx) => (
-              <div key={poIdx} style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ background: 'rgba(26,58,92,0.5)', padding: '12px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  onClick={() => setOpenPOIds(prev => ({ ...prev, [poIdx]: !prev[poIdx] }))}
-                >
-                  <div>
-                    <div style={{ fontFamily: 'Share Tech Mono', fontSize: 11, fontWeight: 700, color: 'var(--accent1)' }}>{poGroup.po}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{poGroup.count} items · {poGroup.scs.length} SCs</div>
-                  </div>
-                  <div style={{ fontSize: 12 }}>{openPOIds[poIdx] ? '▲' : '▼'}</div>
-                </div>
-                {openPOIds[poIdx] && (
-                  <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)' }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>SCs in this PO: {poGroup.scs.join(', ')}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                      {poGroup.items.map((i, idx) => (
-                        <div key={idx} style={{ padding: '6px 0', borderBottom: idx < poGroup.items.length - 1 ? '1px solid rgba(26,58,92,0.4)' : 'none' }}>
-                          <span style={{ color: 'var(--accent1)', fontFamily: 'Share Tech Mono', fontSize: 9 }}>{i.po}</span>
-                          {' · '}
-                          <span style={{ fontSize: 9 }}>{i.product?.substring(0, 40)}</span>
-                          {' · '}
-                          <span style={{ color: 'var(--text-muted)', fontSize: 9 }}>{i.currentStage}</span>
-                          {' · '}
-                          {(() => {
-                            const poAge = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
-                            return (
-                              <span style={{ color: poAge > 21 ? 'var(--danger)' : poAge > 7 ? 'var(--warning)' : 'var(--success)', fontSize: 9, fontWeight: 700 }}>
-                                {poAge != null ? `${poAge}d` : '—'}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <Modal
+          isOpen={!!selectedCategory}
+          onClose={() => setSelectedCategory(null)}
+          title={selectedCategory === 'daily' ? '📅 DAILY SET' : selectedCategory === 'delayed' ? '⚠️ DELAYED POs' : '⏳ INPROGRESS'}
+          width={750}
+        >
+          <OverviewStatsModal
+            category={selectedCategory}
+            data={selectedCategory === 'daily' ? dailyPOs : selectedCategory === 'delayed' ? delayedPOs : inProgressPOs}
+            todayStr={todayStr}
+          />
+        </Modal>
       )}
 
       {showReadyDetails && (
@@ -315,6 +269,135 @@ function OverviewPage() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── OVERVIEW STATS MODAL COMPONENT ──────────────────────────────────────────────
+function OverviewStatsModal({ category, data, todayStr }) {
+  const [expandedPOs, setExpandedPOs] = React.useState({});
+  const [expandedSCs, setExpandedSCs] = React.useState({});
+
+  const togglePO = (po) => {
+    setExpandedPOs(prev => ({ ...prev, [po]: !prev[po] }));
+  };
+
+  const toggleSC = (sc) => {
+    setExpandedSCs(prev => ({ ...prev, [sc]: !prev[sc] }));
+  };
+
+  if (!data || data.length === 0) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No items found for this category.</div>;
+  }
+
+  return (
+    <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 6 }}>
+      {data.map((poGroup, poIdx) => {
+        const isPOExpanded = !!expandedPOs[poGroup.po];
+        return (
+          <div key={poGroup.po} style={{ marginBottom: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(26,58,92,0.15)', overflow: 'hidden' }}>
+            {/* PO Header */}
+            <div 
+              onClick={() => togglePO(poGroup.po)}
+              style={{
+                padding: '12px 16px',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: isPOExpanded ? 'rgba(0, 201, 255, 0.08)' : 'transparent',
+                transition: 'background 0.2s ease'
+              }}
+            >
+              <div>
+                <span style={{ fontFamily: 'Share Tech Mono', fontSize: 13, fontWeight: 700, color: 'var(--accent1)' }}>{poGroup.po}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 12 }}>
+                  {poGroup.count} items · {poGroup.scs.length} SCs
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{isPOExpanded ? '▲' : '▼'}</div>
+            </div>
+
+            {/* PO Expand Content (SCs List) */}
+            {isPOExpanded && (
+              <div style={{ padding: '8px 16px 16px 16px', borderTop: '1px solid var(--border)', background: 'rgba(0, 0, 0, 0.2)' }}>
+                {poGroup.scs.map((scNum) => {
+                  const isSCExpanded = !!expandedSCs[scNum];
+                  const scItems = poGroup.items.filter(item => item.sc === scNum);
+                  return (
+                    <div key={scNum} style={{ marginTop: 8, border: '1px solid rgba(26,58,92,0.3)', borderRadius: 6, background: 'rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+                      {/* SC Header */}
+                      <div
+                        onClick={() => toggleSC(scNum)}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          background: isSCExpanded ? 'rgba(0, 201, 255, 0.04)' : 'transparent'
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontFamily: 'Share Tech Mono', fontSize: 11, fontWeight: 600, color: 'var(--accent2)' }}>{scNum || '—'}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 10 }}>({scItems.length} items)</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{isSCExpanded ? '▲' : '▼'}</div>
+                      </div>
+
+                      {/* SC Expand Content (Items List) */}
+                      {isSCExpanded && (
+                        <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(26,58,92,0.2)', background: 'rgba(0,0,0,0.1)' }}>
+                          {scItems.map((item, itemIdx) => {
+                            const poAge = item.poDate ? workingDaysBetween(item.poDate, todayStr) : null;
+                            const isDelayed = poAge !== null && poAge > 21;
+                            return (
+                              <div 
+                                key={itemIdx} 
+                                style={{ 
+                                  padding: '6px 0', 
+                                  display: 'flex', 
+                                  justifyContent: 'space-between', 
+                                  alignItems: 'center',
+                                  borderBottom: itemIdx < scItems.length - 1 ? '1px solid rgba(26,58,92,0.2)' : 'none'
+                                }}
+                              >
+                                <div style={{ flex: 1, paddingRight: 10 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-primary)' }}>{item.product}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    Type: <span style={{ color: 'var(--accent1)' }}>{item.type}</span> · Stage: <strong style={{ color: getStageColor(item.currentStage) }}>{item.currentStage}</strong> · {item.inhouse}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  {poAge != null ? (
+                                    <span style={{
+                                      fontFamily: 'Rajdhani',
+                                      fontWeight: 700,
+                                      fontSize: 12,
+                                      color: isDelayed ? 'var(--danger)' : poAge > 14 ? 'var(--warning)' : 'var(--success)',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      background: isDelayed ? 'rgba(255, 61, 90, 0.1)' : poAge > 14 ? 'rgba(255, 214, 10, 0.1)' : 'rgba(0, 230, 118, 0.1)'
+                                    }}>
+                                      {poAge}d aging
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>—</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

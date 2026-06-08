@@ -10,28 +10,55 @@ async function apiFetchData() {
   return await res.json();
 }
 
-async function apiSaveRows(rows, syncType = 'Manual Upload') {
+async function apiSaveRows(rows, syncType = 'Manual Upload', apiKey = '') {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['x-api-key'] = apiKey;
+  
   const res = await fetch(`${apiBase}/api/data?sync_type=${encodeURIComponent(syncType)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ rows }),
   });
+  if (res.status === 401) {
+    const err = new Error('Unauthorized: Invalid API Key');
+    err.status = 401;
+    throw err;
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
 
-async function apiImportRows(rows) {
+async function apiImportRows(rows, apiKey = '') {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['x-api-key'] = apiKey;
+
   const res = await fetch(`${apiBase}/api/import`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ rows }),
   });
+  if (res.status === 401) {
+    const err = new Error('Unauthorized: Invalid API Key');
+    err.status = 401;
+    throw err;
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
 
-async function apiResetDB() {
-  const res = await fetch(`${apiBase}/api/data`, { method: 'DELETE' });
+async function apiResetDB(apiKey = '') {
+  const headers = {};
+  if (apiKey) headers['x-api-key'] = apiKey;
+
+  const res = await fetch(`${apiBase}/api/data`, { 
+    method: 'DELETE',
+    headers
+  });
+  if (res.status === 401) {
+    const err = new Error('Unauthorized: Invalid API Key');
+    err.status = 401;
+    throw err;
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }

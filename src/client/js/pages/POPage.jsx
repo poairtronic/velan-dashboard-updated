@@ -5,7 +5,7 @@ function isPOComplete(scGroupsForPO) {
 }
 
 function POPage() {
-  const { kpis, poGroups, scGroups } = useDashboard();
+  const { kpis, poGroups, scGroups, selectedPONum, setSelectedPONum } = useDashboard();
   const leadsRef = React.useRef();
   const [tab, setTab]           = React.useState('all');
   const [selectedPO, setSelectedPO] = React.useState(null);
@@ -26,6 +26,23 @@ function POPage() {
     const days   = daysBetween(pg.poDate, lastTs);
     return { ...pg, scs, done, lastTs, days };
   });
+
+  const now = new Date();
+  const todayStr =
+    now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+
+  // Auto-expand and highlight PO from context state
+  React.useEffect(() => {
+    if (selectedPONum) {
+      const found = poRows.find(p => p.po === selectedPONum);
+      if (found) {
+        setSelectedPO(found);
+        setSelectedPONum(null);
+      }
+    }
+  }, [selectedPONum, poRows, setSelectedPONum]);
 
   const tabFiltered = tab === 'complete' ? poRows.filter(p => p.done)
                     : tab === 'wip'      ? poRows.filter(p => !p.done)
@@ -122,121 +139,167 @@ function POPage() {
               <tr>
                 <th>PO</th>
                 <th>PO DATE</th>
-                <th>SC SETS</th>
-                <th>ITEMS</th>
-                <th>LAST TIMESTAMP</th>
-                <th>DAYS TAKEN</th>
-                <th>VS TARGET</th>
-                <th>PO STATUS</th>
+                <th>SCs COUNT</th>
+                <th>ITEMS COUNT</th>
+                <th>DELAYED COUNT</th>
+                <th>STATUS</th>
               </tr>
             </thead>
             <tbody>
               {displayed.map((p, i) => {
-                const over = (p.days || 0) - 21;
+                const delayedItems = p.items.filter(item => (item.pendingDays || 0) > 2);
+                const isDelayed = !p.done && (daysBetween(p.poDate, todayStr) > 21 || delayedItems.length > 0);
+                const isExpanded = selectedPO?.po === p.po;
                 return (
-                  <tr key={i}>
-                    <td>
-                      <button
-                        onClick={() => setSelectedPO(selectedPO?.po === p.po ? null : p)}
-                        className="mono text-accent fw7"
-                        style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          textDecoration: 'underline', fontSize: 13
-                        }}
-                        title={`View SC sets for PO ${p.po}`}
-                      >
-                        {p.po}
-                      </button>
-                    </td>
-                    <td className="mono" style={{ fontSize: 11 }}>{fmtDate(p.poDate)}</td>
-                    <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15, color: 'var(--text-muted)' }}>{p.scs.length}</td>
-                    <td>{p.items.length}</td>
-                    <td className="mono" style={{ fontSize: 10 }}>{fmtDate(p.lastTs)}</td>
-                    <td>
-                      <span style={{
-                        fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 18,
-                        color: p.done && p.days != null && p.days > 21 ? 'var(--danger)' :
-                              p.done ? 'var(--success)' : 'var(--warning)'
-                      }}>
-                        {p.days ?? '—'}
-                      </span>
-                    </td>
-                    <td style={{ color: over > 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 700 }}>
-                      {p.days != null ? (over > 0 ? `+${over} over` : `-${Math.abs(over)} early`) : '—'}
-                    </td>
-                    <td>
-                      <span className={`status-pill ${p.done ? 's-ready' : 's-wip'}`}>
-                        {p.done ? 'COMPLETE' : 'IN PROGRESS'}
-                      </span>
-                    </td>
-                  </tr>
+                  <React.Fragment key={i}>
+                    <tr 
+                      onClick={() => setSelectedPO(isExpanded ? null : p)}
+                      style={{ 
+                        cursor: 'pointer', 
+                        backgroundColor: isExpanded ? 'rgba(0,201,255,0.08)' : isDelayed ? 'rgba(255, 61, 90, 0.08)' : 'transparent',
+                        borderLeft: isDelayed ? '3px solid var(--danger)' : 'none'
+                      }}
+                    >
+                      <td className="mono text-accent fw7" style={{ fontSize: 13 }}>{p.po}</td>
+                      <td className="mono" style={{ fontSize: 11 }}>{fmtDate(p.poDate)}</td>
+                      <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15, color: 'var(--text-muted)' }}>{p.scs.length}</td>
+                      <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 15 }}>{p.items.length}</td>
+                      <td>
+                        <span style={{ 
+                          fontFamily: 'Rajdhani', 
+                          fontWeight: 700, 
+                          fontSize: 15,
+                          color: delayedItems.length > 0 ? 'var(--danger)' : 'var(--success)' 
+                        }}>
+                          {delayedItems.length}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${p.done ? 's-ready' : 's-wip'}`}>
+                          {p.done ? 'COMPLETE' : 'IN PROGRESS'}
+                        </span>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr style={{ backgroundColor: 'rgba(0,0,0,0.12)' }}>
+                        <td colSpan="6" style={{ padding: '12px 16px' }}>
+                          <PODetailsExpandable poRow={p} todayStr={todayStr} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Drill-down sets list */}
-      {selectedPO && (
-        <div className="table-card" style={{ marginTop: 16 }}>
-          <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div>
-              <div className="chart-title">PO {selectedPO.po} — SC Sets Inside</div>
-              <div className="chart-sub">
-                {selectedPO.scs.length} SC sets · {selectedPO.items.length} total items
-              </div>
-            </div>
-            <button
-              onClick={() => setSelectedPO(null)}
-              style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11 }}
-            >CLOSE</button>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>SC NO</th>
-                  <th>ITEMS</th>
-                  <th>LAST TIMESTAMP</th>
-                  <th>DAYS TAKEN</th>
-                  <th>SET STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedPO.scs.map((sg, idx) => {
-                  const scDone  = isSCComplete(sg.items);
-                  const scLastTs = getSCLastTimestamp(sg.items);
-                  const scDays  = daysBetween(selectedPO.poDate, scLastTs);
-                  return (
-                    <tr key={idx}>
-                      <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 16, color: 'var(--text-muted)' }}>{idx + 1}</td>
-                      <td className="mono text-accent fw7">{sg.sc}</td>
-                      <td>{sg.items.length}</td>
-                      <td className="mono" style={{ fontSize: 10 }}>{fmtDate(scLastTs)}</td>
-                      <td>
-                        <span style={{
-                          fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 18,
-                          color: scDone && scDays != null && scDays > 21 ? 'var(--danger)' :
-                                scDone ? 'var(--success)' : 'var(--warning)'
-                        }}>
-                          {scDays ?? '—'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`status-pill ${scDone ? 's-ready' : 's-wip'}`}>
-                          {scDone ? 'COMPLETE' : 'IN PROGRESS'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+// ─── PO DETAILS EXPANDABLE COMPONENT ──────────────────────────────────────────────
+function PODetailsExpandable({ poRow, todayStr }) {
+  const [expandedSCs, setExpandedSCs] = React.useState({});
+  
+  const toggleSC = (sc) => {
+    setExpandedSCs(prev => ({ ...prev, [sc]: !prev[sc] }));
+  };
+
+  const scs = poRow.scs;
+  const items = poRow.items;
+  
+  const totalItems = items.length;
+  const completedItems = items.filter(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage)).length;
+  const delayedItems = items.filter(i => (i.pendingDays || 0) > 2);
+  const delayedCount = delayedItems.length;
+  const delayedPct = totalItems > 0 ? Math.round((delayedCount / totalItems) * 100) : 0;
+  
+  return (
+    <div style={{ padding: '16px 20px', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 8, border: '1px solid rgba(26,58,92,0.4)', marginTop: 4 }}>
+      {/* Summary Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 16 }}>
+        <div style={{ background: 'rgba(0,201,255,0.05)', border: '1px solid rgba(0,201,255,0.15)', borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Total SC Sets</div>
+          <div style={{ fontFamily: 'Rajdhani', fontSize: 20, fontWeight: 700, color: 'var(--accent1)' }}>{scs.length}</div>
+        </div>
+        <div style={{ background: 'rgba(0,201,255,0.05)', border: '1px solid rgba(0,201,255,0.15)', borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Total Items</div>
+          <div style={{ fontFamily: 'Rajdhani', fontSize: 20, fontWeight: 700, color: 'var(--accent2)' }}>{totalItems}</div>
+        </div>
+        <div style={{ background: 'rgba(0,230,118,0.05)', border: '1px solid rgba(0,230,118,0.15)', borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Completed Items</div>
+          <div style={{ fontFamily: 'Rajdhani', fontSize: 20, fontWeight: 700, color: 'var(--success)' }}>{completedItems}</div>
+        </div>
+        <div style={{ background: 'rgba(255,61,90,0.05)', border: '1px solid rgba(255,61,90,0.15)', borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Delayed Items (Delayed %)</div>
+          <div style={{ fontFamily: 'Rajdhani', fontSize: 20, fontWeight: 700, color: delayedCount > 0 ? 'var(--danger)' : 'var(--success)' }}>
+            {delayedCount} <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({delayedPct}%)</span>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* SCs List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {scs.map((sg) => {
+          const isSCExpanded = !!expandedSCs[sg.sc];
+          const scItems = items.filter(i => i.sc === sg.sc);
+          const scDone = scItems.every(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
+          return (
+            <div key={sg.sc} style={{ border: '1px solid rgba(26,58,92,0.3)', borderRadius: 6, overflow: 'hidden', background: 'rgba(0,0,0,0.12)' }}>
+              <div 
+                onClick={(e) => { e.stopPropagation(); toggleSC(sg.sc); }}
+                style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(26,58,92,0.3)' }}
+              >
+                <div>
+                  <span style={{ fontFamily: 'Share Tech Mono', fontSize: 11, fontWeight: 700, color: 'var(--accent1)' }}>SC: {sg.sc}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 12 }}>({scItems.length} items)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span className={`status-pill ${scDone ? 'badge-green' : 'badge-yellow'}`} style={{ fontSize: 8 }}>
+                    {scDone ? '✓ COMPLETE' : '⏳ IN PROGRESS'}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{isSCExpanded ? '▲' : '▼'}</span>
+                </div>
+              </div>
+
+              {isSCExpanded && (
+                <div style={{ padding: '8px 12px', background: 'rgba(0,0,0,0.15)' }}>
+                  {scItems.map((item, idx) => {
+                    const isItemDelayed = (item.pendingDays || 0) > 2;
+                    return (
+                      <div 
+                        key={idx} 
+                        style={{ 
+                          padding: '6px 0', 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          borderBottom: idx < scItems.length - 1 ? '1px solid rgba(26,58,92,0.15)' : 'none',
+                          color: isItemDelayed ? 'var(--danger)' : 'var(--text-primary)'
+                        }}
+                      >
+                        <div style={{ flex: 1, paddingRight: 12 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600 }}>{item.product}</span>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 8 }}>Type: {item.type}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <span className="status-pill" style={{ fontSize: 8, background: getStageColor(item.currentStage) + '22', color: getStageColor(item.currentStage) }}>
+                            {item.currentStage}
+                          </span>
+                          <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 12, color: isItemDelayed ? 'var(--danger)' : 'var(--success)' }}>
+                            {item.pendingDays != null ? `${item.pendingDays}d pending` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
-  const { kpis, data, setActiveNav } = useDashboard();
+  const { kpis, data, setActiveNav, setSelectedPONum } = useDashboard();
   const [selectedSC, setSelectedSC] = React.useState(null);
   const [selectedItem, setSelectedItem] = React.useState(null);
   const vendorBarRef  = React.useRef();
@@ -524,9 +524,15 @@ function VendorPage() {
                 >
                   View SC {selectedItem.sc} Details
                 </button>
-                {setActiveNav && (
+                 {setActiveNav && (
                   <button 
-                    onClick={() => { setSelectedItem(null); setActiveNav('po'); }}
+                    onClick={() => { 
+                      if (setSelectedPONum) {
+                        setSelectedPONum(selectedItem.po);
+                      }
+                      setSelectedItem(null); 
+                      setActiveNav('po'); 
+                    }}
                     style={{ background: 'rgba(0,201,255,0.1)', border: '1px solid rgba(0,201,255,0.3)', color: 'var(--accent1)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
                   >
                     View in PO Analysis

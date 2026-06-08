@@ -61,39 +61,37 @@ function WIPPage() {
           <table>
             <thead>
               <tr>
-                <th>SC</th>
                 <th>PO</th>
+                <th>SC</th>
                 <th>PRODUCT</th>
-                <th>TYPE</th>
-                <th>STAGE</th>
-                <th>STATUS 1</th>
-                <th>INHOUSE</th>
-                <th>TIMESTAMP</th>
-                <th>DETAILS</th>
+                <th>DAYS PENDING</th>
               </tr>
             </thead>
             <tbody>
               {filtered.slice(0, 200).map((r, i) => (
                 <React.Fragment key={i}>
-                  <tr style={{ cursor: 'pointer', backgroundColor: expandedItem === i ? 'rgba(0,201,255,0.08)' : 'transparent' }}>
+                  <tr 
+                    onClick={() => setExpandedItem(expandedItem === i ? null : i)}
+                    style={{ cursor: 'pointer', backgroundColor: expandedItem === i ? 'rgba(0,201,255,0.08)' : 'transparent' }}
+                  >
+                    <td style={{ fontSize: 11 }} className="mono">{r.po}</td>
                     <td className="mono text-accent">{r.sc || '—'}</td>
-                    <td style={{ fontSize: 11 }}>{r.po}</td>
-                    <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product || '—'}</td>
-                    <td><span className="status-pill badge-blue">{r.type}</span></td>
-                    <td><span className="status-pill" style={{ background: getStageColor(r.currentStage) + '22', color: getStageColor(r.currentStage) }}>{r.currentStage}</span></td>
-                    <td style={{ fontSize: 10, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.status1}</td>
-                    <td><span className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}>{r.inhouse}</span></td>
-                    <td className="mono" style={{ fontSize: 10 }}>{fmtTs(r.timestamp)}</td>
+                    <td style={{ maxWidth: 350, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product || '—'}</td>
                     <td>
-                      <button onClick={() => setExpandedItem(expandedItem === i ? null : i)} style={{ background: 'none', border: 'none', color: 'var(--accent1)', cursor: 'pointer', fontSize: 11 }}>
-                        {expandedItem === i ? '▼' : '▶'}
-                      </button>
+                      <span style={{ 
+                        fontFamily: 'Rajdhani', 
+                        fontWeight: 700, 
+                        fontSize: 14,
+                        color: (r.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)' 
+                      }}>
+                        {r.pendingDays != null ? `${r.pendingDays} days` : '—'}
+                      </span>
                     </td>
                   </tr>
                   {expandedItem === i && (
                     <tr style={{ backgroundColor: 'rgba(0,201,255,0.04)', borderBottom: '2px solid var(--border)' }}>
-                      <td colSpan="9" style={{ padding: '14px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+                      <td colSpan="4" style={{ padding: '16px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
                           <div>
                             <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>PO Number</div>
                             <div style={{ fontFamily: 'Share Tech Mono', fontSize: 13, fontWeight: 700, color: 'var(--accent1)' }}>{r.po}</div>
@@ -103,14 +101,37 @@ function WIPPage() {
                             <div style={{ fontFamily: 'Share Tech Mono', fontSize: 13, fontWeight: 700, color: 'var(--accent1)' }}>{r.sc || '—'}</div>
                           </div>
                           <div>
-                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Current Stage</div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: getStageColor(r.currentStage) }}>{r.currentStage}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Product Type & Category</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {r.type} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>({getProductCategory(r.type)})</span>
+                            </div>
                           </div>
                           <div>
                             <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Days Pending</div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: (r.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)' }}>
-                              {r.pendingDays != null ? r.pendingDays : '-'}d
+                              {r.pendingDays != null ? `${r.pendingDays}d` : '-'}
                             </div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginTop: 14, borderTop: '1px solid rgba(26,58,92,0.2)', paddingTop: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Current Stage</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: getStageColor(r.currentStage) }}>{r.currentStage}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Workload Location</div>
+                            <span className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`} style={{ fontSize: 9 }}>{r.inhouse}</span>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Processing Comments</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                              {r.status1 ? <div>Status 1: {r.status1}</div> : null}
+                              {r.status2 ? <div>Status 2: {r.status2}</div> : null}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Last Edit/Update Timestamp</div>
+                            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 11, color: 'var(--text-muted)' }}>{fmtTs(r.timestamp)}</div>
                           </div>
                         </div>
                       </td>
