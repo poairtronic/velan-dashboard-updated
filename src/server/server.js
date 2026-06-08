@@ -7,7 +7,6 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
 
 const { pool, isMock, initDB, runKeyMigration, loadDB, loadLiveDB } = require('./db/pool');
 const state = require('./state');
@@ -291,28 +290,22 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── Static files ──────────────────────────────────────────────────────────
-  const distDir = path.resolve(__dirname, '..', '..', 'dist');
-  let clientDir = distDir;
+  const projectRoot = path.resolve(__dirname, '..', '..');
+  const staticRoot  = path.join(projectRoot, 'dist');
 
-  if (!fs.existsSync(clientDir)) {
-    clientDir = path.resolve(__dirname, '..', '..'); // fallback to project root for index.html
-  }
+  const staticFile  = path.join(staticRoot, pathname === '/' ? 'index.html' : pathname);
 
-  const staticFile = path.join(clientDir, pathname === '/' ? 'index.html' : pathname);
-
-  if (!staticFile.startsWith(clientDir)) {
+  if (!staticFile.startsWith(staticRoot)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
   }
 
   if (fs.existsSync(staticFile) && fs.statSync(staticFile).isFile()) {
-    const ext  = path.extname(staticFile);
+    const ext = path.extname(staticFile);
     const mime = {
       '.html':  'text/html',
       '.js':    'text/javascript',
       '.jsx':   'text/javascript',
-      '.ts':    'text/javascript',
-      '.tsx':   'text/javascript',
       '.mjs':   'text/javascript',
       '.css':   'text/css',
       '.json':  'application/json',
@@ -320,22 +313,18 @@ const server = http.createServer(async (req, res) => {
       '.png':   'image/png',
       '.jpg':   'image/jpeg',
       '.jpeg':  'image/jpeg',
-      '.gif':   'image/gif',
-      '.webp':  'image/webp',
       '.ico':   'image/x-icon',
       '.woff':  'font/woff',
       '.woff2': 'font/woff2',
       '.ttf':   'font/ttf',
-      '.eot':   'application/vnd.ms-fontobject',
       '.map':   'application/json',
-      '.txt':   'text/plain',
     }[ext] || 'application/octet-stream';
     res.writeHead(200, { 'Content-Type': mime });
     return res.end(fs.readFileSync(staticFile));
   }
 
   // ── SPA fallback → index.html ─────────────────────────────────────────────
-  const indexPath = path.join(clientDir, 'index.html');
+  const indexPath = path.join(staticRoot, 'index.html');
   if (fs.existsSync(indexPath)) {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(fs.readFileSync(indexPath));
@@ -344,22 +333,6 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not found');
 });
-
-// ── Auto-build frontend if dist/ is missing ────────────────────────────────
-function ensureDist() {
-  if (!fs.existsSync(path.resolve(__dirname, '..', '..', 'dist'))) {
-    console.log('[BUILD] dist/ not found — running npm run build...');
-    try {
-      execSync('npm run build', { cwd: path.resolve(__dirname, '..', '..'), stdio: 'inherit', timeout: 120000 });
-      console.log('[BUILD] Frontend built successfully');
-    } catch (err) {
-      console.error('[BUILD] Failed to build frontend:', err.message);
-      console.error('[BUILD] The server will start but SPA routes will return 404 until dist/ is created');
-    }
-  } else {
-    console.log(`[STATIC] Serving built frontend from: ${path.resolve(__dirname, '..', '..', 'dist')}`);
-  }
-}
 
 // ── Startup: init Neon table → load rows → start listening ───────────────────
 async function startup() {
@@ -393,8 +366,8 @@ async function startup() {
   const liveDb = await loadLiveDB();
   state._liveRows = liveDb;
   console.log(`[DB] Loaded ${state._db.length} archive rows and ${state._liveRows.length} live rows from Neon`);
-
-  ensureDist();
+  console.log('[STATIC] Serving from:', path.resolve(__dirname, '..', '..', 'dist'));
+  console.log('[STATIC] index.html exists:', fs.existsSync(path.join(path.resolve(__dirname, '..', '..', 'dist'), 'index.html')));
 
   server.listen(PORT, () => {
     console.log(`\n┌─────────────────────────────────────────────────┐`);

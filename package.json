@@ -4,9 +4,9 @@
   "description": "Velan Metrology Production Command Center — Neon PostgreSQL + Google Sheets + React",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "start": "node src/server/server.js"
   },
   "keywords": [
     "dashboard",
