@@ -7,6 +7,7 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 
 const { pool, isMock, initDB, runKeyMigration, loadDB, loadLiveDB } = require('./db/pool');
 const state = require('./state');
@@ -326,6 +327,23 @@ const server = http.createServer(async (req, res) => {
   res.end('Not found');
 });
 
+// ── Auto-build frontend if dist/ is missing ────────────────────────────────
+function ensureDist() {
+  const distDir = path.resolve(__dirname, '..', '..', 'dist');
+  if (!fs.existsSync(distDir)) {
+    console.log('[BUILD] dist/ not found — running npm run build...');
+    try {
+      execSync('npm run build', { cwd: path.resolve(__dirname, '..', '..'), stdio: 'inherit', timeout: 120000 });
+      console.log('[BUILD] Frontend built successfully');
+    } catch (err) {
+      console.error('[BUILD] Failed to build frontend:', err.message);
+      console.error('[BUILD] The server will start but SPA routes will return 404 until dist/ is created');
+    }
+  } else {
+    console.log(`[BUILD] dist/ found at ${distDir}`);
+  }
+}
+
 // ── Startup: init Neon table → load rows → start listening ───────────────────
 async function startup() {
   if (isMock) {
@@ -358,6 +376,8 @@ async function startup() {
   const liveDb = await loadLiveDB();
   state._liveRows = liveDb;
   console.log(`[DB] Loaded ${state._db.length} archive rows and ${state._liveRows.length} live rows from Neon`);
+
+  ensureDist();
 
   server.listen(PORT, () => {
     console.log(`\n┌─────────────────────────────────────────────────┐`);
