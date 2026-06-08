@@ -1,3 +1,4 @@
+
 // ─── PROCESS & FORMULA CALCULATION HELPERS ───────────────────────────────────
 
 const AIRPLUG_TYPES = ['APG','ARG'];
@@ -201,3 +202,5 @@ function getSCLastTimestamp(items) {
   const ts = items.map(i => i.timestamp).filter(Boolean).sort().pop();
   return ts;
 }
+
+export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp };

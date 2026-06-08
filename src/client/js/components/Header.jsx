@@ -1,3 +1,5 @@
+import React from 'react';
+import { useDashboard } from '../context/DashboardContext';
 // ─── HEADER UI COMPONENT ──────────────────────────────────────────────────────
 
 function Header() {
@@ -95,3 +97,5 @@ function Header() {
     </div>
   );
 }
+
+export default Header;

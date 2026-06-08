@@ -1,3 +1,7 @@
+import * as XLSX from 'xlsx';
+import { toIsoDateString } from '../utils/dateUtils';
+import { normalizeInhouse, inferType, normalizeTimestamp } from './dataNormalizer';
+import { resolveLatestStage } from './stageResolver';
 // ─── EXCEL & CSV PARSER SERVICES ─────────────────────────────────────────────
 
 // Raw CSV parser to preserve original DD/MM date strings and prevent sheetJS date flipping
@@ -237,3 +241,5 @@ function parseWorksheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
   return parseGenericRows(rows);
 }
+
+export { parseRawCsv, parseVelanExcel, parseGenericRows, parseRowsFromHeaderAoA, parseWorksheet };

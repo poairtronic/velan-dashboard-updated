@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 // ─── DATE UTILITIES ──────────────────────────────────────────────────────────
 
 // Resolution rule for ambiguous A/B/YYYY or A/B/YY where A<=12 and B<=12:
@@ -112,3 +113,5 @@ function fmtTs(tsStr) {
   const d = fmtDate(datePart);
   return timePart ? `${d} ${timePart}` : d;
 }
+
+export { toIsoDateString, fmtDate, fmtTs };

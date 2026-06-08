@@ -1,3 +1,4 @@
+import React from 'react';
 // ─── KPICARD UI COMPONENT ─────────────────────────────────────────────────────
 
 function KPICard({ label, value, sub, color1, color2, badge, action }) {
@@ -28,3 +29,5 @@ function KPICard({ label, value, sub, color1, color2, badge, action }) {
     </div>
   );
 }
+
+export default KPICard;

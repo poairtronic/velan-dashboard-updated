@@ -1,3 +1,4 @@
+import React from 'react';
 // ─── CHARTCARD UI COMPONENT ───────────────────────────────────────────────────
 
 function ChartCard({ title, subtitle, children }) {
@@ -15,3 +16,5 @@ function ChartCard({ title, subtitle, children }) {
     </div>
   );
 }
+
+export default ChartCard;

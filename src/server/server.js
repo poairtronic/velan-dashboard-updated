@@ -424,7 +424,7 @@ function applySecurityHeaders(res) {
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   res.setHeader('Content-Security-Policy', 
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; " +
+    "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "connect-src 'self' https://docs.google.com https://docs.googleusercontent.com; " +
@@ -948,7 +948,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── Static files ──────────────────────────────────────────────────────────
-  const clientDir = path.join(__dirname, '..', 'client');
+  const distDir = path.resolve(__dirname, '..', '..', 'dist');
+  const clientDir = fs.existsSync(distDir) ? distDir : path.join(__dirname, '..', 'client');
   const staticFile = path.join(clientDir, pathname === '/' ? 'index.html' : pathname);
   if (!staticFile.startsWith(clientDir)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
@@ -971,7 +972,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── SPA fallback → index.html ─────────────────────────────────────────────
-  const indexPath = path.join(__dirname, '..', 'client', 'index.html');
+  const indexPath = path.join(clientDir, 'index.html');
   if (fs.existsSync(indexPath)) {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(fs.readFileSync(indexPath));

@@ -1,3 +1,4 @@
+import React from 'react';
 // ─── LIVE OPERATIONAL SHEET BACKGROUND SYNC HOOK ──────────────────────────────
 
 function useLiveSync(liveConfig, syncLiveDataNow) {
@@ -18,3 +19,5 @@ function useLiveSync(liveConfig, syncLiveDataNow) {
     return () => clearInterval(timer);
   }, [liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec, syncLiveDataNow]);
 }
+
+export default useLiveSync;

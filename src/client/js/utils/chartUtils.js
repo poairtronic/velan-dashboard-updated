@@ -1,3 +1,6 @@
+import React from 'react';
+import Chart from 'chart.js/auto';
+import { useDashboard } from '../context/DashboardContext';
 // ─── CHART HELPERS ────────────────────────────────────────────────────────────
 
 function useChart(ref, config, deps) {
@@ -41,3 +44,5 @@ function useChart(ref, config, deps) {
     };
   }, [...deps, theme]);
 }
+
+export default useChart;

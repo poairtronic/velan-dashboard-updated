@@ -1,3 +1,4 @@
+import React from 'react';
 // ─── LOADING SCREEN UI COMPONENT ──────────────────────────────────────────────
 
 function LoadingScreen() {
@@ -24,3 +25,5 @@ function LoadingScreen() {
     </div>
   );
 }
+
+export default LoadingScreen;

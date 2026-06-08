@@ -1,3 +1,5 @@
+import React from 'react';
+import { useDashboard } from '../context/DashboardContext';
 // ─── SIDEBAR UI COMPONENT ──────────────────────────────────────────────────────
 
 function Sidebar() {
@@ -33,3 +35,5 @@ function Sidebar() {
     </div>
   );
 }
+
+export default Sidebar;

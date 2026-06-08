@@ -1,3 +1,15 @@
+import React from 'react';
+import { useDashboard } from '../context/DashboardContext';
+import { getStageColor } from '../services/dataNormalizer';
+import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
+import { fmtTs, fmtDate } from '../utils/dateUtils';
+import KPICard from '../components/KPICard';
+import Modal from '../components/Modal';
+import DataTable from '../components/DataTable';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { parseRawCsv, parseWorksheet } from '../services/excelParser';
 // ─── DATABASE PAGE COMPONENT ──────────────────────────────────────────────────
 
 function DatabasePage() {
@@ -380,7 +392,7 @@ function DatabasePage() {
   }
 
   function exportPDF() {
-    const { jsPDF } = window.jspdf;
+    // jsPDF imported at top
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
     const exportRows = filtered.filter(r => isDoneStage(r.currentStage));
@@ -832,7 +844,7 @@ function DatabasePage() {
           a.download = 'sc_completed_plus_va.csv'; a.click();
         }
         function exportModalPDF() {
-          const { jsPDF } = window.jspdf;
+          // jsPDF imported at top
           const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
           doc.setFontSize(14);
           doc.text('Velan Metrology \u2013 SC COMPLETED + VA', 40, 36);
@@ -992,3 +1004,5 @@ function DatabasePage() {
     </div>
   );
 }
+
+export default DatabasePage;

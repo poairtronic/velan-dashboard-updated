@@ -1,3 +1,14 @@
+import React from 'react';
+import { useDashboard } from '../context/DashboardContext';
+import { getStageColor } from '../services/dataNormalizer';
+import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
+import { fmtTs, fmtDate } from '../utils/dateUtils';
+import KPICard from '../components/KPICard';
+import Modal from '../components/Modal';
+import DataTable from '../components/DataTable';
+import useChart from '../utils/chartUtils';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {
@@ -72,7 +83,7 @@ function BottleneckPage() {
   function exportPDF() {
     const rows = getStuckRows();
     if (!rows.length) return;
-    const { jsPDF } = window.jspdf;
+    // jsPDF imported at top
     const doc = new jsPDF({ orientation: 'landscape' });
     const d = new Date();
     doc.setFontSize(14); doc.setTextColor(40);
@@ -265,3 +276,5 @@ function BottleneckPage() {
     </div>
   );
 }
+
+export default BottleneckPage;

@@ -1,3 +1,6 @@
+import * as XLSX from 'xlsx';
+import { normalizeGoogleSheetsUrl } from './googleSheets';
+import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet } from './excelParser';
 // ─── API SERVICES ────────────────────────────────────────────────────────────
 
 const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -108,3 +111,5 @@ async function apiFetchDataUrl(sourceUrl) {
     throw new Error('Paste a Google Sheets URL, or a direct .xlsx/.csv/.json link.');
   }
 }
+
+export { apiFetchData, apiSaveRows, apiImportRows, apiResetDB, apiLoadConfig, apiFetchDataUrl };

@@ -1,3 +1,9 @@
+import React from 'react';
+import * as XLSX from 'xlsx';
+import { toIsoDateString } from '../utils/dateUtils';
+import { inferType, normalizeInhouse, normalizeTimestamp } from '../services/dataNormalizer';
+import { resolveLatestStage } from '../services/stageResolver';
+import { parseWorksheet, parseRawCsv, parseRowsFromHeaderAoA } from '../services/excelParser';
 // ─── FILE UPLOAD HANDLERS HOOK ───────────────────────────────────────────────
 
 function useUploadHandlers(options) {
@@ -196,3 +202,5 @@ function useUploadHandlers(options) {
     handleHistoryDragDrop,
   };
 }
+
+export default useUploadHandlers;

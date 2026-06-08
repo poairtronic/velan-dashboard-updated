@@ -1,3 +1,4 @@
+import { normalizeStage } from './dataNormalizer';
 // ─── STAGE RESOLUTION SERVICES ───────────────────────────────────────────────
 
 function extractStageFromStatusText(text) {
@@ -33,3 +34,5 @@ function resolveLatestStage({ opStage, status1, status2 }) {
     ''
   );
 }
+
+export { extractStageFromStatusText, resolveLatestStage };

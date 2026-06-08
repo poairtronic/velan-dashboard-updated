@@ -1,3 +1,4 @@
+import React from 'react';
 // ─── MODAL UI COMPONENT ───────────────────────────────────────────────────────
 
 function Modal({ isOpen, onClose, title, children, width = 600 }) {
@@ -67,3 +68,5 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
     </div>
   );
 }
+
+export default Modal;

@@ -1,3 +1,4 @@
+import React from 'react';
 // ─── DATATABLE UI COMPONENT ───────────────────────────────────────────────────
 
 function DataTable({ headers, children, style, className = 'db-table' }) {
@@ -20,3 +21,5 @@ function DataTable({ headers, children, style, className = 'db-table' }) {
     </div>
   );
 }
+
+export default DataTable;

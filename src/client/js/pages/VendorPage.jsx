@@ -1,3 +1,12 @@
+import React from 'react';
+import { useDashboard } from '../context/DashboardContext';
+import { getStageColor } from '../services/dataNormalizer';
+import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
+import { fmtTs, fmtDate } from '../utils/dateUtils';
+import KPICard from '../components/KPICard';
+import Modal from '../components/Modal';
+import DataTable from '../components/DataTable';
+import useChart from '../utils/chartUtils';
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
@@ -560,3 +569,5 @@ function VendorPage() {
     </div>
   );
 }
+
+export default VendorPage;

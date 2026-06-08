@@ -1,3 +1,5 @@
+import React from 'react';
+import { apiFetchData, apiLoadConfig } from '../services/api';
 // ─── INITIAL DATA INITIALIZATION HOOK ─────────────────────────────────────────
 
 function useDashboardData(options) {
@@ -46,3 +48,5 @@ function useDashboardData(options) {
     loadServerConfig();
   }, [setLiveConfig, setHistoryConfig]);
 }
+
+export default useDashboardData;

@@ -1,3 +1,5 @@
+import React from 'react';
+import { getProductCategory } from '../utils/calculationUtils';
 // ─── FILTER HOOK ─────────────────────────────────────────────────────────────
 
 function useFilters() {
@@ -59,3 +61,5 @@ function useFilters() {
     filterRows,
   };
 }
+
+export default useFilters;

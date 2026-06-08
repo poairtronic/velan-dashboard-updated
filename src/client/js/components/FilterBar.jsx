@@ -1,3 +1,5 @@
+import React from 'react';
+import { useDashboard } from '../context/DashboardContext';
 // ─── FILTERBAR UI COMPONENT ───────────────────────────────────────────────────
 
 function FilterBar() {
@@ -91,3 +93,5 @@ function FilterBar() {
     </div>
   );
 }
+
+export default FilterBar;
