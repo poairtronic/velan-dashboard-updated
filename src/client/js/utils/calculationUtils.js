@@ -203,4 +203,4 @@ function getSCLastTimestamp(items) {
   return ts;
 }
 
-export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp };
+export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp, TARGET_DAYS };
