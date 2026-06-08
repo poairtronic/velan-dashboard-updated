@@ -1,9 +1,18 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../context/DashboardContext';
+import { useAuth } from '../hooks/useAuth';
 // ─── HEADER UI COMPONENT ──────────────────────────────────────────────────────
 
 function Header() {
   const { liveState, now, setActiveNav, theme, toggleTheme } = useDashboard();
+  const { user, logout, isAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="header">
@@ -77,22 +86,75 @@ function Header() {
             </svg>
           )}
         </button>
-        <button
-          onClick={() => setActiveNav('upload')}
-          style={{
-            background: 'rgba(0,201,255,0.1)',
-            border: '1px solid rgba(0,201,255,0.3)',
-            color: 'var(--accent1)',
-            borderRadius: 8,
-            padding: '5px 12px',
-            cursor: 'pointer',
-            fontSize: 10,
-            fontFamily: 'Share Tech Mono,monospace',
-            fontWeight: 700
-          }}
-        >
-          📊 CONNECT SHEETS
-        </button>
+
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setActiveNav('upload');
+              navigate('/upload');
+            }}
+            style={{
+              background: 'rgba(0,201,255,0.1)',
+              border: '1px solid rgba(0,201,255,0.3)',
+              color: 'var(--accent1)',
+              borderRadius: 8,
+              padding: '5px 12px',
+              cursor: 'pointer',
+              fontSize: 10,
+              fontFamily: 'Share Tech Mono,monospace',
+              fontWeight: 700
+            }}
+          >
+            📊 CONNECT SHEETS
+          </button>
+        )}
+
+        {user && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(26, 58, 92, 0.4)',
+              border: '1px solid var(--border-bright)',
+              padding: '4px 12px',
+              borderRadius: 16,
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              fontFamily: 'Share Tech Mono, monospace'
+            }}>
+              <span style={{ fontSize: 13 }}>{isAdmin ? '👑' : '👤'}</span>
+              <span>{isAdmin ? 'Admin' : 'User'}: <span style={{ color: 'var(--accent1)' }}>{user}</span></span>
+            </div>
+            
+            <button
+              onClick={handleSignOut}
+              style={{
+                background: 'rgba(255, 61, 90, 0.1)',
+                border: '1px solid rgba(255, 61, 90, 0.35)',
+                color: 'var(--danger)',
+                borderRadius: 8,
+                padding: '5px 12px',
+                cursor: 'pointer',
+                fontSize: 10,
+                fontFamily: 'Share Tech Mono, monospace',
+                fontWeight: 700,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 61, 90, 0.2)';
+                e.currentTarget.style.borderColor = 'rgba(255, 61, 90, 0.6)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 61, 90, 0.1)';
+                e.currentTarget.style.borderColor = 'rgba(255, 61, 90, 0.35)';
+              }}
+            >
+              🚪 SIGN OUT
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

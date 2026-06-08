@@ -1,5 +1,6 @@
 import React from 'react';
 import { useDashboard } from '../context/DashboardContext';
+import { useAuth } from '../hooks/useAuth';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -13,6 +14,7 @@ import { parseRawCsv, parseWorksheet } from '../services/excelParser';
 // ─── DATABASE PAGE COMPONENT ──────────────────────────────────────────────────
 
 function DatabasePage() {
+  const { isAdmin } = useAuth();
   const {
     allDbData: data,
     data: historyRows,
@@ -456,7 +458,8 @@ function DatabasePage() {
       <div className="section-title">Database <span>Archive</span><div className="section-line" /></div>
       
       {/* ── HISTORY DATA MODULE ─────────────────────────────────────────── */}
-      <div className="chart-card" style={{ marginBottom: 18, background: 'rgba(10,15,40,0.95)', border: '1px solid rgba(100,120,255,0.35)' }}>
+      {isAdmin && (
+        <div className="chart-card" style={{ marginBottom: 18, background: 'rgba(10,15,40,0.95)', border: '1px solid rgba(100,120,255,0.35)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🗃</span>
@@ -554,6 +557,7 @@ function DatabasePage() {
           <strong style={{ color: 'var(--accent3)' }}>ℹ Database-only:</strong> Imported history rows are stored permanently in Neon PostgreSQL and visible <strong>only on this page</strong>. They do not appear in Production, Stage/WIP, or any other module. Duplicates are automatically skipped.
         </div>
       </div>
+    )}
 
       {/* FILTER BAR */}
       <div className="chart-card" style={{ marginBottom: 16, background: 'rgba(0,20,40,0.9)' }}>

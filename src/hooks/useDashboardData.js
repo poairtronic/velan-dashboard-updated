@@ -1,8 +1,10 @@
 import React from 'react';
 import { apiFetchData, apiLoadConfig } from '../services/api';
+import { useAuth } from './useAuth';
 // ─── INITIAL DATA INITIALIZATION HOOK ─────────────────────────────────────────
 
 function useDashboardData(options) {
+  const { user } = useAuth();
   const {
     setData,
     setLiveRows,
@@ -14,6 +16,14 @@ function useDashboardData(options) {
   } = options;
 
   React.useEffect(() => {
+    if (!user) {
+      setData([]);
+      setLiveRows([]);
+      setLastSync('');
+      setServerStatus('loading');
+      return;
+    }
+
     async function loadServerData() {
       setIsLoading(true);
       try {
@@ -31,9 +41,10 @@ function useDashboardData(options) {
       }
     }
     loadServerData();
-  }, [setData, setLiveRows, setLastSync, setServerStatus, setIsLoading]);
+  }, [user, setData, setLiveRows, setLastSync, setServerStatus, setIsLoading]);
 
   React.useEffect(() => {
+    if (!user) return;
     async function loadServerConfig() {
       try {
         const cfg = await apiLoadConfig();
@@ -46,7 +57,7 @@ function useDashboardData(options) {
       } catch { /* ignore */ }
     }
     loadServerConfig();
-  }, [setLiveConfig, setHistoryConfig]);
+  }, [user, setLiveConfig, setHistoryConfig]);
 }
 
 export default useDashboardData;

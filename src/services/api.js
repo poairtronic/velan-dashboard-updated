@@ -1,12 +1,41 @@
 import * as XLSX from 'xlsx';
 import { normalizeGoogleSheetsUrl } from './googleSheets';
 import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet } from './excelParser';
-// ─── API SERVICES ────────────────────────────────────────────────────────────
+// ─── API SERVICES WITH JWT AUTHENTICATION ─────────────────────────────────────
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
 
+async function authFetch(url, options = {}) {
+  const token = localStorage.getItem('vd_token');
+  options.headers = options.headers || {};
+  
+  // Only attach authorization to our backend API endpoints
+  const isBackend = url.startsWith('/api/') || (apiBase && url.startsWith(`${apiBase}/api/`));
+  
+  if (token && isBackend) {
+    options.headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(url, options);
+  
+  if (res.status === 401 && isBackend) {
+    // Automatically redirect to /login
+    localStorage.removeItem('vd_token');
+    localStorage.removeItem('vd_role');
+    localStorage.removeItem('vd_user');
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    const err = new Error('Unauthorized');
+    err.status = 401;
+    throw err;
+  }
+  
+  return res;
+}
+
 async function apiFetchData() {
-  const res = await fetch(`${apiBase}/api/data`);
+  const res = await authFetch(`${apiBase}/api/data`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
@@ -15,7 +44,7 @@ async function apiSaveRows(rows, syncType = 'Manual Upload', apiKey = '') {
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['x-api-key'] = apiKey;
   
-  const res = await fetch(`${apiBase}/api/data?sync_type=${encodeURIComponent(syncType)}`, {
+  const res = await authFetch(`${apiBase}/api/data?sync_type=${encodeURIComponent(syncType)}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ rows }),
@@ -33,7 +62,7 @@ async function apiImportRows(rows, apiKey = '') {
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['x-api-key'] = apiKey;
 
-  const res = await fetch(`${apiBase}/api/import`, {
+  const res = await authFetch(`${apiBase}/api/import`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ rows }),
@@ -51,7 +80,7 @@ async function apiResetDB(apiKey = '') {
   const headers = {};
   if (apiKey) headers['x-api-key'] = apiKey;
 
-  const res = await fetch(`${apiBase}/api/data`, { 
+  const res = await authFetch(`${apiBase}/api/data`, { 
     method: 'DELETE',
     headers
   });
@@ -65,7 +94,7 @@ async function apiResetDB(apiKey = '') {
 }
 
 async function apiLoadConfig() {
-  const res = await fetch(`${apiBase}/api/config`);
+  const res = await authFetch(`${apiBase}/api/config`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
@@ -88,19 +117,19 @@ async function apiFetchDataUrl(sourceUrl) {
   const isExcelUrl = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
 
   if (isJsonUrl) {
-    const res = await fetch(fetchUrl, { cache: 'no-store' });
+    const res = await authFetch(fetchUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status} from server`);
     const parsed = await res.json();
     return Array.isArray(parsed) ? parsed : [parsed];
   } else if (isCsvUrl) {
-    const res = await fetch(fetchUrl, { cache: 'no-store' });
+    const res = await authFetch(fetchUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status} — make sure the sheet is shared "Anyone with the link"`);
     const text = await res.text();
     // Raw CSV parsing to preserve Indian DD/MM date string format
     const rawAoA = parseRawCsv(text);
     return parseRowsFromHeaderAoA(rawAoA);
   } else if (isExcelUrl) {
-    const res = await fetch(fetchUrl, { cache: 'no-store' });
+    const res = await authFetch(fetchUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = await res.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array', cellDates: true, raw: false });

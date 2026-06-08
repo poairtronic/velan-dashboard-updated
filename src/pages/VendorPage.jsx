@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../context/DashboardContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, TARGET_DAYS } from '../utils/calculationUtils';
@@ -11,6 +12,7 @@ import useChart from '../utils/chartUtils';
 
 function VendorPage() {
   const { kpis, data, setActiveNav, setSelectedPONum } = useDashboard();
+  const navigate = useNavigate();
   const [selectedSC, setSelectedSC] = React.useState(null);
   const [selectedItem, setSelectedItem] = React.useState(null);
   const vendorBarRef  = React.useRef();
@@ -541,6 +543,7 @@ function VendorPage() {
                       }
                       setSelectedItem(null); 
                       setActiveNav('po'); 
+                      navigate('/po');
                     }}
                     style={{ background: 'rgba(0,201,255,0.1)', border: '1px solid rgba(0,201,255,0.3)', color: 'var(--accent1)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
                   >
@@ -549,7 +552,7 @@ function VendorPage() {
                 )}
                 {setActiveNav && (
                   <button 
-                    onClick={() => { setSelectedItem(null); setActiveNav('wip'); }}
+                    onClick={() => { setSelectedItem(null); setActiveNav('wip'); navigate('/wip'); }}
                     style={{ background: 'rgba(255,214,10,0.1)', border: '1px solid rgba(255,214,10,0.3)', color: 'var(--accent5)', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
                   >
                     View in Stage / WIP

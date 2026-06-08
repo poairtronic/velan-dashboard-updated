@@ -1,8 +1,12 @@
 import React from 'react';
+import { useAuth } from './useAuth';
 // ─── LIVE OPERATIONAL SHEET BACKGROUND SYNC HOOK ──────────────────────────────
 
 function useLiveSync(liveConfig, syncLiveDataNow) {
+  const { user } = useAuth();
+
   React.useEffect(() => {
+    if (!user) return;
     const enabled = liveConfig?.enabled === true;
     const url = String(liveConfig?.url || '').trim();
     if (!enabled || !url) return;
@@ -17,7 +21,7 @@ function useLiveSync(liveConfig, syncLiveDataNow) {
     }, sec * 1000);
 
     return () => clearInterval(timer);
-  }, [liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec, syncLiveDataNow]);
+  }, [user, liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec, syncLiveDataNow]);
 }
 
 export default useLiveSync;

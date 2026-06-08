@@ -125,7 +125,18 @@ async function initDB() {
       )
     `);
 
-    // 4. Create indices for speed optimization
+    // 4. Create users table (separate from production data)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        username      VARCHAR(50) UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role          VARCHAR(10) NOT NULL DEFAULT 'user',
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_live_rows_key ON velan_live_rows (row_key)');
 

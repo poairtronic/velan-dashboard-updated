@@ -10,7 +10,10 @@ const fs = require('fs');
 
 const { pool, isMock, initDB, runKeyMigration, loadDB, loadLiveDB } = require('./db/pool');
 const state = require('./state');
-const { rateLimiter, applySecurityHeaders } = require('./utils/helpers');
+const { rateLimiter, applySecurityHeaders, readBody } = require('./utils/helpers');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const SALT_ROUNDS = 10;
 
 // Routes
 const handleDataRoutes = require('./routes/data');
@@ -23,7 +26,52 @@ const PORT = process.env.PORT || 10000;
 const LIVE_URL = process.env.LIVE_URL || process.env.SHEETS_URL || '';
 const HISTORY_URL = process.env.HISTORY_URL || '';
 
+// JWT Configuration & Fallback Credentials
+const JWT_SECRET = process.env.JWT_SECRET || 'velan_secret_default_key_123456';
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123';
+const USER_USER = process.env.USER_USER || 'user';
+const USER_PASS = process.env.USER_PASS || 'user123';
+
+function requireAuth(req, res, roles = []) {
+  // Allow API key fallback to prevent breaking external integrations
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey && process.env.API_SECRET && apiKey === process.env.API_SECRET) {
+    return true;
+  }
+
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'Unauthorized: No token provided' }));
+    return false;
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+
+    if (roles.length > 0 && !roles.includes(decoded.role)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'Forbidden: Insufficient permissions' }));
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'Unauthorized: Invalid token' }));
+    return false;
+  }
+}
+
 // ── HTTP Server ───────────────────────────────────────────────────────────────
+function sendJson(res, status, data) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
 const server = http.createServer(async (req, res) => {
   let parsed;
   try {
@@ -51,7 +99,7 @@ const server = http.createServer(async (req, res) => {
   }
   
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
 
   // ── Rate Limiting ─────────────────────────────────────────────────────────
@@ -61,12 +109,163 @@ const server = http.createServer(async (req, res) => {
     '/api/reset',
     '/api/migrate',
     '/api/sheets',
-    '/api/security-status'
+    '/api/security-status',
+    '/api/login',
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/admin-create'
   ];
   
   if (rateLimitedPaths.includes(pathname)) {
     const limit = (pathname === '/api/data' && req.method === 'GET') ? 60 : 10;
     if (!rateLimiter(req, res, limit, 60000)) return;
+  }
+
+  // ── Auth Routes ──────────────────────────────────────────────────────────
+  // POST /api/auth/login — authenticate against users table with bcrypt
+  if (pathname === '/api/auth/login' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const { username, password } = body;
+      if (!username || !password) return sendJson(res, 400, { error: 'Username and password required' });
+
+      const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+      if (result.rows.length === 0) return sendJson(res, 401, { error: 'Invalid credentials' });
+
+      const user = result.rows[0];
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) return sendJson(res, 401, { error: 'Invalid credentials' });
+
+      const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+      return sendJson(res, 200, { token, role: user.role, username: user.username });
+    } catch (err) {
+      return sendJson(res, 400, { error: 'Invalid request body' });
+    }
+  }
+
+  // POST /api/auth/register — self-registration (always 'user' role)
+  if (pathname === '/api/auth/register' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const { username, password } = body;
+      if (!username || !password) return sendJson(res, 400, { error: 'Username and password required' });
+      if (password.length < 4) return sendJson(res, 400, { error: 'Password must be at least 4 characters' });
+
+      const hash = await bcrypt.hash(password, SALT_ROUNDS);
+      const result = await pool.query(
+        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
+        [username, hash, 'user']
+      );
+      const u = result.rows[0];
+      return sendJson(res, 201, { id: u.id, username: u.username, role: u.role });
+    } catch (err) {
+      if (err.code === '23505') return sendJson(res, 400, { error: 'Username already taken' });
+      return sendJson(res, 400, { error: 'Registration failed' });
+    }
+  }
+
+  // POST /api/auth/admin-create — admin only
+  if (pathname === '/api/auth/admin-create' && req.method === 'POST') {
+    if (!requireAuth(req, res, ['admin'])) return;
+    try {
+      const body = JSON.parse(await readBody(req));
+      const { username, password, role } = body;
+      if (!username || !password) return sendJson(res, 400, { error: 'Username and password required' });
+      const finalRole = (role === 'admin') ? 'admin' : 'user';
+
+      const hash = await bcrypt.hash(password, SALT_ROUNDS);
+      const result = await pool.query(
+        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
+        [username, hash, finalRole]
+      );
+      const u = result.rows[0];
+      return sendJson(res, 201, { id: u.id, username: u.username, role: u.role });
+    } catch (err) {
+      if (err.code === '23505') return sendJson(res, 400, { error: 'Username already taken' });
+      return sendJson(res, 400, { error: 'Failed to create user' });
+    }
+  }
+
+  // GET /api/auth/users — admin only
+  if (pathname === '/api/auth/users' && req.method === 'GET') {
+    if (!requireAuth(req, res, ['admin'])) return;
+    try {
+      const result = await pool.query(
+        'SELECT id, username, role, created_at FROM users ORDER BY created_at DESC'
+      );
+      return sendJson(res, 200, result.rows);
+    } catch (err) {
+      return sendJson(res, 500, { error: 'Failed to fetch users' });
+    }
+  }
+
+  // DELETE /api/auth/users/:id — admin only (cannot delete self)
+  if (pathname.startsWith('/api/auth/users/') && req.method === 'DELETE') {
+    if (!requireAuth(req, res, ['admin'])) return;
+    const id = parseInt(pathname.split('/')[4], 10);
+    if (!id) return sendJson(res, 400, { error: 'Invalid user ID' });
+    if (req.user.id === id) return sendJson(res, 400, { error: 'Cannot delete your own account' });
+    try {
+      const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+      if (result.rows.length === 0) return sendJson(res, 404, { error: 'User not found' });
+      return sendJson(res, 200, { message: 'User deleted' });
+    } catch (err) {
+      return sendJson(res, 500, { error: 'Failed to delete user' });
+    }
+  }
+
+  // ── Legacy Login (env-based, kept for backward compatibility) ───────────────
+  if (pathname === '/api/login' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { username, password } = JSON.parse(body);
+
+      let role = null;
+      if (username === ADMIN_USER && password === ADMIN_PASS) {
+        role = 'admin';
+      } else if (username === USER_USER && password === USER_PASS) {
+        role = 'user';
+      }
+
+      if (!role) {
+        sendJson(res, 401, { success: false, error: 'Invalid username or password' });
+        return;
+      }
+
+      const token = jwt.sign({ username, role }, JWT_SECRET, { expiresIn: '24h' });
+      sendJson(res, 200, { success: true, token, role, username });
+    } catch (err) {
+      sendJson(res, 400, { success: false, error: 'Invalid request body' });
+    }
+    return;
+  }
+
+  // Define route protections
+  const adminOnlyRoutes = [
+    { path: '/api/import', method: 'POST' },
+    { path: '/api/reset', method: 'POST' },
+    { path: '/api/data', method: 'POST' },
+    { path: '/api/data', method: 'DELETE' },
+    { path: '/api/sync-sheet', method: 'POST' },
+    { path: '/api/migrate', method: 'POST' }
+  ];
+
+  const authRoutes = [
+    { path: '/api/data', method: 'GET' },
+    { path: '/api/sync-status', method: 'GET' },
+    { path: '/api/sheets', method: 'GET' },
+    { path: '/api/config', method: 'GET' },
+    { path: '/api/security-status', method: 'GET' }
+  ];
+
+  const isAdminRoute = adminOnlyRoutes.some(r => r.path === pathname && r.method === req.method);
+  const isAuthRoute = authRoutes.some(r => r.path === pathname && r.method === req.method) ||
+                      (pathname.startsWith('/api/') && req.method === 'GET' && pathname !== '/api/health' && pathname !== '/api/login');
+
+  if (isAdminRoute) {
+    if (!requireAuth(req, res, ['admin'])) return;
+  } else if (isAuthRoute) {
+    if (!requireAuth(req, res, ['admin', 'user'])) return;
   }
 
   // ── API Routing ───────────────────────────────────────────────────────────

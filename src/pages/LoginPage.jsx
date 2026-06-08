@@ -1,0 +1,480 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+
+const styles = {
+  page: {
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#0b1120',
+    padding: 20,
+  },
+  card: {
+    display: 'flex',
+    width: 820,
+    maxWidth: '100%',
+    minHeight: 520,
+    borderRadius: 16,
+    overflow: 'hidden',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+  },
+  left: {
+    flex: 1,
+    background: '#fff',
+    padding: '44px 40px 36px',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  right: {
+    flex: 1,
+    background: '#4B3ADB',
+    padding: '44px 36px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#fff',
+  },
+  logo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 28,
+  },
+  logoMark: {
+    width: 38,
+    height: 38,
+    background: 'linear-gradient(135deg, #7c5cfc, #4B3ADB)',
+    clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: 13,
+    color: '#fff',
+    fontFamily: "'Rajdhani', sans-serif",
+    flexShrink: 0,
+  },
+  logoText: {
+    fontFamily: "'Rajdhani', sans-serif",
+    fontWeight: 700,
+    fontSize: 16,
+    letterSpacing: 2,
+    color: '#4B3ADB',
+    lineHeight: 1.1,
+  },
+  logoSub: {
+    fontSize: 8,
+    letterSpacing: 3,
+    color: '#8b7cf0',
+    fontFamily: "'Share Tech Mono', monospace",
+  },
+  roleToggle: {
+    display: 'flex',
+    gap: 8,
+    marginBottom: 20,
+    background: '#f3f4f6',
+    borderRadius: 8,
+    padding: 3,
+  },
+  roleBtn: (active) => ({
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '8px 0',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: "'Exo 2', sans-serif",
+    background: active ? '#fff' : 'transparent',
+    color: active ? '#4B3ADB' : '#9ca3af',
+    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+    transition: 'all 0.2s',
+  }),
+  tabRow: {
+    display: 'flex',
+    gap: 0,
+    marginBottom: 24,
+    borderBottom: '2px solid #e5e7eb',
+  },
+  tab: (active) => ({
+    padding: '10px 0',
+    marginRight: 28,
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: active ? 700 : 500,
+    color: active ? '#4B3ADB' : '#9ca3af',
+    fontFamily: "'Exo 2', sans-serif",
+    borderBottom: active ? '2px solid #4B3ADB' : '2px solid transparent',
+    marginBottom: -2,
+    transition: 'all 0.2s',
+  }),
+  fieldGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    display: 'block',
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#374151',
+    marginBottom: 6,
+    fontFamily: "'Exo 2', sans-serif",
+  },
+  inputWrap: {
+    position: 'relative',
+  },
+  input: {
+    width: '100%',
+    padding: '10px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: 8,
+    fontSize: 14,
+    color: '#111827',
+    background: '#f9fafb',
+    outline: 'none',
+    fontFamily: "'Exo 2', sans-serif",
+    transition: 'border-color 0.2s',
+    boxSizing: 'border-box',
+  },
+  inputFocus: {
+    borderColor: '#4B3ADB',
+    background: '#fff',
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 10,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#9ca3af',
+    fontSize: 18,
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    fontSize: 12,
+  },
+  link: {
+    color: '#4B3ADB',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    fontWeight: 500,
+    fontFamily: "'Exo 2', sans-serif",
+  },
+  btn: (loading) => ({
+    width: '100%',
+    padding: '12px 0',
+    background: '#4B3ADB',
+    border: 'none',
+    borderRadius: 8,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: loading ? 'not-allowed' : 'pointer',
+    opacity: loading ? 0.7 : 1,
+    fontFamily: "'Exo 2', sans-serif",
+    transition: 'opacity 0.2s',
+  }),
+  switchLink: {
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: "'Exo 2', sans-serif",
+  },
+  errorMsg: {
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: 6,
+    padding: '8px 12px',
+    color: '#dc2626',
+    fontSize: 12,
+    marginBottom: 16,
+    fontFamily: "'Exo 2', sans-serif",
+  },
+  successMsg: {
+    background: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: 6,
+    padding: '8px 12px',
+    color: '#16a34a',
+    fontSize: 12,
+    marginBottom: 16,
+    fontFamily: "'Exo 2', sans-serif",
+  },
+  rightIcon: {
+    fontSize: 64,
+    marginBottom: 20,
+    color: '#fff',
+  },
+  rightTitle: {
+    fontSize: 24,
+    fontWeight: 700,
+    marginBottom: 10,
+    fontFamily: "'Rajdhani', sans-serif",
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  rightDesc: {
+    fontSize: 13,
+    lineHeight: 1.5,
+    textAlign: 'center',
+    opacity: 0.85,
+    fontFamily: "'Exo 2', sans-serif",
+    maxWidth: 260,
+  },
+};
+
+function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const [role, setRole] = useState('user');
+  const [tab, setTab] = useState('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const isAdmin = role === 'admin';
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      await login(username, password);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (password.length < 4) {
+      setError('Password must be at least 4 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      const res = await fetch(`${apiBase}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Registration failed');
+      }
+      setSuccess('Account created successfully!');
+      setPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setTab('login');
+        setSuccess('');
+      }, 1500);
+    } catch (err) {
+      setError(err.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = (newTab) => {
+    setTab(newTab);
+    setError('');
+    setSuccess('');
+    setPassword('');
+    setConfirmPassword('');
+  };
+
+  const rightContent = isAdmin
+    ? { icon: 'ti-shield-check', title: 'Admin Portal', desc: 'Full access — upload, sync, reset and manage users' }
+    : { icon: 'ti-eye', title: 'User Portal', desc: 'View-only access to all production modules' };
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <div style={styles.left}>
+          <div style={styles.logo}>
+            <div style={styles.logoMark}>VM</div>
+            <div>
+              <div style={styles.logoText}>VELAN METROLOGY</div>
+              <div style={styles.logoSub}>COMMAND CENTER</div>
+            </div>
+          </div>
+
+          <div style={styles.roleToggle}>
+            <button style={styles.roleBtn(isAdmin)} onClick={() => { setRole('admin'); resetForm('login'); }}>
+              <i className="ti ti-shield" style={{ fontSize: 16 }} />
+              Admin
+            </button>
+            <button style={styles.roleBtn(!isAdmin)} onClick={() => { setRole('user'); resetForm('login'); }}>
+              <i className="ti ti-user" style={{ fontSize: 16 }} />
+              User
+            </button>
+          </div>
+
+          {!isAdmin && (
+            <div style={styles.tabRow}>
+              <button style={styles.tab(tab === 'login')} onClick={() => resetForm('login')}>Log in</button>
+              <button style={styles.tab(tab === 'register')} onClick={() => resetForm('register')}>Register</button>
+            </div>
+          )}
+
+          {error && <div style={styles.errorMsg}>{error}</div>}
+          {success && <div style={styles.successMsg}>{success}</div>}
+
+          {tab === 'login' ? (
+            <form onSubmit={handleLogin} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Username</label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  placeholder="Enter username"
+                  style={styles.input}
+                  onFocus={e => e.target.style.borderColor = '#4B3ADB'}
+                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                />
+              </div>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Password</label>
+                <div style={styles.inputWrap}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    style={styles.input}
+                    onFocus={e => e.target.style.borderColor = '#4B3ADB'}
+                    onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                  />
+                  <button type="button" style={styles.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
+                    <i className={`ti ${showPassword ? 'ti-eye-off' : 'ti-eye'}`} />
+                  </button>
+                </div>
+              </div>
+              <div style={styles.linkRow}>
+                <span style={{ ...styles.link, fontSize: 12 }}>Terms &amp; Conditions</span>
+                <span style={{ ...styles.link, fontSize: 12 }}>Forgot Password?</span>
+              </div>
+              <button type="submit" disabled={loading} style={styles.btn(loading)}>
+                {loading ? 'Signing in\u2026' : 'Log In'}
+              </button>
+              {!isAdmin && (
+                <div style={styles.switchLink}>
+                  Don&apos;t have an account?{' '}
+                  <span style={{ ...styles.link, cursor: 'pointer' }} onClick={() => resetForm('register')}>Register</span>
+                </div>
+              )}
+            </form>
+          ) : (
+            <form onSubmit={handleRegister} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Username</label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  placeholder="Choose a username"
+                  style={styles.input}
+                  onFocus={e => e.target.style.borderColor = '#4B3ADB'}
+                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                />
+              </div>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Password</label>
+                <div style={styles.inputWrap}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Create a password"
+                    style={styles.input}
+                    onFocus={e => e.target.style.borderColor = '#4B3ADB'}
+                    onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                  />
+                  <button type="button" style={styles.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
+                    <i className={`ti ${showPassword ? 'ti-eye-off' : 'ti-eye'}`} />
+                  </button>
+                </div>
+              </div>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Confirm Password</label>
+                <div style={styles.inputWrap}>
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    style={styles.input}
+                    onFocus={e => e.target.style.borderColor = '#4B3ADB'}
+                    onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                  />
+                  <button type="button" style={styles.eyeBtn} onClick={() => setShowConfirm(!showConfirm)}>
+                    <i className={`ti ${showConfirm ? 'ti-eye-off' : 'ti-eye'}`} />
+                  </button>
+                </div>
+              </div>
+              <button type="submit" disabled={loading} style={{ ...styles.btn(loading), marginTop: 'auto' }}>
+                {loading ? 'Creating account\u2026' : 'Create Account'}
+              </button>
+              <div style={styles.switchLink}>
+                Already have an account?{' '}
+                <span style={{ ...styles.link, cursor: 'pointer' }} onClick={() => resetForm('login')}>Log in</span>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <div style={styles.right}>
+          <i className={`ti ${rightContent.icon}`} style={styles.rightIcon} />
+          <div style={styles.rightTitle}>{rightContent.title}</div>
+          <div style={styles.rightDesc}>{rightContent.desc}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default LoginPage;
