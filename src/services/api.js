@@ -3,9 +3,7 @@ import { normalizeGoogleSheetsUrl } from './googleSheets';
 import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet } from './excelParser';
 // ─── API SERVICES ────────────────────────────────────────────────────────────
 
-const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? window.location.origin
-  : '';
+const apiBase = import.meta.env.VITE_API_BASE || '';
 
 async function apiFetchData() {
   const res = await fetch(`${apiBase}/api/data`);

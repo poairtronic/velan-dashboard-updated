@@ -1,23 +1,23 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { useDashboard, DashboardProvider } from './context/DashboardContext';
+import React, { Suspense } from 'react';
+import { useDashboard } from './context/DashboardContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import FilterBar from './components/FilterBar';
 import LoadingScreen from './components/LoadingScreen';
-import OverviewPage from './pages/OverviewPage';
-import MonthDayPage from './pages/MonthDayPage';
-import DatabasePage from './pages/DatabasePage';
-import ProductionPage from './pages/ProductionPage';
-import WIPPage from './pages/WIPPage';
-import CycleTimePage from './pages/CycleTimePage';
-import BottleneckPage from './pages/BottleneckPage';
-import POPage from './pages/POPage';
-import SCPage from './pages/SCPage';
-import VendorPage from './pages/VendorPage';
-import UploadPage from './pages/UploadPage';
-// ─── ROOT APPLICATION ENTRY & ROUTER ──────────────────────────────────────────
+
+// Lazy-loaded page components
+const OverviewPage = React.lazy(() => import('./pages/OverviewPage'));
+const MonthDayPage = React.lazy(() => import('./pages/MonthDayPage'));
+const DatabasePage = React.lazy(() => import('./pages/DatabasePage'));
+const ProductionPage = React.lazy(() => import('./pages/ProductionPage'));
+const WIPPage = React.lazy(() => import('./pages/WIPPage'));
+const CycleTimePage = React.lazy(() => import('./pages/CycleTimePage'));
+const BottleneckPage = React.lazy(() => import('./pages/BottleneckPage'));
+const POPage = React.lazy(() => import('./pages/POPage'));
+const SCPage = React.lazy(() => import('./pages/SCPage'));
+const VendorPage = React.lazy(() => import('./pages/VendorPage'));
+const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 
 function App() {
   const { activeNav, isLoading } = useDashboard();
@@ -36,7 +36,7 @@ function App() {
             {isLoading ? (
               <LoadingScreen />
             ) : (
-              <React.Fragment>
+              <Suspense fallback={<LoadingScreen />}>
                 {activeNav === 'overview' && <OverviewPage />}
                 {activeNav === 'monthday' && <MonthDayPage />}
                 {activeNav === 'database' && <DatabasePage />}
@@ -48,7 +48,7 @@ function App() {
                 {activeNav === 'sc' && <SCPage />}
                 {activeNav === 'vendor' && <VendorPage />}
                 {activeNav === 'upload' && <UploadPage />}
-              </React.Fragment>
+              </Suspense>
             )}
           </div>
         </div>
@@ -57,13 +57,4 @@ function App() {
   );
 }
 
-// Mount ReactDOM root
-const rootEl = document.getElementById('root');
-if (rootEl) {
-  const root = ReactDOM.createRoot(rootEl);
-root.render(
-  <DashboardProvider>
-    <App />
-  </DashboardProvider>
-);
-}
+export default App;

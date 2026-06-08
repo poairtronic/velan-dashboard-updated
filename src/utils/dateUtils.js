@@ -81,8 +81,8 @@ function toIsoDateString(value) {
   // Excel serial number (e.g. 46148)
   const num = Number(text);
   if (!isNaN(num) && num > 20000 && num < 80000) {
-    if (window.XLSX?.SSF?.parse_date_code) {
-      const dc = window.XLSX.SSF.parse_date_code(num);
+    if (XLSX?.SSF?.parse_date_code) {
+      const dc = XLSX.SSF.parse_date_code(num);
       if (dc && dc.y && dc.m && dc.d) {
         return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
       }

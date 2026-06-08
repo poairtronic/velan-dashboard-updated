@@ -1,8 +1,7 @@
 import React from 'react';
 import * as XLSX from 'xlsx';
-import { toIsoDateString } from '../utils/dateUtils';
-import { inferType, normalizeInhouse, normalizeTimestamp } from '../services/dataNormalizer';
-import { resolveLatestStage } from '../services/stageResolver';
+import { inferType } from '../services/dataNormalizer';
+import { normalizeRow } from '../utils/normalizeRow';
 import { parseWorksheet, parseRawCsv, parseRowsFromHeaderAoA } from '../services/excelParser';
 // ─── FILE UPLOAD HANDLERS HOOK ───────────────────────────────────────────────
 
@@ -27,28 +26,7 @@ function useUploadHandlers(options) {
       });
       return false;
     }
-    const normalizedRows = rows.map(raw => {
-      const product = String(raw.product || raw['Product Name'] || '').trim();
-      const status1 = String(raw.status1 || '').trim();
-      const status2 = String(raw.status2 || '').trim();
-      const opStage = String(raw.currentStage || '').trim();
-      const poRaw = String(raw.po || '').trim();
-      const poDate = toIsoDateString(raw.poDate);
-      const po = toIsoDateString(poRaw) ? '' : poRaw;
-      return {
-        ...raw,
-        sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
-        po,
-        poDate,
-        product,
-        type: String(raw.type || '').trim().toUpperCase() || inferType(product),
-        status1,
-        status2,
-        inhouse: normalizeInhouse(raw.inhouse),
-        currentStage: resolveLatestStage({ opStage, status1, status2 }),
-        timestamp: normalizeTimestamp(raw.timestamp),
-      };
-    }).filter(r => r.sc || r.po);
+    const normalizedRows = rows.map(normalizeRow).filter(r => r && (r.sc || r.po));
 
     const missingStage = normalizedRows.filter(r => !r.currentStage).length;
     setLiveRows(normalizedRows);
@@ -125,25 +103,7 @@ function useUploadHandlers(options) {
         setImportState({ loading: false, lastMsg: '❌ No valid rows found in file.' });
         return;
       }
-      const normalized = rows.map(raw => {
-        const product = String(raw.product || raw['Product Name'] || '').trim();
-        const status1 = String(raw.status1 || '').trim();
-        const status2 = String(raw.status2 || '').trim();
-        const opStage = String(raw.currentStage || '').trim();
-        const poRaw   = String(raw.po || '').trim();
-        const poDate  = toIsoDateString(raw.poDate);
-        const po      = toIsoDateString(poRaw) ? '' : poRaw;
-        return {
-          ...raw,
-          sc: String(raw.sc || '').replace(/\s+/g,'').trim(),
-          po, poDate, product,
-          type: String(raw.type || '').trim().toUpperCase() || inferType(product),
-          status1, status2,
-          inhouse: normalizeInhouse(raw.inhouse),
-          currentStage: resolveLatestStage({ opStage, status1, status2 }),
-          timestamp: normalizeTimestamp(raw.timestamp),
-        };
-      }).filter(r => r.sc || r.po);
+      const normalized = rows.map(normalizeRow).filter(r => r && (r.sc || r.po));
       importRowsToDb(normalized);
     };
 
