@@ -2,7 +2,56 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-const styles = {
+function IconShield({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3z"/>
+    </svg>
+  );
+}
+function IconUser({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 20c0-4 4-7 8-7s8 3 8 7"/>
+    </svg>
+  );
+}
+function IconEye({ size = 18 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+function IconEyeOff({ size = 18 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.06 3.94"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+function IconShieldCheck({ size = 64 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3z"/>
+      <path d="m9 12 2 2 4-4"/>
+    </svg>
+  );
+}
+function IconView({ size = 64 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+
+const s = {
   page: {
     minHeight: '100vh',
     display: 'flex',
@@ -144,10 +193,6 @@ const styles = {
     transition: 'border-color 0.2s',
     boxSizing: 'border-box',
   },
-  inputFocus: {
-    borderColor: '#4B3ADB',
-    background: '#fff',
-  },
   eyeBtn: {
     position: 'absolute',
     right: 10,
@@ -157,7 +202,6 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     color: '#9ca3af',
-    fontSize: 18,
     padding: 0,
     display: 'flex',
     alignItems: 'center',
@@ -217,11 +261,6 @@ const styles = {
     fontSize: 12,
     marginBottom: 16,
     fontFamily: "'Exo 2', sans-serif",
-  },
-  rightIcon: {
-    fontSize: 64,
-    marginBottom: 20,
-    color: '#fff',
   },
   rightTitle: {
     fontSize: 24,
@@ -322,155 +361,152 @@ function LoginPage() {
   };
 
   const rightContent = isAdmin
-    ? { icon: 'ti-shield-check', title: 'Admin Portal', desc: 'Full access — upload, sync, reset and manage users' }
-    : { icon: 'ti-eye', title: 'User Portal', desc: 'View-only access to all production modules' };
+    ? { icon: 'shield-check', title: 'Admin Portal', desc: 'Full access — upload, sync, reset and manage users' }
+    : { icon: 'view', title: 'User Portal', desc: 'View-only access to all production modules' };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.left}>
-          <div style={styles.logo}>
-            <div style={styles.logoMark}>VM</div>
+    <div style={s.page}>
+      <div style={s.card}>
+        <div style={s.left}>
+          <div style={s.logo}>
+            <div style={s.logoMark}>VM</div>
             <div>
-              <div style={styles.logoText}>VELAN METROLOGY</div>
-              <div style={styles.logoSub}>COMMAND CENTER</div>
+              <div style={s.logoText}>VELAN METROLOGY</div>
+              <div style={s.logoSub}>COMMAND CENTER</div>
             </div>
           </div>
 
-          <div style={styles.roleToggle}>
-            <button style={styles.roleBtn(isAdmin)} onClick={() => { setRole('admin'); resetForm('login'); }}>
-              <i className="ti ti-shield" style={{ fontSize: 16 }} />
+          <div style={s.roleToggle}>
+            <button style={s.roleBtn(isAdmin)} onClick={() => { setRole('admin'); resetForm('login'); }}>
+              <IconShield size={16} />
               Admin
             </button>
-            <button style={styles.roleBtn(!isAdmin)} onClick={() => { setRole('user'); resetForm('login'); }}>
-              <i className="ti ti-user" style={{ fontSize: 16 }} />
+            <button style={s.roleBtn(!isAdmin)} onClick={() => { setRole('user'); resetForm('login'); }}>
+              <IconUser size={16} />
               User
             </button>
           </div>
 
           {!isAdmin && (
-            <div style={styles.tabRow}>
-              <button style={styles.tab(tab === 'login')} onClick={() => resetForm('login')}>Log in</button>
-              <button style={styles.tab(tab === 'register')} onClick={() => resetForm('register')}>Register</button>
+            <div style={s.tabRow}>
+              <button style={s.tab(tab === 'login')} onClick={() => resetForm('login')}>Log in</button>
+              <button style={s.tab(tab === 'register')} onClick={() => resetForm('register')}>Register</button>
             </div>
           )}
 
-          {error && <div style={styles.errorMsg}>{error}</div>}
-          {success && <div style={styles.successMsg}>{success}</div>}
+          {error && <div style={s.errorMsg}>{error}</div>}
+          {success && <div style={s.successMsg}>{success}</div>}
 
           {tab === 'login' ? (
             <form onSubmit={handleLogin} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Username</label>
+              <div style={s.fieldGroup}>
+                <label style={s.label}>Username</label>
                 <input
-                  type="text"
-                  required
+                  type="text" required
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   placeholder="Enter username"
-                  style={styles.input}
+                  style={s.input}
                   onFocus={e => e.target.style.borderColor = '#4B3ADB'}
                   onBlur={e => e.target.style.borderColor = '#d1d5db'}
                 />
               </div>
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Password</label>
-                <div style={styles.inputWrap}>
+              <div style={s.fieldGroup}>
+                <label style={s.label}>Password</label>
+                <div style={s.inputWrap}>
                   <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
+                    type={showPassword ? 'text' : 'password'} required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Enter password"
-                    style={styles.input}
+                    style={s.input}
                     onFocus={e => e.target.style.borderColor = '#4B3ADB'}
                     onBlur={e => e.target.style.borderColor = '#d1d5db'}
                   />
-                  <button type="button" style={styles.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
-                    <i className={`ti ${showPassword ? 'ti-eye-off' : 'ti-eye'}`} />
+                  <button type="button" style={s.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
               </div>
-              <div style={styles.linkRow}>
-                <span style={{ ...styles.link, fontSize: 12 }}>Terms &amp; Conditions</span>
-                <span style={{ ...styles.link, fontSize: 12 }}>Forgot Password?</span>
+              <div style={s.linkRow}>
+                <span style={{ ...s.link, fontSize: 12 }}>Terms &amp; Conditions</span>
+                <span style={{ ...s.link, fontSize: 12 }}>Forgot Password?</span>
               </div>
-              <button type="submit" disabled={loading} style={styles.btn(loading)}>
+              <button type="submit" disabled={loading} style={s.btn(loading)}>
                 {loading ? 'Signing in\u2026' : 'Log In'}
               </button>
               {!isAdmin && (
-                <div style={styles.switchLink}>
+                <div style={s.switchLink}>
                   Don&apos;t have an account?{' '}
-                  <span style={{ ...styles.link, cursor: 'pointer' }} onClick={() => resetForm('register')}>Register</span>
+                  <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('register')}>Register</span>
                 </div>
               )}
             </form>
           ) : (
             <form onSubmit={handleRegister} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Username</label>
+              <div style={s.fieldGroup}>
+                <label style={s.label}>Username</label>
                 <input
-                  type="text"
-                  required
+                  type="text" required
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   placeholder="Choose a username"
-                  style={styles.input}
+                  style={s.input}
                   onFocus={e => e.target.style.borderColor = '#4B3ADB'}
                   onBlur={e => e.target.style.borderColor = '#d1d5db'}
                 />
               </div>
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Password</label>
-                <div style={styles.inputWrap}>
+              <div style={s.fieldGroup}>
+                <label style={s.label}>Password</label>
+                <div style={s.inputWrap}>
                   <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
+                    type={showPassword ? 'text' : 'password'} required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Create a password"
-                    style={styles.input}
+                    style={s.input}
                     onFocus={e => e.target.style.borderColor = '#4B3ADB'}
                     onBlur={e => e.target.style.borderColor = '#d1d5db'}
                   />
-                  <button type="button" style={styles.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
-                    <i className={`ti ${showPassword ? 'ti-eye-off' : 'ti-eye'}`} />
+                  <button type="button" style={s.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
               </div>
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Confirm Password</label>
-                <div style={styles.inputWrap}>
+              <div style={s.fieldGroup}>
+                <label style={s.label}>Confirm Password</label>
+                <div style={s.inputWrap}>
                   <input
-                    type={showConfirm ? 'text' : 'password'}
-                    required
+                    type={showConfirm ? 'text' : 'password'} required
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     placeholder="Confirm your password"
-                    style={styles.input}
+                    style={s.input}
                     onFocus={e => e.target.style.borderColor = '#4B3ADB'}
                     onBlur={e => e.target.style.borderColor = '#d1d5db'}
                   />
-                  <button type="button" style={styles.eyeBtn} onClick={() => setShowConfirm(!showConfirm)}>
-                    <i className={`ti ${showConfirm ? 'ti-eye-off' : 'ti-eye'}`} />
+                  <button type="button" style={s.eyeBtn} onClick={() => setShowConfirm(!showConfirm)}>
+                    {showConfirm ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
               </div>
-              <button type="submit" disabled={loading} style={{ ...styles.btn(loading), marginTop: 'auto' }}>
+              <button type="submit" disabled={loading} style={{ ...s.btn(loading), marginTop: 'auto' }}>
                 {loading ? 'Creating account\u2026' : 'Create Account'}
               </button>
-              <div style={styles.switchLink}>
+              <div style={s.switchLink}>
                 Already have an account?{' '}
-                <span style={{ ...styles.link, cursor: 'pointer' }} onClick={() => resetForm('login')}>Log in</span>
+                <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('login')}>Log in</span>
               </div>
             </form>
           )}
         </div>
 
-        <div style={styles.right}>
-          <i className={`ti ${rightContent.icon}`} style={styles.rightIcon} />
-          <div style={styles.rightTitle}>{rightContent.title}</div>
-          <div style={styles.rightDesc}>{rightContent.desc}</div>
+        <div style={s.right}>
+          <div style={{ marginBottom: 20 }}>
+            {isAdmin ? <IconShieldCheck size={64} /> : <IconView size={64} />}
+          </div>
+          <div style={s.rightTitle}>{rightContent.title}</div>
+          <div style={s.rightDesc}>{rightContent.desc}</div>
         </div>
       </div>
     </div>

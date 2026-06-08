@@ -61,8 +61,8 @@ function applySecurityHeaders(res) {
   res.setHeader('Content-Security-Policy', 
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline'; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; " +
-    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
     "connect-src 'self' https://docs.google.com https://docs.googleusercontent.com; " +
     "img-src 'self' data:; " +
     "frame-ancestors 'none';"
