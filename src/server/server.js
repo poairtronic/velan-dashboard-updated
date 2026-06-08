@@ -292,14 +292,19 @@ const server = http.createServer(async (req, res) => {
 
   // ── Static files ──────────────────────────────────────────────────────────
   const distDir = path.resolve(__dirname, '..', '..', 'dist');
-  const clientDir = fs.existsSync(distDir) ? distDir : path.join(__dirname, '..', 'client');
+  let clientDir = distDir;
+
+  if (!fs.existsSync(clientDir)) {
+    clientDir = path.resolve(__dirname, '..', '..'); // fallback to project root for index.html
+  }
+
   const staticFile = path.join(clientDir, pathname === '/' ? 'index.html' : pathname);
-  
+
   if (!staticFile.startsWith(clientDir)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
   }
-  
+
   if (fs.existsSync(staticFile) && fs.statSync(staticFile).isFile()) {
     const ext  = path.extname(staticFile);
     const mime = {
@@ -329,8 +334,7 @@ const server = http.createServer(async (req, res) => {
 
 // ── Auto-build frontend if dist/ is missing ────────────────────────────────
 function ensureDist() {
-  const distDir = path.resolve(__dirname, '..', '..', 'dist');
-  if (!fs.existsSync(distDir)) {
+  if (!fs.existsSync(path.resolve(__dirname, '..', '..', 'dist'))) {
     console.log('[BUILD] dist/ not found — running npm run build...');
     try {
       execSync('npm run build', { cwd: path.resolve(__dirname, '..', '..'), stdio: 'inherit', timeout: 120000 });
@@ -340,7 +344,7 @@ function ensureDist() {
       console.error('[BUILD] The server will start but SPA routes will return 404 until dist/ is created');
     }
   } else {
-    console.log(`[BUILD] dist/ found at ${distDir}`);
+    console.log(`[STATIC] Serving built frontend from: ${path.resolve(__dirname, '..', '..', 'dist')}`);
   }
 }
 
