@@ -1,4 +1,5 @@
 const { validateSheetsUrl, getSheetData } = require('../utils/helpers');
+const { sheetsQuerySchema } = require('../schemas/dashboard.schema');
 
 const LIVE_URL = process.env.LIVE_URL || process.env.SHEETS_URL || '';
 
@@ -14,7 +15,18 @@ async function handleSheetsRoutes(req, res, pathname, parsed) {
       }));
     }
     
-    // Validate target URL to prevent SSRF
+    // Validate target URL using Zod schema
+    try {
+      sheetsQuerySchema.parse({ url: sheetUrl });
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        error: 'Validation failed: Invalid Google Sheets URL format.',
+        details: err.errors ? err.errors.map(e => e.message) : err.message
+      }));
+    }
+
+    // Validate target URL to prevent SSRF (extra layer of check)
     if (!validateSheetsUrl(sheetUrl)) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
@@ -43,3 +55,4 @@ async function handleSheetsRoutes(req, res, pathname, parsed) {
 }
 
 module.exports = handleSheetsRoutes;
+

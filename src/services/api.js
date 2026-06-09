@@ -6,21 +6,18 @@ import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet } from './excelPars
 const apiBase = import.meta.env.VITE_API_BASE || '';
 
 async function authFetch(url, options = {}) {
-  const token = localStorage.getItem('vd_token');
   options.headers = options.headers || {};
   
-  // Only attach authorization to our backend API endpoints
+  // Always include credentials (cookies) for backend API calls
   const isBackend = url.startsWith('/api/') || (apiBase && url.startsWith(`${apiBase}/api/`));
-  
-  if (token && isBackend) {
-    options.headers['Authorization'] = `Bearer ${token}`;
+  if (isBackend) {
+    options.credentials = 'include';
   }
   
   const res = await fetch(url, options);
   
   if (res.status === 401 && isBackend) {
-    // Automatically redirect to /login
-    localStorage.removeItem('vd_token');
+    // Automatically redirect to /login and clear local role/user cache
     localStorage.removeItem('vd_role');
     localStorage.removeItem('vd_user');
     if (window.location.pathname !== '/login') {
@@ -33,6 +30,7 @@ async function authFetch(url, options = {}) {
   
   return res;
 }
+
 
 async function apiFetchData() {
   const res = await authFetch(`${apiBase}/api/data`);

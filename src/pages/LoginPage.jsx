@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 function IconShield({ size = 16 }) {
@@ -313,8 +313,13 @@ const s = {
 };
 
 function LoginPage() {
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  // If session check is done and user is already logged in, send to dashboard
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   const [role, setRole] = useState('user');
   const [tab, setTab] = useState('login');

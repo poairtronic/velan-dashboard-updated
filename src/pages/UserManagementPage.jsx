@@ -3,15 +3,8 @@ import { useAuth } from '../hooks/useAuth';
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
 
-function authHeaders(token) {
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
 function UserManagementPage() {
-  const { token } = useAuth();
+  const { userId } = useAuth();
   const [users, setUsers] = useState([]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +16,8 @@ function UserManagementPage() {
   const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch(`${apiBase}/api/auth/users`, {
-        headers: authHeaders(token),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
       });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
@@ -31,7 +25,7 @@ function UserManagementPage() {
     } catch {
       setMsg({ type: 'error', text: 'Failed to load users' });
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
@@ -44,8 +38,9 @@ function UserManagementPage() {
     try {
       const res = await fetch(`${apiBase}/api/auth/admin-create`, {
         method: 'POST',
-        headers: authHeaders(token),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role }),
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create user');
@@ -67,8 +62,9 @@ function UserManagementPage() {
     try {
       const res = await fetch(`${apiBase}/api/auth/users/${id}/status`, {
         method: 'PUT',
-        headers: authHeaders(token),
-        body: JSON.stringify({ status })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Failed to update status to ${status}`);
@@ -86,7 +82,8 @@ function UserManagementPage() {
     try {
       const res = await fetch(`${apiBase}/api/auth/users/${id}`, {
         method: 'DELETE',
-        headers: authHeaders(token),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
       });
       if (!res.ok) {
         const data = await res.json();
@@ -333,11 +330,11 @@ function UserManagementPage() {
                             borderColor: 'rgba(255,61,90,0.3)',
                             padding: '4px 14px',
                             fontSize: 11,
-                            cursor: u.id === JSON.parse(atob(token.split('.')[1])).id ? 'not-allowed' : 'pointer',
-                            opacity: u.id === JSON.parse(atob(token.split('.')[1])).id ? 0.4 : 1,
+                            cursor: u.id === userId ? 'not-allowed' : 'pointer',
+                            opacity: u.id === userId ? 0.4 : 1,
                           }}
-                          disabled={u.id === JSON.parse(atob(token.split('.')[1])).id}
-                          title={u.id === JSON.parse(atob(token.split('.')[1])).id ? 'Cannot delete yourself' : 'Delete user'}
+                          disabled={u.id === userId}
+                          title={u.id === userId ? 'Cannot delete yourself' : 'Delete user'}
                         >
                           Delete
                         </button>

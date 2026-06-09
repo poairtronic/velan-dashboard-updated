@@ -1,6 +1,8 @@
 const state = require('../state');
-const { requireApiKey, readBody } = require('../utils/helpers');
+const { readBody } = require('../utils/helpers');
 const { loadDB, loadLiveDB, saveLiveRows, insertRows, logSync, pool } = require('../db/pool');
+const { dataUploadSchema } = require('../schemas/upload.schema');
+const { validateBody } = require('../middleware/validation');
 
 async function handleDataRoutes(req, res, pathname, method, parsed) {
   // ── GET /api/data ─────────────────────────────────────────────────────────
@@ -24,13 +26,18 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
 
   // ── POST /api/data — replace live snapshot AND save new rows to Neon ──────
   if (pathname === '/api/data' && method === 'POST') {
-    if (!requireApiKey(req, res)) return;
     let syncType = 'Manual Upload';
     let incomingLength = 0;
     try {
-      const body     = await readBody(req);
-      const payload  = JSON.parse(body);
-      const incoming = Array.isArray(payload.rows) ? payload.rows : [];
+      const body = await readBody(req);
+      const payload = JSON.parse(body);
+
+      // Validate body using Zod schema
+      const valResult = validateBody(dataUploadSchema)(payload, res);
+      if (!valResult.success) return;
+      const validated = valResult.data;
+
+      const incoming = validated.rows;
       incomingLength = incoming.length;
 
       // Extract sync_type query parameter if present
@@ -72,7 +79,6 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
 
   // ── DELETE /api/data — wipe all rows from Neon ────────────────────────────
   if (pathname === '/api/data' && method === 'DELETE') {
-    if (!requireApiKey(req, res)) return;
     try {
       await pool.query('DELETE FROM velan_rows');
       await pool.query('DELETE FROM velan_live_rows');
@@ -107,7 +113,6 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
 
   // ── POST /api/migrate — fix legacy rows missing currentStage ────────────
   if (pathname === '/api/migrate' && method === 'POST') {
-    if (!requireApiKey(req, res)) return;
     try {
       const allRes = await pool.query('SELECT id, row_key, data FROM velan_rows');
       let fixed = 0;
@@ -153,3 +158,4 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
 }
 
 module.exports = handleDataRoutes;
+

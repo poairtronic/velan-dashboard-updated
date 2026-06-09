@@ -22,18 +22,18 @@ const NAV_ITEMS = [
 
 function Sidebar() {
   const { activeNav, setActiveNav } = useDashboard();
-  const { isAdmin, token } = useAuth();
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(n => (n.id !== 'upload' && n.id !== 'users') || isAdmin);
 
   const fetchPendingCount = useCallback(async () => {
-    if (!isAdmin || !token) return;
+    if (!isAdmin) return;
     try {
       const apiBase = import.meta.env.VITE_API_BASE || '';
       const res = await fetch(`${apiBase}/api/auth/users/pending-count`, {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -42,7 +42,7 @@ function Sidebar() {
     } catch (err) {
       console.error('Failed to fetch pending count:', err);
     }
-  }, [isAdmin, token]);
+  }, [isAdmin]);
 
   useEffect(() => {
     fetchPendingCount();

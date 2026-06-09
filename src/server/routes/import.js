@@ -1,13 +1,14 @@
 const state = require('../state');
-const { requireApiKey, readBody, fetchRemote, parseCSV } = require('../utils/helpers');
+const { readBody, fetchRemote, parseCSV } = require('../utils/helpers');
 const { insertRows, saveLiveRows, loadDB, logSync, pool } = require('../db/pool');
+const { importUploadSchema } = require('../schemas/upload.schema');
+const { validateBody } = require('../middleware/validation');
 
 const HISTORY_URL = process.env.HISTORY_URL || '';
 
 async function handleImportRoutes(req, res, pathname, method) {
   // ── POST /api/reset — wipe Neon + optionally re-import from HISTORY_URL ──
   if (pathname === '/api/reset' && method === 'POST') {
-    if (!requireApiKey(req, res)) return;
     try {
       // 1. Wipe Neon
       await pool.query('DELETE FROM velan_rows');
@@ -47,29 +48,33 @@ async function handleImportRoutes(req, res, pathname, method) {
 
   // ── POST /api/import — append to Neon DB with dedup ──────────────────────
   if (pathname === '/api/import' && method === 'POST') {
-    if (!requireApiKey(req, res)) return;
     let incomingLength = 0;
     try {
       const body    = await readBody(req);
       const payload = JSON.parse(body);
+
+      // Validate body using Zod schema
+      const valResult = validateBody(importUploadSchema)(payload, res);
+      if (!valResult.success) return;
+      const validated = valResult.data;
 
       let incoming = [];
 
       // Support two modes:
       // 1. { rows: [...] }         — caller sends pre-parsed rows
       // 2. { url: '...', replace: true/false } — fetch CSV from URL
-      if (Array.isArray(payload.rows) && payload.rows.length > 0) {
-        incoming = payload.rows;
-      } else if (typeof payload.url === 'string' && payload.url.trim()) {
-        console.log(`[POST /api/import] Fetching CSV from URL: ${payload.url.substring(0, 80)}…`);
-        const raw = await fetchRemote(payload.url.trim());
+      if (Array.isArray(validated.rows) && validated.rows.length > 0) {
+        incoming = validated.rows;
+      } else if (typeof validated.url === 'string' && validated.url.trim()) {
+        console.log(`[POST /api/import] Fetching CSV from URL: ${validated.url.substring(0, 80)}…`);
+        const raw = await fetchRemote(validated.url.trim());
         incoming  = parseCSV(raw);
         console.log(`[POST /api/import] Parsed ${incoming.length} rows from CSV`);
       }
       incomingLength = incoming.length;
 
       // If replace=true, wipe Neon first
-      if (payload.replace === true) {
+      if (validated.replace === true) {
         await pool.query('DELETE FROM velan_rows');
         await pool.query('DELETE FROM velan_live_rows');
         state._db       = [];
@@ -103,3 +108,4 @@ async function handleImportRoutes(req, res, pathname, method) {
 }
 
 module.exports = handleImportRoutes;
+
