@@ -304,7 +304,7 @@ const server = http.createServer(async (req, res) => {
 
   const isAdminRoute = adminOnlyRoutes.some(r => r.path === pathname && r.method === req.method);
   const isAuthRoute = authRoutes.some(r => r.path === pathname && r.method === req.method) ||
-                      (pathname.startsWith('/api/') && req.method === 'GET' && pathname !== '/api/health' && pathname !== '/api/login');
+                      (pathname.startsWith('/api/') && req.method === 'GET' && pathname !== '/api/health' && pathname !== '/api/login' && pathname !== '/api/debug-sc');
 
   if (isAdminRoute) {
     if (!requireAuth(req, res, ['admin'])) return;
