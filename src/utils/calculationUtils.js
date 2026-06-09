@@ -195,7 +195,7 @@ function getVendorCode(stage, inhouse) {
 }
 
 function isSCComplete(items) {
-  return items.every(i => ['READY','STORES','STOCK','EXSTOCK'].includes(i.currentStage));
+  return items.every(i => ['READY','STORES','STOCK','EXSTOCK','VA'].includes(i.currentStage));
 }
 
 function getSCLastTimestamp(items) {

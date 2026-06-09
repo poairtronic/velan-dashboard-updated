@@ -152,7 +152,7 @@ function DatabasePage() {
     const _isDoneOrVA = s => {
       if (!s) return false;
       const t = String(s).trim().toUpperCase().replace(/\s+/g, '');
-      return ['READY', 'STORES', 'STORE', 'STOCK', 'EXSTOCK'].includes(t) ||
+      return ['READY', 'STORES', 'STORE', 'STOCK', 'EXSTOCK', 'VA'].includes(t) ||
              /^STOCK[K]?$/.test(t) || /^READ{1,2}Y$/.test(t);
     };
 
