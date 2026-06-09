@@ -39,7 +39,7 @@ function UserManagementPage() {
       await apiClient(`${apiBase}/api/auth/admin-create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role })
+        body: JSON.stringify({ username, password, role }),
       });
       setMsg({ type: 'success', text: `User "${username}" created successfully` });
       toast.success(`User "${username}" created successfully.`);
@@ -63,9 +63,12 @@ function UserManagementPage() {
       await apiClient(`${apiBase}/api/auth/users/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status }),
       });
-      setMsg({ type: 'success', text: `User "${targetUsername}" has been ${status === 'approved' ? 'approved' : 'denied'}` });
+      setMsg({
+        type: 'success',
+        text: `User "${targetUsername}" has been ${status === 'approved' ? 'approved' : 'denied'}`,
+      });
       toast.success(`User status updated to ${status}.`);
       fetchUsers();
       window.dispatchEvent(new CustomEvent('pending-users-updated'));
@@ -81,7 +84,7 @@ function UserManagementPage() {
     setMsg(null);
     try {
       await apiClient(`${apiBase}/api/auth/users/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
       setMsg({ type: 'success', text: `User "${delUsername}" deleted` });
       toast.success(`User "${delUsername}" deleted.`);
@@ -94,8 +97,8 @@ function UserManagementPage() {
     }
   };
 
-  const pendingUsers = users.filter(u => u.status === 'pending');
-  const existingUsers = users.filter(u => u.status !== 'pending');
+  const pendingUsers = users.filter((u) => u.status === 'pending');
+  const existingUsers = users.filter((u) => u.status !== 'pending');
   const displayedUsers = activeTab === 'pending' ? pendingUsers : existingUsers;
 
   return (
@@ -106,53 +109,93 @@ function UserManagementPage() {
       </div>
 
       {msg && (
-        <div style={{
-          padding: '10px 14px',
-          borderRadius: 8,
-          marginBottom: 16,
-          fontSize: 13,
-          fontFamily: "'Exo 2', sans-serif",
-          background: msg.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,90,0.1)',
-          border: `1px solid ${msg.type === 'success' ? 'rgba(0,230,118,0.3)' : 'rgba(255,61,90,0.3)'}`,
-          color: msg.type === 'success' ? 'var(--success)' : 'var(--danger)',
-        }}>
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: 8,
+            marginBottom: 16,
+            fontSize: 13,
+            fontFamily: "'Exo 2', sans-serif",
+            background: msg.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,90,0.1)',
+            border: `1px solid ${msg.type === 'success' ? 'rgba(0,230,118,0.3)' : 'rgba(255,61,90,0.3)'}`,
+            color: msg.type === 'success' ? 'var(--success)' : 'var(--danger)',
+          }}
+        >
           {msg.text}
         </div>
       )}
 
       <div className="chart-card" style={{ marginBottom: 20 }}>
         <div className="chart-title">Add New User</div>
-        <div className="chart-sub" style={{ marginBottom: 16 }}>Create a new admin or viewer account</div>
-        <form onSubmit={handleCreate} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="chart-sub" style={{ marginBottom: 16 }}>
+          Create a new admin or viewer account
+        </div>
+        <form
+          onSubmit={handleCreate}
+          style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}
+        >
           <div style={{ flex: '1 1 180px', minWidth: 140 }}>
-            <label className="mono" style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 1 }}>USERNAME</label>
+            <label
+              className="mono"
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                marginBottom: 4,
+                letterSpacing: 1,
+              }}
+            >
+              USERNAME
+            </label>
             <input
               type="text"
               required
               value={username}
-              onChange={e => setUsername(e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
               placeholder="Username"
               className="filter-input"
               style={{ width: '100%' }}
             />
           </div>
           <div style={{ flex: '1 1 180px', minWidth: 140 }}>
-            <label className="mono" style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 1 }}>PASSWORD</label>
+            <label
+              className="mono"
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                marginBottom: 4,
+                letterSpacing: 1,
+              }}
+            >
+              PASSWORD
+            </label>
             <input
               type="password"
               required
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               className="filter-input"
               style={{ width: '100%' }}
             />
           </div>
           <div style={{ flex: '0 1 160px', minWidth: 120 }}>
-            <label className="mono" style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 1 }}>ROLE</label>
+            <label
+              className="mono"
+              style={{
+                display: 'block',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                marginBottom: 4,
+                letterSpacing: 1,
+              }}
+            >
+              ROLE
+            </label>
             <select
               value={role}
-              onChange={e => setRole(e.target.value)}
+              onChange={(e) => setRole(e.target.value)}
               className="filter-select"
               style={{ width: '100%' }}
             >
@@ -179,7 +222,14 @@ function UserManagementPage() {
         </form>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 16,
+          marginBottom: 16,
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
         <button
           onClick={() => setActiveTab('existing')}
           style={{
@@ -217,15 +267,17 @@ function UserManagementPage() {
         >
           Pending Approvals
           {pendingUsers.length > 0 && (
-            <span style={{
-              background: '#ff3d5a',
-              color: '#fff',
-              fontSize: 10,
-              fontWeight: 700,
-              padding: '2px 6px',
-              borderRadius: 10,
-              lineHeight: 1
-            }}>
+            <span
+              style={{
+                background: '#ff3d5a',
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: 10,
+                lineHeight: 1,
+              }}
+            >
               {pendingUsers.length}
             </span>
           )}
@@ -255,18 +307,23 @@ function UserManagementPage() {
             <tbody>
               {displayedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'existing' ? 5 : 4} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>
+                  <td
+                    colSpan={activeTab === 'existing' ? 5 : 4}
+                    style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}
+                  >
                     No users found
                   </td>
                 </tr>
               ) : (
-                displayedUsers.map(u => (
+                displayedUsers.map((u) => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.username}</td>
                     <td>
-                      <span className={`status-pill ${u.role === 'admin' ? 's-stores' : 's-ready'}`}
+                      <span
+                        className={`status-pill ${u.role === 'admin' ? 's-stores' : 's-ready'}`}
                         style={{
-                          background: u.role === 'admin' ? 'rgba(75,58,219,0.15)' : 'rgba(156,163,175,0.2)',
+                          background:
+                            u.role === 'admin' ? 'rgba(75,58,219,0.15)' : 'rgba(156,163,175,0.2)',
                           color: u.role === 'admin' ? '#4B3ADB' : '#9ca3af',
                         }}
                       >
@@ -275,18 +332,35 @@ function UserManagementPage() {
                     </td>
                     {activeTab === 'existing' && (
                       <td>
-                        <span className="status-pill"
+                        <span
+                          className="status-pill"
                           style={{
-                            background: u.status === 'approved' ? 'rgba(0,230,118,0.15)' : u.status === 'denied' ? 'rgba(255,61,90,0.15)' : 'rgba(156,163,175,0.2)',
-                            color: u.status === 'approved' ? 'var(--success, #00e676)' : u.status === 'denied' ? 'var(--danger, #ff3d5a)' : '#9ca3af',
+                            background:
+                              u.status === 'approved'
+                                ? 'rgba(0,230,118,0.15)'
+                                : u.status === 'denied'
+                                  ? 'rgba(255,61,90,0.15)'
+                                  : 'rgba(156,163,175,0.2)',
+                            color:
+                              u.status === 'approved'
+                                ? 'var(--success, #00e676)'
+                                : u.status === 'denied'
+                                  ? 'var(--danger, #ff3d5a)'
+                                  : '#9ca3af',
                           }}
                         >
-                          {u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1) : 'Approved'}
+                          {u.status
+                            ? u.status.charAt(0).toUpperCase() + u.status.slice(1)
+                            : 'Approved'}
                         </span>
                       </td>
                     )}
                     <td className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {new Date(u.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {new Date(u.created_at).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {activeTab === 'pending' ? (

@@ -32,7 +32,7 @@ function useChart(ref, config, deps) {
           cfg.options.plugins.legend.labels.color = tickColor;
         }
         if (cfg.options.scales) {
-          Object.keys(cfg.options.scales).forEach(key => {
+          Object.keys(cfg.options.scales).forEach((key) => {
             const scale = cfg.options.scales[key];
             scale.ticks = scale.ticks || {};
             scale.ticks.color = tickColor;
@@ -46,10 +46,14 @@ function useChart(ref, config, deps) {
       const typeMatch = existing && existing.config.type === config.type;
 
       // ── EMPTY DATA CHECK ─────────────────────────────────────────────────────
-      const hasData = config.data?.datasets?.some(ds => ds.data?.length > 0 && ds.data.some(v => v !== null && v !== undefined));
+      const hasData = config.data?.datasets?.some(
+        (ds) => ds.data?.length > 0 && ds.data.some((v) => v !== null && v !== undefined)
+      );
       if (!hasData) {
         if (existing) {
-          try { existing.destroy(); } catch (_) {}
+          try {
+            existing.destroy();
+          } catch (_) {}
           chartRef.current = null;
         }
         const ctx = ref.current.getContext('2d');
@@ -85,7 +89,9 @@ function useChart(ref, config, deps) {
       // ── RECREATE PATH: first mount, type change, or theme change ─────────────
       lastThemeRef.current = theme;
       if (existing) {
-        try { existing.destroy(); } catch (_) {}
+        try {
+          existing.destroy();
+        } catch (_) {}
         chartRef.current = null;
       }
 
@@ -100,11 +106,13 @@ function useChart(ref, config, deps) {
     return () => {
       isActive = false;
       if (chartRef.current) {
-        try { chartRef.current.destroy(); } catch (_) {}
+        try {
+          chartRef.current.destroy();
+        } catch (_) {}
         chartRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, theme]);
 }
 

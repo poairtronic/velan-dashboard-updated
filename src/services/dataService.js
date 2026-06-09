@@ -8,7 +8,7 @@ export async function fetchData() {
 
 export async function saveRows(rows, syncType = 'Manual Upload') {
   const headers = { 'Content-Type': 'application/json' };
-  
+
   const res = await apiClient(`${apiBase}/api/data?sync_type=${encodeURIComponent(syncType)}`, {
     method: 'POST',
     headers,
@@ -33,9 +33,9 @@ export async function importRows(rows) {
 export async function resetDB() {
   const headers = {};
 
-  const res = await apiClient(`${apiBase}/api/data`, { 
+  const res = await apiClient(`${apiBase}/api/data`, {
     method: 'DELETE',
-    headers
+    headers,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();

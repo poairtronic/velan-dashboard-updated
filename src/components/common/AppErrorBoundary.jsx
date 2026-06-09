@@ -9,10 +9,7 @@ export default function AppErrorBoundary({ children, fallbackRender }) {
   };
 
   return (
-    <ErrorBoundary 
-      FallbackComponent={fallbackRender || ErrorFallback}
-      onError={handleError}
-    >
+    <ErrorBoundary FallbackComponent={fallbackRender || ErrorFallback} onError={handleError}>
       {children}
     </ErrorBoundary>
   );

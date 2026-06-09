@@ -13,7 +13,7 @@ async function handleImportRoutes(req, res, pathname, method) {
       // 1. Wipe Neon
       await pool.query('DELETE FROM velan_rows');
       await pool.query('DELETE FROM velan_live_rows');
-      state._db       = [];
+      state._db = [];
       state._liveRows = [];
       state._lastSync = '';
       console.log('[POST /api/reset] Neon DB wiped');
@@ -22,22 +22,35 @@ async function handleImportRoutes(req, res, pathname, method) {
       const histUrl = HISTORY_URL;
       if (!histUrl) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: true, message: 'DB wiped. No HISTORY_URL set — nothing imported.', total: 0 }));
+        return res.end(
+          JSON.stringify({
+            success: true,
+            message: 'DB wiped. No HISTORY_URL set — nothing imported.',
+            total: 0,
+          })
+        );
       }
 
       console.log('[POST /api/reset] Fetching fresh data from HISTORY_URL…');
-      const raw  = await fetchRemote(histUrl);
+      const raw = await fetchRemote(histUrl);
       const rows = parseCSV(raw);
 
       const imported = await insertRows(rows);
-      state._db       = await loadDB();
+      state._db = await loadDB();
       state._lastSync = new Date().toLocaleString('en-IN');
 
       await logSync('History Import', rows.length, 'success');
 
       console.log(`[POST /api/reset] Re-imported ${imported} rows | DB now: ${state._db.length}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, imported, total: state._db.length, lastSync: state._lastSync }));
+      return res.end(
+        JSON.stringify({
+          success: true,
+          imported,
+          total: state._db.length,
+          lastSync: state._lastSync,
+        })
+      );
     } catch (err) {
       console.error('[POST /api/reset]', err.message);
       await logSync('History Import', 0, 'failed');
@@ -50,7 +63,7 @@ async function handleImportRoutes(req, res, pathname, method) {
   if (pathname === '/api/import' && method === 'POST') {
     let incomingLength = 0;
     try {
-      const body    = await readBody(req);
+      const body = await readBody(req);
       const payload = JSON.parse(body);
 
       // Validate body using Zod schema
@@ -68,7 +81,7 @@ async function handleImportRoutes(req, res, pathname, method) {
       } else if (typeof validated.url === 'string' && validated.url.trim()) {
         console.log(`[POST /api/import] Fetching CSV from URL: ${validated.url.substring(0, 80)}…`);
         const raw = await fetchRemote(validated.url.trim());
-        incoming  = parseCSV(raw);
+        incoming = parseCSV(raw);
         console.log(`[POST /api/import] Parsed ${incoming.length} rows from CSV`);
       }
       incomingLength = incoming.length;
@@ -77,7 +90,7 @@ async function handleImportRoutes(req, res, pathname, method) {
       if (validated.replace === true) {
         await pool.query('DELETE FROM velan_rows');
         await pool.query('DELETE FROM velan_live_rows');
-        state._db       = [];
+        state._db = [];
         state._liveRows = [];
         console.log('[POST /api/import] replace=true → wiped existing Neon rows');
       }
@@ -91,13 +104,15 @@ async function handleImportRoutes(req, res, pathname, method) {
       console.log(`[POST /api/import] Imported/Updated: ${imported} | DB: ${state._db.length}`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        success:  true,
-        imported,
-        skipped:  incomingLength - imported,
-        total:    state._db.length,
-        lastSync: state._lastSync,
-      }));
+      return res.end(
+        JSON.stringify({
+          success: true,
+          imported,
+          skipped: incomingLength - imported,
+          total: state._db.length,
+          lastSync: state._lastSync,
+        })
+      );
     } catch (err) {
       console.error('[POST /api/import] failed:', err.message);
       await logSync('History Import', incomingLength, 'failed');
@@ -108,4 +123,3 @@ async function handleImportRoutes(req, res, pathname, method) {
 }
 
 module.exports = handleImportRoutes;
-

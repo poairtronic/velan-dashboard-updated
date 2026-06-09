@@ -51,7 +51,7 @@ export function AuthProvider({ children }) {
       const res = await apiClient(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await res.json();
@@ -85,24 +85,21 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const value = useMemo(() => ({
-    auth,
-    userId: auth?.id || null,
-    role: auth?.role || null,
-    username: auth?.username || null,
-    user: auth?.username || null,
-    isAdmin: auth?.role === 'admin',
-    isAuthenticated: !!auth,
-    login,
-    logout,
-    isLoading,
-  }), [auth, login, logout, isLoading]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      auth,
+      userId: auth?.id || null,
+      role: auth?.role || null,
+      username: auth?.username || null,
+      user: auth?.username || null,
+      isAdmin: auth?.role === 'admin',
+      isAuthenticated: !!auth,
+      login,
+      logout,
+      isLoading,
+    }),
+    [auth, login, logout, isLoading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
-

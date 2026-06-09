@@ -8,7 +8,7 @@ if (!isMock) {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 5,                  // max 5 concurrent connections (Neon free tier safe)
+    max: 5, // max 5 concurrent connections (Neon free tier safe)
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
@@ -25,7 +25,7 @@ if (!isMock) {
           password_hash: bcrypt.hashSync('admin123', 10),
           role: 'admin',
           status: 'approved',
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         },
         {
           id: 2,
@@ -33,19 +33,25 @@ if (!isMock) {
           password_hash: bcrypt.hashSync('user123', 10),
           role: 'user',
           status: 'approved',
-          created_at: new Date().toISOString()
-        }
+          created_at: new Date().toISOString(),
+        },
       ];
     }
     async connect() {
       return {
         query: async (sql, params) => this.query(sql, params),
-        release: () => {}
+        release: () => {},
       };
     }
     async query(sql, params) {
       const cleanSql = sql.trim().replace(/\s+/g, ' ').toUpperCase();
-      if (cleanSql.includes('CREATE TABLE') || cleanSql.includes('CREATE INDEX') || cleanSql.includes('BEGIN') || cleanSql.includes('COMMIT') || cleanSql.includes('DROP TABLE')) {
+      if (
+        cleanSql.includes('CREATE TABLE') ||
+        cleanSql.includes('CREATE INDEX') ||
+        cleanSql.includes('BEGIN') ||
+        cleanSql.includes('COMMIT') ||
+        cleanSql.includes('DROP TABLE')
+      ) {
         return { rowCount: 0, rows: [] };
       }
       if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS WHERE ROW_KEY')) {
@@ -66,7 +72,10 @@ if (!isMock) {
       if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS')) {
         return { rows: [{ count: this.rows.length }] };
       }
-      if (cleanSql.includes('TRUNCATE VELAN_LIVE_ROWS') || cleanSql.includes('DELETE FROM VELAN_LIVE_ROWS')) {
+      if (
+        cleanSql.includes('TRUNCATE VELAN_LIVE_ROWS') ||
+        cleanSql.includes('DELETE FROM VELAN_LIVE_ROWS')
+      ) {
         this.liveRows = [];
         return { rowCount: 0, rows: [] };
       }
@@ -74,19 +83,22 @@ if (!isMock) {
         this.rows = [];
         return { rowCount: 0, rows: [] };
       }
-      if (cleanSql.includes('INSERT INTO VELAN_LIVE_ROWS') || cleanSql.includes('INSERT INTO VELAN_ROWS')) {
+      if (
+        cleanSql.includes('INSERT INTO VELAN_LIVE_ROWS') ||
+        cleanSql.includes('INSERT INTO VELAN_ROWS')
+      ) {
         if (params) {
           for (let i = 0; i < params.length; i += 2) {
             const key = params[i];
-            if (!params[i+1]) continue;
-            const data = JSON.parse(params[i+1]);
+            if (!params[i + 1]) continue;
+            const data = JSON.parse(params[i + 1]);
             const rowObj = { row_key: key, data };
             if (cleanSql.includes('VELAN_LIVE_ROWS')) {
-              const idx = this.liveRows.findIndex(r => r.row_key === key);
+              const idx = this.liveRows.findIndex((r) => r.row_key === key);
               if (idx >= 0) this.liveRows[idx] = rowObj;
               else this.liveRows.push(rowObj);
             } else {
-              const idx = this.rows.findIndex(r => r.row_key === key);
+              const idx = this.rows.findIndex((r) => r.row_key === key);
               if (idx >= 0) this.rows[idx] = rowObj;
               else this.rows.push(rowObj);
             }
@@ -101,11 +113,11 @@ if (!isMock) {
         return { rowCount: 1, rows: [] };
       }
       if (cleanSql.includes("SELECT COUNT(*) FROM USERS WHERE STATUS = 'PENDING'")) {
-        const count = this.users.filter(u => u.status === 'pending').length;
+        const count = this.users.filter((u) => u.status === 'pending').length;
         return { rows: [{ count }] };
       }
       if (cleanSql.includes('SELECT * FROM USERS WHERE USERNAME = $1')) {
-        const user = this.users.find(u => u.username === params[0]);
+        const user = this.users.find((u) => u.username === params[0]);
         return { rows: user ? [user] : [] };
       }
       if (cleanSql.includes('INSERT INTO USERS')) {
@@ -119,7 +131,7 @@ if (!isMock) {
           password_hash,
           role,
           status,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         };
         this.users.push(newUser);
         return { rows: [newUser], rowCount: 1 };
@@ -127,7 +139,7 @@ if (!isMock) {
       if (cleanSql.includes('UPDATE USERS SET STATUS = $1 WHERE ID = $2')) {
         const status = params[0];
         const id = parseInt(params[1], 10);
-        const user = this.users.find(u => u.id === id);
+        const user = this.users.find((u) => u.id === id);
         if (user) {
           user.status = status;
           return { rows: [user], rowCount: 1 };
@@ -136,7 +148,7 @@ if (!isMock) {
       }
       if (cleanSql.includes('DELETE FROM USERS WHERE ID = $1')) {
         const id = parseInt(params[0], 10);
-        const idx = this.users.findIndex(u => u.id === id);
+        const idx = this.users.findIndex((u) => u.id === id);
         if (idx >= 0) {
           const deleted = this.users.splice(idx, 1);
           return { rows: deleted, rowCount: 1 };
@@ -144,7 +156,9 @@ if (!isMock) {
         return { rows: [], rowCount: 0 };
       }
       if (cleanSql.includes('FROM USERS')) {
-        return { rows: [...this.users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) };
+        return {
+          rows: [...this.users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+        };
       }
       return { rows: [] };
     }
@@ -158,7 +172,7 @@ async function initDB() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     // 1. Create velan_rows table
     await client.query(`
       CREATE TABLE IF NOT EXISTS velan_rows (
@@ -209,7 +223,9 @@ async function initDB() {
 
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_velan_live_rows_key ON velan_live_rows (row_key)');
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_velan_live_rows_key ON velan_live_rows (row_key)'
+    );
 
     await client.query('COMMIT');
     console.log('[DB] Neon tables and indices initialized successfully');
@@ -227,7 +243,7 @@ async function runKeyMigration() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     // Create temporary table with deduplicated latest entries
     await client.query(`
       CREATE TEMP TABLE temp_latest_rows AS
@@ -277,7 +293,7 @@ async function runKeyMigration() {
 // ── Load all rows from Neon into memory ───────────────────────────────────────
 async function loadDB() {
   const res = await pool.query('SELECT data FROM velan_rows ORDER BY id');
-  return res.rows.map(r => {
+  return res.rows.map((r) => {
     const d = r.data;
     if (!d.currentStage && d.op) {
       d.currentStage = String(d.op).trim();
@@ -292,7 +308,7 @@ async function loadDB() {
 // ── Load all live operational rows from Neon ─────────────────────────
 async function loadLiveDB() {
   const res = await pool.query('SELECT data FROM velan_live_rows ORDER BY id');
-  return res.rows.map(r => {
+  return res.rows.map((r) => {
     const d = r.data;
     if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
     if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
@@ -314,15 +330,14 @@ async function logSync(syncType, rowCount, status) {
 }
 
 // ── Refactored Row Key Generator ──────────────────────────────────────────────
-const makeKey = r =>
-  `${r.sc||''}||${r.po||''}||${r.product||''}||${r.currentStage||''}`;
+const makeKey = (r) => `${r.sc || ''}||${r.po || ''}||${r.product || ''}||${r.currentStage || ''}`;
 
 // ── Bulk Upsert archive rows into Neon ─────────────────────────────────────────
 async function insertRows(rows) {
   if (!rows.length) return 0;
-  
+
   const uniqueMap = new Map();
-  rows.forEach(r => {
+  rows.forEach((r) => {
     const key = makeKey(r);
     const existing = uniqueMap.get(key);
     if (!existing || (r.timestamp && (!existing.timestamp || r.timestamp > existing.timestamp))) {
@@ -340,14 +355,14 @@ async function insertRows(rows) {
       const chunk = uniqueRows.slice(i, i + chunkSize);
       const valueStrings = [];
       const values = [];
-      
+
       chunk.forEach((row, idx) => {
         const valIdx1 = idx * 2 + 1;
         const valIdx2 = idx * 2 + 2;
         valueStrings.push(`($${valIdx1}, $${valIdx2})`);
         values.push(makeKey(row), JSON.stringify(row));
       });
-      
+
       const queryText = `
         INSERT INTO velan_rows (row_key, data)
         VALUES ${valueStrings.join(', ')}
@@ -372,13 +387,16 @@ async function saveLiveRows(rows) {
   try {
     await client.query('BEGIN');
     await client.query('TRUNCATE velan_live_rows');
-    
+
     if (rows.length > 0) {
       const uniqueMap = new Map();
-      rows.forEach(r => {
+      rows.forEach((r) => {
         const key = makeKey(r);
         const existing = uniqueMap.get(key);
-        if (!existing || (r.timestamp && (!existing.timestamp || r.timestamp > existing.timestamp))) {
+        if (
+          !existing ||
+          (r.timestamp && (!existing.timestamp || r.timestamp > existing.timestamp))
+        ) {
           uniqueMap.set(key, r);
         }
       });
@@ -422,5 +440,5 @@ module.exports = {
   logSync,
   makeKey,
   insertRows,
-  saveLiveRows
+  saveLiveRows,
 };

@@ -7,49 +7,107 @@ import { apiClient } from '../services/apiClient';
 
 function IconShield({ size = 16 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <path d="M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3z"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3z" />
     </svg>
   );
 }
 function IconUser({ size = 16 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <circle cx="12" cy="8" r="4"/>
-      <path d="M4 20c0-4 4-7 8-7s8 3 8 7"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
     </svg>
   );
 }
 function IconEye({ size = 18 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z"/>
-      <circle cx="12" cy="12" r="3"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
 function IconEyeOff({ size = 18 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"/>
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.06 3.94"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.06 3.94" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   );
 }
 function IconShieldCheck({ size = 64 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3z"/>
-      <path d="m9 12 2 2 4-4"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3a12 12 0 0 0 8.5 3A12 12 0 0 1 12 21 12 12 0 0 1 3.5 6 12 12 0 0 0 12 3z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   );
 }
 function IconView({ size = 64 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z"/>
-      <circle cx="12" cy="12" r="3"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -408,7 +466,11 @@ function LoginPage() {
   };
 
   const rightContent = isAdmin
-    ? { icon: 'shield-check', title: 'Admin Portal', desc: 'Full access — upload, sync, reset and manage users' }
+    ? {
+        icon: 'shield-check',
+        title: 'Admin Portal',
+        desc: 'Full access — upload, sync, reset and manage users',
+      }
     : { icon: 'view', title: 'User Portal', desc: 'View-only access to all production modules' };
 
   return (
@@ -424,11 +486,23 @@ function LoginPage() {
           </div>
 
           <div style={s.roleToggle}>
-            <button style={s.roleBtn(isAdmin)} onClick={() => { setRole('admin'); resetForm('login'); }}>
+            <button
+              style={s.roleBtn(isAdmin)}
+              onClick={() => {
+                setRole('admin');
+                resetForm('login');
+              }}
+            >
               <IconShield size={16} />
               Admin
             </button>
-            <button style={s.roleBtn(!isAdmin)} onClick={() => { setRole('user'); resetForm('login'); }}>
+            <button
+              style={s.roleBtn(!isAdmin)}
+              onClick={() => {
+                setRole('user');
+                resetForm('login');
+              }}
+            >
               <IconUser size={16} />
               User
             </button>
@@ -436,8 +510,12 @@ function LoginPage() {
 
           {!isAdmin && (
             <div style={s.tabRow}>
-              <button style={s.tab(tab === 'login')} onClick={() => resetForm('login')}>Log in</button>
-              <button style={s.tab(tab === 'register')} onClick={() => resetForm('register')}>Register</button>
+              <button style={s.tab(tab === 'login')} onClick={() => resetForm('login')}>
+                Log in
+              </button>
+              <button style={s.tab(tab === 'register')} onClick={() => resetForm('register')}>
+                Register
+              </button>
             </div>
           )}
 
@@ -445,32 +523,41 @@ function LoginPage() {
           {success && <div style={s.successMsg}>{success}</div>}
 
           {tab === 'login' ? (
-            <form onSubmit={handleLogin} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <form
+              onSubmit={handleLogin}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+            >
               <div style={s.fieldGroup}>
                 <label style={s.label}>Username</label>
                 <input
-                  type="text" required
+                  type="text"
+                  required
                   value={username}
-                  onChange={e => setUsername(e.target.value)}
+                  onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter username"
                   style={s.input}
-                  onFocus={e => e.target.style.borderColor = '#4B3ADB'}
-                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                  onFocus={(e) => (e.target.style.borderColor = '#4B3ADB')}
+                  onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
                 />
               </div>
               <div style={s.fieldGroup}>
                 <label style={s.label}>Password</label>
                 <div style={s.inputWrap}>
                   <input
-                    type={showPassword ? 'text' : 'password'} required
+                    type={showPassword ? 'text' : 'password'}
+                    required
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     style={s.input}
-                    onFocus={e => e.target.style.borderColor = '#4B3ADB'}
-                    onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => (e.target.style.borderColor = '#4B3ADB')}
+                    onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
                   />
-                  <button type="button" style={s.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
+                  <button
+                    type="button"
+                    style={s.eyeBtn}
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
                     {showPassword ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
@@ -491,7 +578,10 @@ function LoginPage() {
                     </div>
                   )}
                   <div style={{ textAlign: 'center', marginTop: 12 }}>
-                    <span style={{ ...s.link, fontSize: 13, cursor: 'pointer' }} onClick={() => setApprovalStatus(null)}>
+                    <span
+                      style={{ ...s.link, fontSize: 13, cursor: 'pointer' }}
+                      onClick={() => setApprovalStatus(null)}
+                    >
                       Back to Log In
                     </span>
                   </div>
@@ -508,39 +598,53 @@ function LoginPage() {
                   {!isAdmin && (
                     <div style={s.switchLink}>
                       Don&apos;t have an account?{' '}
-                      <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('register')}>Register</span>
+                      <span
+                        style={{ ...s.link, cursor: 'pointer' }}
+                        onClick={() => resetForm('register')}
+                      >
+                        Register
+                      </span>
                     </div>
                   )}
                 </>
               )}
             </form>
           ) : (
-            <form onSubmit={handleRegister} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <form
+              onSubmit={handleRegister}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+            >
               <div style={s.fieldGroup}>
                 <label style={s.label}>Username</label>
                 <input
-                  type="text" required
+                  type="text"
+                  required
                   value={username}
-                  onChange={e => setUsername(e.target.value)}
+                  onChange={(e) => setUsername(e.target.value)}
                   placeholder="Choose a username"
                   style={s.input}
-                  onFocus={e => e.target.style.borderColor = '#4B3ADB'}
-                  onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                  onFocus={(e) => (e.target.style.borderColor = '#4B3ADB')}
+                  onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
                 />
               </div>
               <div style={s.fieldGroup}>
                 <label style={s.label}>Password</label>
                 <div style={s.inputWrap}>
                   <input
-                    type={showPassword ? 'text' : 'password'} required
+                    type={showPassword ? 'text' : 'password'}
+                    required
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="Create a password"
                     style={s.input}
-                    onFocus={e => e.target.style.borderColor = '#4B3ADB'}
-                    onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => (e.target.style.borderColor = '#4B3ADB')}
+                    onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
                   />
-                  <button type="button" style={s.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
+                  <button
+                    type="button"
+                    style={s.eyeBtn}
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
                     {showPassword ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
@@ -549,25 +653,36 @@ function LoginPage() {
                 <label style={s.label}>Confirm Password</label>
                 <div style={s.inputWrap}>
                   <input
-                    type={showConfirm ? 'text' : 'password'} required
+                    type={showConfirm ? 'text' : 'password'}
+                    required
                     value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm your password"
                     style={s.input}
-                    onFocus={e => e.target.style.borderColor = '#4B3ADB'}
-                    onBlur={e => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => (e.target.style.borderColor = '#4B3ADB')}
+                    onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
                   />
-                  <button type="button" style={s.eyeBtn} onClick={() => setShowConfirm(!showConfirm)}>
+                  <button
+                    type="button"
+                    style={s.eyeBtn}
+                    onClick={() => setShowConfirm(!showConfirm)}
+                  >
                     {showConfirm ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
               </div>
-              <button type="submit" disabled={loading} style={{ ...s.btn(loading), marginTop: 'auto' }}>
+              <button
+                type="submit"
+                disabled={loading}
+                style={{ ...s.btn(loading), marginTop: 'auto' }}
+              >
                 {loading ? 'Creating account\u2026' : 'Create Account'}
               </button>
               <div style={s.switchLink}>
                 Already have an account?{' '}
-                <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('login')}>Log in</span>
+                <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('login')}>
+                  Log in
+                </span>
               </div>
             </form>
           )}

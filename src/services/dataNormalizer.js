@@ -2,19 +2,19 @@ import { toIsoDateString } from '../utils/dateUtils';
 // ─── DATA NORMALIZATION SERVICES ─────────────────────────────────────────────
 
 const STAGE_CORRECTIONS = {
-  'BLACKENEING'  : 'BLACKENING',
-  'BLACKNING'    : 'BLACKENING',
-  'BLACKENNING'  : 'BLACKENING',
-  'BLACING'      : 'PLACING',
-  'BRASING'      : 'BRAZING',
-  'PLATING '     : 'PLATING',
-  'READDY'       : 'READY',
-  'REAADY'       : 'READY',
-  'STORE'        : 'STORES',
-  'STORRES'      : 'STORES',
-  'STOERS'       : 'STORES',
-  'CALIBARTION'  : 'CALIBRATION',
-  'CALLIBRATION' : 'CALIBRATION',
+  BLACKENEING: 'BLACKENING',
+  BLACKNING: 'BLACKENING',
+  BLACKENNING: 'BLACKENING',
+  BLACING: 'PLACING',
+  BRASING: 'BRAZING',
+  'PLATING ': 'PLATING',
+  READDY: 'READY',
+  REAADY: 'READY',
+  STORE: 'STORES',
+  STORRES: 'STORES',
+  STOERS: 'STORES',
+  CALIBARTION: 'CALIBRATION',
+  CALLIBRATION: 'CALIBRATION',
 };
 
 function inferType(productName) {
@@ -30,15 +30,28 @@ function inferType(productName) {
 
 function normalizeStage(stage) {
   if (!stage) return '';
-  const s = String(stage).trim().toUpperCase().replace(/[\.\s]/g, '');
+  const s = String(stage)
+    .trim()
+    .toUpperCase()
+    .replace(/[\.\s]/g, '');
   if (!s) return '';
   const aliases = {
-    'STORE':'STORES','STORRES':'STORES','STOERS':'STORES',
-    'READDY':'READY','REAADY':'READY',
-    'BLACKENEING':'BLACKENING','BLACKNING':'BLACKENING','BLACKENNING':'BLACKENING',
-    'DCPL':'DCPLI',
-    'HOV':'HOV','HOVE':'HOV',
-    'SDV':'SDV','BLV':'BLV','FBV':'FBV','HTV':'HTV','HCV':'HCV',
+    STORE: 'STORES',
+    STORRES: 'STORES',
+    STOERS: 'STORES',
+    READDY: 'READY',
+    REAADY: 'READY',
+    BLACKENEING: 'BLACKENING',
+    BLACKNING: 'BLACKENING',
+    BLACKENNING: 'BLACKENING',
+    DCPL: 'DCPLI',
+    HOV: 'HOV',
+    HOVE: 'HOV',
+    SDV: 'SDV',
+    BLV: 'BLV',
+    FBV: 'FBV',
+    HTV: 'HTV',
+    HCV: 'HCV',
   };
   const corrected = aliases[s] || s;
   if (corrected === 'STOCK' || corrected === 'STOCKK') return 'STOCK';
@@ -48,7 +61,9 @@ function normalizeStage(stage) {
 }
 
 function normalizeInhouse(val) {
-  const s = String(val || '').trim().toUpperCase();
+  const s = String(val || '')
+    .trim()
+    .toUpperCase();
   if (!s) return 'INHOUSE';
   return s.includes('VENDOR') ? 'VENDOR' : 'INHOUSE';
 }
@@ -62,8 +77,8 @@ function correctStageName(stage) {
 function getStageColor(stage) {
   if (!stage) return '#3d6080';
   const s = stage.toUpperCase();
-  if (s==='READY') return '#00e676';
-  if (s==='STORES') return '#00c9ff';
+  if (s === 'READY') return '#00e676';
+  if (s === 'STORES') return '#00c9ff';
   if (s.includes('LATHE')) return '#ff3d5a';
   if (s.includes('VA')) return '#ff6b35';
   if (s.includes('CG')) return '#ffd60a';
@@ -72,25 +87,33 @@ function getStageColor(stage) {
   if (s.includes('QC')) return '#b24bff';
   if (s.includes('M1')) return '#ff3d5a';
   if (s.includes('FB')) return '#ffd60a';
-  if (['SDV','SDV','BLV','FBV','HTV','HOV','HCV'].some(v=>s.includes(v.replace('V','')))) return '#b24bff';
-  if (s==='STOCK') return '#00c9ff';
+  if (['SDV', 'SDV', 'BLV', 'FBV', 'HTV', 'HOV', 'HCV'].some((v) => s.includes(v.replace('V', ''))))
+    return '#b24bff';
+  if (s === 'STOCK') return '#00c9ff';
   return '#7ba7cc';
 }
 
 function normalizeTimestamp(value) {
   if (value === undefined || value === null || value === '') return '';
-  const s = String(value).trim().replace('T',' ');
+  const s = String(value).trim().replace('T', ' ');
   if (!s) return '';
 
   const date = toIsoDateString(s);
   const timeMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (date && timeMatch) {
-    const hh = String(timeMatch[1]).padStart(2,'0');
-    const mm = String(timeMatch[2]).padStart(2,'0');
-    const ss = String(timeMatch[3] || '00').padStart(2,'0');
+    const hh = String(timeMatch[1]).padStart(2, '0');
+    const mm = String(timeMatch[2]).padStart(2, '0');
+    const ss = String(timeMatch[3] || '00').padStart(2, '0');
     return `${date} ${hh}:${mm}:${ss}`;
   }
-  return date || s.substring(0,19);
+  return date || s.substring(0, 19);
 }
 
-export { inferType, normalizeStage, normalizeInhouse, correctStageName, getStageColor, normalizeTimestamp };
+export {
+  inferType,
+  normalizeStage,
+  normalizeInhouse,
+  correctStageName,
+  getStageColor,
+  normalizeTimestamp,
+};

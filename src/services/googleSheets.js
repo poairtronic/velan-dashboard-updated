@@ -1,4 +1,3 @@
-
 // ─── GOOGLE SHEETS SERVICES ──────────────────────────────────────────────────
 
 function normalizeGoogleSheetsUrl(rawUrl) {

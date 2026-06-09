@@ -1,9 +1,8 @@
-
 // ─── PROCESS & FORMULA CALCULATION HELPERS ───────────────────────────────────
 
-const AIRPLUG_TYPES = ['APG','ARG'];
-const MASTER_TYPES  = ['SPG','SRG','SP'];
-const TARGET_DAYS   = 21;
+const AIRPLUG_TYPES = ['APG', 'ARG'];
+const MASTER_TYPES = ['SPG', 'SRG', 'SP'];
+const TARGET_DAYS = 21;
 
 // Company holidays calendar
 const COMPANY_HOLIDAYS = new Set([
@@ -27,37 +26,52 @@ function workingDaysBetween(d1Str, d2Str) {
   try {
     function parseLocalDate(str) {
       if (!str) return null;
-      const clean = String(str).trim().substring(0,10);
+      const clean = String(str).trim().substring(0, 10);
       let day, month, year;
 
       if (clean.includes('/')) {
         const parts = clean.split('/');
         const p0 = parseInt(parts[0], 10);
         const p1 = parseInt(parts[1], 10);
-        let   p2 = parseInt(parts[2], 10);
+        let p2 = parseInt(parts[2], 10);
         if (p2 < 100) p2 += 2000;
         year = p2;
         if (String(parts[2]).trim().length <= 2) {
-          month = p0; day = p1; // Google Sheets M/D/YY
+          month = p0;
+          day = p1; // Google Sheets M/D/YY
         } else {
-          if (p0 > 12) { day = p0; month = p1; }
-          else if (p1 > 12) { month = p0; day = p1; }
-          else { day = p0; month = p1; } // DD/MM default
+          if (p0 > 12) {
+            day = p0;
+            month = p1;
+          } else if (p1 > 12) {
+            month = p0;
+            day = p1;
+          } else {
+            day = p0;
+            month = p1;
+          } // DD/MM default
         }
       } else if (clean.includes('-')) {
         const parts = clean.split('-');
         if (parts[0].length === 4) {
-          year  = parseInt(parts[0], 10);
+          year = parseInt(parts[0], 10);
           month = parseInt(parts[1], 10);
-          day   = parseInt(parts[2], 10);
+          day = parseInt(parts[2], 10);
         } else {
           const p0 = parseInt(parts[0], 10);
           const p1 = parseInt(parts[1], 10);
           year = parseInt(parts[2], 10);
           if (year < 100) year += 2000;
-          if (p0 > 12) { day = p0; month = p1; }
-          else if (p1 > 12) { month = p0; day = p1; }
-          else { day = p0; month = p1; }
+          if (p0 > 12) {
+            day = p0;
+            month = p1;
+          } else if (p1 > 12) {
+            month = p0;
+            day = p1;
+          } else {
+            day = p0;
+            month = p1;
+          }
         }
       } else {
         return null;
@@ -77,14 +91,18 @@ function workingDaysBetween(d1Str, d2Str) {
     while (cur <= end) {
       const dow = cur.getDay();
       const ds =
-        cur.getFullYear() + '-' +
-        String(cur.getMonth() + 1).padStart(2, '0') + '-' +
+        cur.getFullYear() +
+        '-' +
+        String(cur.getMonth() + 1).padStart(2, '0') +
+        '-' +
         String(cur.getDate()).padStart(2, '0');
       if (dow !== 0 && !COMPANY_HOLIDAYS.has(ds)) count++;
       cur.setDate(cur.getDate() + 1);
     }
     return d2 < d1 ? -count : count;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function daysBetween(d1Str, d2Str) {
@@ -110,23 +128,37 @@ function parseDateTime(str) {
     const p1 = parseInt(parts[1], 10);
     year = parseInt(parts[2], 10);
     if (year < 100) year += 2000;
-    if (p0 > 12) { day = p0; month = p1; }
-    else if (p1 > 12) { month = p0; day = p1; }
-    else { day = p0; month = p1; }
+    if (p0 > 12) {
+      day = p0;
+      month = p1;
+    } else if (p1 > 12) {
+      month = p0;
+      day = p1;
+    } else {
+      day = p0;
+      month = p1;
+    }
   } else if (datePart.includes('-')) {
     const parts = datePart.split('-');
     if (parts[0].length === 4) {
-      year  = parseInt(parts[0], 10);
+      year = parseInt(parts[0], 10);
       month = parseInt(parts[1], 10);
-      day   = parseInt(parts[2], 10);
+      day = parseInt(parts[2], 10);
     } else {
       const p0 = parseInt(parts[0], 10);
       const p1 = parseInt(parts[1], 10);
       year = parseInt(parts[2], 10);
       if (year < 100) year += 2000;
-      if (p0 > 12) { day = p0; month = p1; }
-      else if (p1 > 12) { month = p0; day = p1; }
-      else { day = p0; month = p1; }
+      if (p0 > 12) {
+        day = p0;
+        month = p1;
+      } else if (p1 > 12) {
+        month = p0;
+        day = p1;
+      } else {
+        day = p0;
+        month = p1;
+      }
     }
   } else {
     return null;
@@ -174,11 +206,12 @@ function isSLAViolation(agingDays, threshold = 2) {
 
 function calculateVendorAging(lastTs, today) {
   if (!lastTs) return null;
-  const todayStr = (today instanceof Date)
-    ? `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-    : String(today).substring(0, 10);
+  const todayStr =
+    today instanceof Date
+      ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      : String(today).substring(0, 10);
   const days = workingDaysBetween(lastTs, todayStr);
-  return (days !== null && days >= 0) ? days : null;
+  return days !== null && days >= 0 ? days : null;
 }
 
 function calculateProcessEfficiency(activeTime, totalTime) {
@@ -195,22 +228,28 @@ function getVendorCode(stage, inhouse) {
 }
 
 function isSCComplete(items) {
-  return items.every(i => ['READY','STORES','STOCK','EXSTOCK','VA'].includes(i.currentStage));
+  return items.every((i) => ['READY', 'STORES', 'STOCK', 'EXSTOCK', 'VA'].includes(i.currentStage));
 }
 
 function getSCLastTimestamp(items) {
-  const ts = items.map(i => i.timestamp).filter(Boolean).sort().pop();
+  const ts = items
+    .map((i) => i.timestamp)
+    .filter(Boolean)
+    .sort()
+    .pop();
   return ts;
 }
 
 function normalizeProductsInGroup(rows) {
   if (!rows || rows.length === 0) return rows;
-  const fullNames = [...new Set(rows.map(r => (r.product || '').trim()).filter(p => p && !p.endsWith('...')))];
-  return rows.map(r => {
+  const fullNames = [
+    ...new Set(rows.map((r) => (r.product || '').trim()).filter((p) => p && !p.endsWith('...'))),
+  ];
+  return rows.map((r) => {
     const prod = (r.product || '').trim();
     if (prod.endsWith('...')) {
       const prefix = prod.slice(0, -3);
-      const match = fullNames.find(f => f.startsWith(prefix));
+      const match = fullNames.find((f) => f.startsWith(prefix));
       if (match) {
         return { ...r, product: match };
       }
@@ -219,4 +258,22 @@ function normalizeProductsInGroup(rows) {
   });
 }
 
-export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp, normalizeProductsInGroup, TARGET_DAYS, AIRPLUG_TYPES, MASTER_TYPES };
+export {
+  workingDaysBetween,
+  daysBetween,
+  getProductCategory,
+  parseDateTime,
+  hoursBetween,
+  minutesBetween,
+  calculateProcessCycleTime,
+  isSLAViolation,
+  calculateVendorAging,
+  calculateProcessEfficiency,
+  getVendorCode,
+  isSCComplete,
+  getSCLastTimestamp,
+  normalizeProductsInGroup,
+  TARGET_DAYS,
+  AIRPLUG_TYPES,
+  MASTER_TYPES,
+};

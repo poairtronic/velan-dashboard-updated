@@ -20,7 +20,7 @@ function KPICard({ label, value, sub, color1, color2, badge, action }) {
             borderRadius: 8,
             fontSize: 11,
             fontWeight: 700,
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           {action.text}

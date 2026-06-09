@@ -44,20 +44,21 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/*" element={
-        <ProtectedRoute>
-          <DashboardLayout />
-        </ProtectedRoute>
-      } />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
 
 const RouteWrapper = ({ children }) => (
   <AppErrorBoundary>
-    <Suspense fallback={<LoadingScreen />}>
-      {children}
-    </Suspense>
+    <Suspense fallback={<LoadingScreen />}>{children}</Suspense>
   </AppErrorBoundary>
 );
 
@@ -67,10 +68,10 @@ function DashboardLayout() {
   return (
     <div>
       <Header />
-      
+
       <div className="main-container">
         <Sidebar />
-        
+
         <div className="content">
           <FilterBar />
 
@@ -78,27 +79,107 @@ function DashboardLayout() {
             <LoadingScreen />
           ) : (
             <Routes>
-              <Route path="/" element={<RouteWrapper><OverviewPage /></RouteWrapper>} />
+              <Route
+                path="/"
+                element={
+                  <RouteWrapper>
+                    <OverviewPage />
+                  </RouteWrapper>
+                }
+              />
               <Route path="/overview" element={<Navigate to="/" replace />} />
-              <Route path="/monthday" element={<RouteWrapper><MonthDayPage /></RouteWrapper>} />
-              <Route path="/database" element={<RouteWrapper><DatabasePage /></RouteWrapper>} />
-              <Route path="/production" element={<RouteWrapper><ProductionPage /></RouteWrapper>} />
-              <Route path="/wip" element={<RouteWrapper><WIPPage /></RouteWrapper>} />
-              <Route path="/cycleTime" element={<RouteWrapper><CycleTimePage /></RouteWrapper>} />
-              <Route path="/bottleneck" element={<RouteWrapper><BottleneckPage /></RouteWrapper>} />
-              <Route path="/po" element={<RouteWrapper><POPage /></RouteWrapper>} />
-              <Route path="/sc" element={<RouteWrapper><SCPage /></RouteWrapper>} />
-              <Route path="/vendor" element={<RouteWrapper><VendorPage /></RouteWrapper>} />
-              <Route path="/users" element={
-                <ProtectedRoute adminOnly={true}>
-                  <RouteWrapper><UserManagementPage /></RouteWrapper>
-                </ProtectedRoute>
-              } />
-              <Route path="/upload" element={
-                <ProtectedRoute adminOnly={true}>
-                  <RouteWrapper><UploadPage /></RouteWrapper>
-                </ProtectedRoute>
-              } />
+              <Route
+                path="/monthday"
+                element={
+                  <RouteWrapper>
+                    <MonthDayPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/database"
+                element={
+                  <RouteWrapper>
+                    <DatabasePage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/production"
+                element={
+                  <RouteWrapper>
+                    <ProductionPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/wip"
+                element={
+                  <RouteWrapper>
+                    <WIPPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/cycleTime"
+                element={
+                  <RouteWrapper>
+                    <CycleTimePage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/bottleneck"
+                element={
+                  <RouteWrapper>
+                    <BottleneckPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/po"
+                element={
+                  <RouteWrapper>
+                    <POPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/sc"
+                element={
+                  <RouteWrapper>
+                    <SCPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/vendor"
+                element={
+                  <RouteWrapper>
+                    <VendorPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute adminOnly={true}>
+                    <RouteWrapper>
+                      <UserManagementPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/upload"
+                element={
+                  <ProtectedRoute adminOnly={true}>
+                    <RouteWrapper>
+                      <UploadPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
@@ -111,8 +192,8 @@ function DashboardLayout() {
 function App() {
   return (
     <AppErrorBoundary>
-      <Toaster 
-        position="top-right" 
+      <Toaster
+        position="top-right"
         toastOptions={{
           style: {
             background: '#050b14',
@@ -126,7 +207,7 @@ function App() {
           error: {
             iconTheme: { primary: '#ff3d5a', secondary: '#050b14' },
           },
-        }} 
+        }}
       />
       <AuthProvider>
         <ThemeProvider>

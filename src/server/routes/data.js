@@ -11,12 +11,14 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
       const dbRows = await loadDB();
       const liveDbRows = await loadLiveDB();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        rows:     dbRows,
-        liveRows: liveDbRows.length > 0 ? liveDbRows : dbRows,
-        lastSync: state._lastSync,
-        total:    dbRows.length,
-      }));
+      return res.end(
+        JSON.stringify({
+          rows: dbRows,
+          liveRows: liveDbRows.length > 0 ? liveDbRows : dbRows,
+          lastSync: state._lastSync,
+          total: dbRows.length,
+        })
+      );
     } catch (err) {
       console.error('[GET /api/data] failed:', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -52,23 +54,27 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
 
       // 2. Save/Upsert new rows to velan_rows in Neon
       const saved = await insertRows(incoming);
-      
+
       state._db = await loadDB();
       state._lastSync = new Date().toLocaleString('en-IN');
 
       // 3. Log the successful sync
       await logSync(syncType, incomingLength, 'success');
 
-      console.log(`[POST /api/data] Live: ${incoming.length} | DB: ${state._db.length} (+${saved} upserted to Neon)`);
+      console.log(
+        `[POST /api/data] Live: ${incoming.length} | DB: ${state._db.length} (+${saved} upserted to Neon)`
+      );
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        success:   true,
-        liveTotal: incoming.length,
-        total:     state._db.length,
-        newRows:   saved,
-        lastSync:  state._lastSync,
-      }));
+      return res.end(
+        JSON.stringify({
+          success: true,
+          liveTotal: incoming.length,
+          total: state._db.length,
+          newRows: saved,
+          lastSync: state._lastSync,
+        })
+      );
     } catch (err) {
       console.error('[POST /api/data] failed:', err.message);
       await logSync(syncType, incomingLength, 'failed');
@@ -82,7 +88,7 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
     try {
       await pool.query('DELETE FROM velan_rows');
       await pool.query('DELETE FROM velan_live_rows');
-      state._db       = [];
+      state._db = [];
       state._liveRows = [];
       state._lastSync = '';
       console.log('[DELETE /api/data] All rows wiped from Neon DB');
@@ -98,12 +104,16 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
   // ── GET /api/sync-status — retrieve sync logs ────────────────────────────
   if (pathname === '/api/sync-status' && method === 'GET') {
     try {
-      const logsRes = await pool.query('SELECT sync_type, row_count, status, created_at FROM sync_logs ORDER BY created_at DESC LIMIT 50');
+      const logsRes = await pool.query(
+        'SELECT sync_type, row_count, status, created_at FROM sync_logs ORDER BY created_at DESC LIMIT 50'
+      );
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        success: true,
-        logs: logsRes.rows,
-      }));
+      return res.end(
+        JSON.stringify({
+          success: true,
+          logs: logsRes.rows,
+        })
+      );
     } catch (err) {
       console.error('[GET /api/sync-status] failed:', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -130,11 +140,12 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
             }
           }
           if (changed) {
-            const newKey = `${d.sc||''}||${d.po||''}||${d.product||''}||${d.currentStage||''}`;
-            await client.query(
-              'UPDATE velan_rows SET data = $1, row_key = $2 WHERE id = $3',
-              [JSON.stringify(d), newKey, row.id]
-            );
+            const newKey = `${d.sc || ''}||${d.po || ''}||${d.product || ''}||${d.currentStage || ''}`;
+            await client.query('UPDATE velan_rows SET data = $1, row_key = $2 WHERE id = $3', [
+              JSON.stringify(d),
+              newKey,
+              row.id,
+            ]);
             fixed++;
           }
         }
@@ -158,4 +169,3 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
 }
 
 module.exports = handleDataRoutes;
-

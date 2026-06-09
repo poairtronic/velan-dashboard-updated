@@ -51,12 +51,14 @@ function useDashboardData(options) {
       try {
         const cfg = await loadConfig();
         if (cfg.liveUrl) {
-          setLiveConfig(prev => ({ ...prev, url: prev.url ? prev.url : cfg.liveUrl }));
+          setLiveConfig((prev) => ({ ...prev, url: prev.url ? prev.url : cfg.liveUrl }));
         }
         if (cfg.historyUrl) {
-          setHistoryConfig(prev => ({ ...prev, url: prev.url ? prev.url : cfg.historyUrl }));
+          setHistoryConfig((prev) => ({ ...prev, url: prev.url ? prev.url : cfg.historyUrl }));
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     loadServerConfig();
   }, [user, setLiveConfig, setHistoryConfig]);

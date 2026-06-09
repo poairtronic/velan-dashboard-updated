@@ -3,7 +3,15 @@ import React from 'react';
 
 function DataTable({ headers, children, style, className = 'db-table' }) {
   return (
-    <div style={{ overflowX: 'auto', width: '100%', background: 'rgba(10,25,47,0.4)', borderRadius: 8, border: '1px solid var(--border)' }}>
+    <div
+      style={{
+        overflowX: 'auto',
+        width: '100%',
+        background: 'rgba(10,25,47,0.4)',
+        borderRadius: 8,
+        border: '1px solid var(--border)',
+      }}
+    >
       <table className={className} style={{ width: '100%', borderCollapse: 'collapse', ...style }}>
         {headers && (
           <thead>
@@ -14,9 +22,7 @@ function DataTable({ headers, children, style, className = 'db-table' }) {
             </tr>
           </thead>
         )}
-        <tbody>
-          {children}
-        </tbody>
+        <tbody>{children}</tbody>
       </table>
     </div>
   );

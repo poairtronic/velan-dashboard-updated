@@ -17,7 +17,7 @@ function FilterBar() {
   const debouncedSearch = React.useMemo(
     () =>
       debounce((value) => {
-        setFilters(f => ({ ...f, search: value }));
+        setFilters((f) => ({ ...f, search: value }));
       }, 300),
     [setFilters]
   );
@@ -39,16 +39,16 @@ function FilterBar() {
   const handleSearchChange = React.useCallback(
     (e) => {
       const value = e.target.value;
-      setSearchInput(value);       // instant — updates input display
-      debouncedSearch(value);      // debounced — triggers filter computation
+      setSearchInput(value); // instant — updates input display
+      debouncedSearch(value); // debounced — triggers filter computation
     },
     [debouncedSearch]
   );
 
   const handleReset = React.useCallback(() => {
-    debouncedSearch.cancel();       // discard any pending debounce
-    setSearchInput('');             // clear local input state
-    resetFilters();                 // clear all context filters
+    debouncedSearch.cancel(); // discard any pending debounce
+    setSearchInput(''); // clear local input state
+    resetFilters(); // clear all context filters
   }, [debouncedSearch, resetFilters]);
 
   if (activeNav === 'database' || activeNav === 'upload') {
@@ -58,17 +58,21 @@ function FilterBar() {
   return (
     <div className="filter-bar">
       <div className="filter-label">FILTERS</div>
-      
+
       <select
         id="filter-po"
         name="filter-po"
         className="filter-select"
         aria-label="Filter by PO"
         value={filters.po}
-        onChange={e => setFilters(f => ({ ...f, po: e.target.value }))}
+        onChange={(e) => setFilters((f) => ({ ...f, po: e.target.value }))}
       >
         <option value="">All POs</option>
-        {uniquePOs.map(p => <option key={p} value={p}>{p}</option>)}
+        {uniquePOs.map((p) => (
+          <option key={p} value={p}>
+            {p}
+          </option>
+        ))}
       </select>
 
       <select
@@ -77,10 +81,14 @@ function FilterBar() {
         className="filter-select"
         aria-label="Filter by Stage"
         value={filters.stage}
-        onChange={e => setFilters(f => ({ ...f, stage: e.target.value }))}
+        onChange={(e) => setFilters((f) => ({ ...f, stage: e.target.value }))}
       >
         <option value="">All Stages</option>
-        {uniqueStages.map(s => <option key={s} value={s}>{s}</option>)}
+        {uniqueStages.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
       </select>
 
       <select
@@ -89,10 +97,14 @@ function FilterBar() {
         className="filter-select"
         aria-label="Filter by Type"
         value={filters.type}
-        onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
+        onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}
       >
         <option value="">All Types</option>
-        {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+        {uniqueTypes.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
       </select>
 
       <select
@@ -101,7 +113,7 @@ function FilterBar() {
         className="filter-select"
         aria-label="Filter by Category"
         value={filters.category}
-        onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
+        onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
       >
         <option value="">All Categories</option>
         <option value="AIRPLUG">Airplug (APG/ARG)</option>
@@ -115,7 +127,7 @@ function FilterBar() {
         className="filter-select"
         aria-label="Filter by Inhouse or Vendor"
         value={filters.inhouse}
-        onChange={e => setFilters(f => ({ ...f, inhouse: e.target.value }))}
+        onChange={(e) => setFilters((f) => ({ ...f, inhouse: e.target.value }))}
       >
         <option value="">Inhouse + Vendor</option>
         <option value="INHOUSE">Inhouse Only</option>
@@ -133,14 +145,18 @@ function FilterBar() {
         style={{ minWidth: 200 }}
       />
 
-      <button className="filter-btn reset" onClick={handleReset}>✕ Reset</button>
-      
-      <span style={{
-        marginLeft: 'auto',
-        fontFamily: 'Share Tech Mono',
-        fontSize: 11,
-        color: 'var(--text-muted)'
-      }}>
+      <button className="filter-btn reset" onClick={handleReset}>
+        ✕ Reset
+      </button>
+
+      <span
+        style={{
+          marginLeft: 'auto',
+          fontFamily: 'Share Tech Mono',
+          fontSize: 11,
+          color: 'var(--text-muted)',
+        }}
+      >
         {filtered.length} items · {liveData.length} live · {data.length} db
       </span>
     </div>

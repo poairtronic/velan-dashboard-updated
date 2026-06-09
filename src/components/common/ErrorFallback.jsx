@@ -4,35 +4,39 @@ export default function ErrorFallback({ error, resetErrorBoundary }) {
   const isDevelopment = import.meta.env.MODE === 'development';
 
   return (
-    <div style={{
-      padding: 40,
-      fontFamily: 'Share Tech Mono, monospace',
-      color: '#ff3d5a',
-      background: '#050b14',
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center'
-    }}>
+    <div
+      style={{
+        padding: 40,
+        fontFamily: 'Share Tech Mono, monospace',
+        color: '#ff3d5a',
+        background: '#050b14',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <div style={{ fontSize: 24, marginBottom: 16 }}>⚠ Something went wrong.</div>
       <div style={{ fontSize: 14, color: '#7ba7cc', marginBottom: 24 }}>
         An unexpected error occurred while rendering this component.
       </div>
-      
+
       {isDevelopment && error && (
-        <div style={{
-          fontSize: 12,
-          color: '#3d6080',
-          background: 'rgba(255,61,90,0.08)',
-          border: '1px solid rgba(255,61,90,0.2)',
-          borderRadius: 8,
-          padding: 16,
-          maxWidth: '80%',
-          overflow: 'auto',
-          wordBreak: 'break-all',
-          marginBottom: 24
-        }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: '#3d6080',
+            background: 'rgba(255,61,90,0.08)',
+            border: '1px solid rgba(255,61,90,0.2)',
+            borderRadius: 8,
+            padding: 16,
+            maxWidth: '80%',
+            overflow: 'auto',
+            wordBreak: 'break-all',
+            marginBottom: 24,
+          }}
+        >
           <pre style={{ margin: 0 }}>{String(error.stack || error.message || error)}</pre>
         </div>
       )}
@@ -49,10 +53,10 @@ export default function ErrorFallback({ error, resetErrorBoundary }) {
             cursor: 'pointer',
             fontSize: 14,
             fontWeight: 'bold',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
           }}
-          onMouseOver={(e) => e.target.style.background = 'rgba(0,201,255,0.2)'}
-          onMouseOut={(e) => e.target.style.background = 'rgba(0,201,255,0.1)'}
+          onMouseOver={(e) => (e.target.style.background = 'rgba(0,201,255,0.2)')}
+          onMouseOut={(e) => (e.target.style.background = 'rgba(0,201,255,0.1)')}
         >
           🔄 Try Again
         </button>
@@ -67,10 +71,10 @@ export default function ErrorFallback({ error, resetErrorBoundary }) {
             cursor: 'pointer',
             fontSize: 14,
             fontWeight: 'bold',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
           }}
-          onMouseOver={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
-          onMouseOut={(e) => e.target.style.background = 'rgba(255,255,255,0.05)'}
+          onMouseOver={(e) => (e.target.style.background = 'rgba(255,255,255,0.1)')}
+          onMouseOut={(e) => (e.target.style.background = 'rgba(255,255,255,0.05)')}
         >
           Refresh Page
         </button>

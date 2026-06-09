@@ -15,8 +15,12 @@ export async function fetchDataUrl(sourceUrl) {
 
   const cleanPath = normalized.split('?')[0].toLowerCase();
   const queryText = normalized.toLowerCase();
-  const isCsvUrl  = cleanPath.endsWith('.csv') || /[?&](output|format)=csv([&#]|$)/.test(queryText) || isGoogleSheets;
-  const isJsonUrl = cleanPath.endsWith('.json') || /[?&](output|format)=json([&#]|$)/.test(queryText);
+  const isCsvUrl =
+    cleanPath.endsWith('.csv') ||
+    /[?&](output|format)=csv([&#]|$)/.test(queryText) ||
+    isGoogleSheets;
+  const isJsonUrl =
+    cleanPath.endsWith('.json') || /[?&](output|format)=json([&#]|$)/.test(queryText);
   const isExcelUrl = cleanPath.endsWith('.xlsx') || cleanPath.endsWith('.xls');
 
   if (isJsonUrl) {
@@ -26,7 +30,8 @@ export async function fetchDataUrl(sourceUrl) {
     return Array.isArray(parsed) ? parsed : [parsed];
   } else if (isCsvUrl) {
     const res = await apiClient(fetchUrl, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status} — make sure the sheet is shared "Anyone with the link"`);
+    if (!res.ok)
+      throw new Error(`HTTP ${res.status} — make sure the sheet is shared "Anyone with the link"`);
     const text = await res.text();
     // Raw CSV parsing to preserve Indian DD/MM date string format
     const rawAoA = parseRawCsv(text);

@@ -10,12 +10,18 @@ function parseRawCsv(text) {
   for (const line of lines) {
     if (!line.trim()) continue;
     const cells = [];
-    let inQuote = false, cell = '';
+    let inQuote = false,
+      cell = '';
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { cell += '"'; i++; }  // escaped ""
-        else { inQuote = !inQuote; }
+        if (inQuote && line[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } // escaped ""
+        else {
+          inQuote = !inQuote;
+        }
       } else if (ch === ',' && !inQuote) {
         cells.push(cell.trim());
         cell = '';
@@ -32,7 +38,10 @@ function parseRawCsv(text) {
 // Parse Velan-specific Excel format (merged cells / PO groups / no type column)
 function parseVelanExcel(rows) {
   const result = [];
-  let currentPO = '', currentPODate = '', currentSC = '', currentStage = '';
+  let currentPO = '',
+    currentPODate = '',
+    currentSC = '',
+    currentStage = '';
 
   for (const row of rows) {
     const v = (i) => {
@@ -40,11 +49,12 @@ function parseVelanExcel(rows) {
       if (val === undefined || val === null) return null;
       if (val instanceof Date) return val;
       const s = String(val).trim();
-      return (s === '' || s === 'nan') ? null : s;
+      return s === '' || s === 'nan' ? null : s;
     };
 
     // Skip header rows and title rows
-    const col1 = v(1); const col5 = v(5);
+    const col1 = v(1);
+    const col5 = v(5);
     if (!col5 || col5 === 'Product Name' || col5 === 'Customer Name') continue;
     if (col1 && (col1.includes('VELAN') || col1 === 'PO NO')) continue;
 
@@ -92,7 +102,10 @@ function parseVelanExcel(rows) {
 
 // Flat-row parser (generic CSV/Excel with headers)
 function parseGenericRows(rows) {
-  const norm = s => String(s || '').replace(/[\s\/\-_]+/g, '').toLowerCase();
+  const norm = (s) =>
+    String(s || '')
+      .replace(/[\s\/\-_]+/g, '')
+      .toLowerCase();
   const pickField = (r, candidates) => {
     for (const c of candidates) {
       const val = r[norm(c)];
@@ -101,55 +114,92 @@ function parseGenericRows(rows) {
     for (const c of candidates) {
       const word = norm(c);
       for (const k of Object.keys(r)) {
-        if (norm(k).includes(word) && r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '')
+        if (
+          norm(k).includes(word) &&
+          r[k] !== undefined &&
+          r[k] !== null &&
+          String(r[k]).trim() !== ''
+        )
           return String(r[k]).trim();
       }
     }
     return '';
   };
-  const normalizeHeaders = row => {
+  const normalizeHeaders = (row) => {
     const n = {};
-    Object.entries(row).forEach(([k, v]) => { n[norm(k)] = v; });
+    Object.entries(row).forEach(([k, v]) => {
+      n[norm(k)] = v;
+    });
     return n;
   };
-  return rows.map(raw => {
-    const r = normalizeHeaders(raw);
-    const product = pickField(r, ['product name', 'productname', 'product', 'item description', 'description']);
-    const typeRaw  = pickField(r, ['type', 'product type', 'producttype', 'dtype']);
-    const type     = typeRaw || inferType(product);
-    const inhouseRaw = pickField(r, ['inhouse/ vendor', 'inhouse/vendor', 'inhousevendor', 'inhouse vendor', 'inhouse', 'location', 'vendor status']);
-    const inhouse  = normalizeInhouse(inhouseRaw);
-    const status1 = pickField(r, ['status 1', 'status1', 'current operation', 'operation']);
-    const status2 = pickField(r, ['status 2', 'status2', 'next operation']);
-    const opStage = pickField(r, ['currentstage', 'current stage', 'stage', 'operation stage', 'current operation', 'op']);
-    return {
-      sc:           pickField(r, ['sc', 'sc no', 'sc#', 'scno']).replace(/\s+/g, ''),
-      po:           pickField(r, ['po no', 'pono', 'purchase order', 'purchaseorder']),
-      poDate:       toIsoDateString(pickField(r, ['po recd date', 'porecddate', 'po date', 'podate', 'date received', 'date'])),
-      product,
-      type,
-      status1,
-      status2,
-      inhouse,
-      currentStage: resolveLatestStage({ opStage, status1, status2 }),
-      timestamp:    normalizeTimestamp(pickField(r, ['timestamp', 'time stamp', 'last updated', 'op time'])),
-    };
-  }).filter(r => r.sc || r.po);
+  return rows
+    .map((raw) => {
+      const r = normalizeHeaders(raw);
+      const product = pickField(r, [
+        'product name',
+        'productname',
+        'product',
+        'item description',
+        'description',
+      ]);
+      const typeRaw = pickField(r, ['type', 'product type', 'producttype', 'dtype']);
+      const type = typeRaw || inferType(product);
+      const inhouseRaw = pickField(r, [
+        'inhouse/ vendor',
+        'inhouse/vendor',
+        'inhousevendor',
+        'inhouse vendor',
+        'inhouse',
+        'location',
+        'vendor status',
+      ]);
+      const inhouse = normalizeInhouse(inhouseRaw);
+      const status1 = pickField(r, ['status 1', 'status1', 'current operation', 'operation']);
+      const status2 = pickField(r, ['status 2', 'status2', 'next operation']);
+      const opStage = pickField(r, [
+        'currentstage',
+        'current stage',
+        'stage',
+        'operation stage',
+        'current operation',
+        'op',
+      ]);
+      return {
+        sc: pickField(r, ['sc', 'sc no', 'sc#', 'scno']).replace(/\s+/g, ''),
+        po: pickField(r, ['po no', 'pono', 'purchase order', 'purchaseorder']),
+        poDate: toIsoDateString(
+          pickField(r, ['po recd date', 'porecddate', 'po date', 'podate', 'date received', 'date'])
+        ),
+        product,
+        type,
+        status1,
+        status2,
+        inhouse,
+        currentStage: resolveLatestStage({ opStage, status1, status2 }),
+        timestamp: normalizeTimestamp(
+          pickField(r, ['timestamp', 'time stamp', 'last updated', 'op time'])
+        ),
+      };
+    })
+    .filter((r) => r.sc || r.po);
 }
 
 // Maps spreadsheet array of arrays to keys matching database expectations
 function parseRowsFromHeaderAoA(rawAoA) {
   if (!Array.isArray(rawAoA) || rawAoA.length === 0) return [];
 
-  const norm = s => String(s || '').replace(/[\s\/\-_]+/g, '').toLowerCase();
+  const norm = (s) =>
+    String(s || '')
+      .replace(/[\s\/\-_]+/g, '')
+      .toLowerCase();
 
   const findColumn = (row, exactAliases, containsAliases = []) => {
-    const normalized = row.map(c => norm(c));
+    const normalized = row.map((c) => norm(c));
     for (let i = 0; i < normalized.length; i++) {
       if (exactAliases.includes(normalized[i])) return i;
     }
     for (let i = 0; i < normalized.length; i++) {
-      if (containsAliases.some(a => normalized[i].includes(a))) return i;
+      if (containsAliases.some((a) => normalized[i].includes(a))) return i;
     }
     return undefined;
   };
@@ -162,15 +212,35 @@ function parseRowsFromHeaderAoA(rawAoA) {
       sc: findColumn(row, ['sc', 'scno', 'sc#']),
       po: findColumn(row, ['pono', 'purchaseorder'], ['pono']),
       poDate: findColumn(row, ['porecddate', 'podate', 'datereceived', 'date']),
-      product: findColumn(row, ['productname', 'product', 'itemdescription', 'description'], ['productname', 'itemdescription']),
+      product: findColumn(
+        row,
+        ['productname', 'product', 'itemdescription', 'description'],
+        ['productname', 'itemdescription']
+      ),
       status1: findColumn(row, ['status1', 'currentoperation', 'operation'], ['status1']),
       status2: findColumn(row, ['status2', 'nextoperation'], ['status2']),
-      inhouse: findColumn(row, ['inhousevendor', 'inhouse', 'location', 'vendorstatus'], ['inhousevendor']),
-      op: findColumn(row, ['op', 'currentstage', 'stage', 'operationstage'], ['currentstage', 'operationstage']),
-      timestamp: findColumn(row, ['timestamp', 'lastupdated', 'optime', 'datetime'], ['timestamp', 'lastupdated']),
+      inhouse: findColumn(
+        row,
+        ['inhousevendor', 'inhouse', 'location', 'vendorstatus'],
+        ['inhousevendor']
+      ),
+      op: findColumn(
+        row,
+        ['op', 'currentstage', 'stage', 'operationstage'],
+        ['currentstage', 'operationstage']
+      ),
+      timestamp: findColumn(
+        row,
+        ['timestamp', 'lastupdated', 'optime', 'datetime'],
+        ['timestamp', 'lastupdated']
+      ),
     };
 
-    if (probe.sc !== undefined && probe.product !== undefined && (probe.po !== undefined || probe.poDate !== undefined)) {
+    if (
+      probe.sc !== undefined &&
+      probe.product !== undefined &&
+      (probe.po !== undefined || probe.poDate !== undefined)
+    ) {
       headerRowIdx = i;
       headerMap = probe;
       break;
@@ -180,7 +250,9 @@ function parseRowsFromHeaderAoA(rawAoA) {
   if (headerRowIdx < 0) return [];
 
   const result = [];
-  let currentSC = '', currentPO = '', currentPODate = '';
+  let currentSC = '',
+    currentPO = '',
+    currentPODate = '';
   for (let i = headerRowIdx + 1; i < rawAoA.length; i++) {
     const row = rawAoA[i] || [];
     const getVal = (idx) => {
@@ -224,7 +296,7 @@ function parseRowsFromHeaderAoA(rawAoA) {
       timestamp,
     });
   }
-  return result.filter(r => r.sc || r.po);
+  return result.filter((r) => r.sc || r.po);
 }
 
 async function parseWorksheet(ws) {
@@ -232,11 +304,13 @@ async function parseWorksheet(ws) {
   const rawAoA = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
   const headerMapped = parseRowsFromHeaderAoA(rawAoA);
   if (headerMapped.length > 0) return headerMapped;
-  const isVelanFormat = rawAoA.slice(0, 5).some(row =>
-    row && row.some(cell => cell && String(cell).includes('VELAN METROLOGY'))
-  ) || rawAoA.slice(0, 6).some(row =>
-    row && row.some(cell => String(cell || '').trim() === 'SNO')
-  );
+  const isVelanFormat =
+    rawAoA
+      .slice(0, 5)
+      .some((row) => row && row.some((cell) => cell && String(cell).includes('VELAN METROLOGY'))) ||
+    rawAoA
+      .slice(0, 6)
+      .some((row) => row && row.some((cell) => String(cell || '').trim() === 'SNO'));
   if (isVelanFormat) return parseVelanExcel(rawAoA);
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
   return parseGenericRows(rows);

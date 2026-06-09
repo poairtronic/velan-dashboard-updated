@@ -16,7 +16,13 @@ const bcrypt = require('bcrypt');
 const SALT_ROUNDS = 10;
 
 // Security Middlewares and Schemas
-const { requireAuth, requireApiKey, serializeCookie, JWT_SECRET, JWT_REFRESH_SECRET } = require('./middleware/auth');
+const {
+  requireAuth,
+  requireApiKey,
+  serializeCookie,
+  JWT_SECRET,
+  JWT_REFRESH_SECRET,
+} = require('./middleware/auth');
 const { loginLimiter, uploadLimiter, adminLimiter } = require('./middleware/rateLimit');
 const { validateBody } = require('./middleware/validation');
 const { loginSchema, registerSchema } = require('./schemas/auth.schema');
@@ -60,23 +66,25 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  res.setHeader('Content-Security-Policy', 
+  res.setHeader(
+    'Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline'; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src 'self' https://fonts.gstatic.com; " +
-    "connect-src 'self' https://docs.google.com https://docs.googleusercontent.com; " +
-    "img-src 'self' data:; " +
-    "frame-ancestors 'none';"
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "connect-src 'self' https://docs.google.com https://docs.googleusercontent.com; " +
+      "img-src 'self' data:; " +
+      "frame-ancestors 'none';"
   );
 
   // ── CORS headers with Credentials support ─────────────────────────────────
   const origin = req.headers.origin || '';
   const allowedOrigin = process.env.ALLOWED_ORIGIN || '';
-  
+
   if (origin) {
     if (allowedOrigin) {
-      const isLocal = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+      const isLocal =
+        origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
       if (origin === allowedOrigin || isLocal) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -86,24 +94,44 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
   }
-  
+
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
-  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
 
   // ── Auth Routes ──────────────────────────────────────────────────────────
-  
+
   // GET /api/auth/me — retrieve user info from active cookie session
   if (pathname === '/api/auth/me' && req.method === 'GET') {
     if (!requireAuth(req, res)) return;
-    return sendJson(res, 200, { success: true, id: req.user.id, username: req.user.username, role: req.user.role });
+    return sendJson(res, 200, {
+      success: true,
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+    });
   }
 
   // POST /api/auth/logout — clear cookie session
   if (pathname === '/api/auth/logout' && req.method === 'POST') {
     res.setHeader('Set-Cookie', [
-      serializeCookie('vd_token', '', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 0 }),
-      serializeCookie('vd_refresh_token', '', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 0 })
+      serializeCookie('vd_token', '', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Lax',
+        path: '/',
+        maxAge: 0,
+      }),
+      serializeCookie('vd_refresh_token', '', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Lax',
+        path: '/',
+        maxAge: 0,
+      }),
     ]);
     return sendJson(res, 200, { success: true });
   }
@@ -130,16 +158,39 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 403, { error: 'Waiting for admin approval.', status: 'pending' });
         }
         if (user.status === 'denied') {
-          return sendJson(res, 403, { error: 'Your account request was denied by admin.', status: 'denied' });
+          return sendJson(res, 403, {
+            error: 'Your account request was denied by admin.',
+            status: 'denied',
+          });
         }
       }
 
-      const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
-      const refreshToken = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '15m' }
+      );
+      const refreshToken = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        JWT_REFRESH_SECRET,
+        { expiresIn: '7d' }
+      );
 
       res.setHeader('Set-Cookie', [
-        serializeCookie('vd_token', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 15 * 60 }),
-        serializeCookie('vd_refresh_token', refreshToken, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 7 * 24 * 60 * 60 })
+        serializeCookie('vd_token', token, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'Lax',
+          path: '/',
+          maxAge: 15 * 60,
+        }),
+        serializeCookie('vd_refresh_token', refreshToken, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'Lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60,
+        }),
       ]);
 
       return sendJson(res, 200, { id: user.id, role: user.role, username: user.username });
@@ -222,7 +273,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   // PUT /api/auth/users/:id/status — admin only
-  if (pathname.startsWith('/api/auth/users/') && pathname.endsWith('/status') && req.method === 'PUT') {
+  if (
+    pathname.startsWith('/api/auth/users/') &&
+    pathname.endsWith('/status') &&
+    req.method === 'PUT'
+  ) {
     if (!requireAuth(req, res, ['admin'])) return;
     if (!adminLimiter(req, res)) return;
     const parts = pathname.split('/');
@@ -241,14 +296,21 @@ const server = http.createServer(async (req, res) => {
         [status, id]
       );
       if (result.rows.length === 0) return sendJson(res, 404, { error: 'User not found' });
-      return sendJson(res, 200, { message: `User status updated to ${status}`, user: result.rows[0] });
+      return sendJson(res, 200, {
+        message: `User status updated to ${status}`,
+        user: result.rows[0],
+      });
     } catch (err) {
       return sendJson(res, 500, { error: 'Failed to update user status' });
     }
   }
 
   // DELETE /api/auth/users/:id — admin only (cannot delete self)
-  if (pathname.startsWith('/api/auth/users/') && req.method === 'DELETE' && !pathname.endsWith('/status')) {
+  if (
+    pathname.startsWith('/api/auth/users/') &&
+    req.method === 'DELETE' &&
+    !pathname.endsWith('/status')
+  ) {
     if (!requireAuth(req, res, ['admin'])) return;
     if (!adminLimiter(req, res)) return;
     const id = parseInt(pathname.split('/')[4], 10);
@@ -285,11 +347,25 @@ const server = http.createServer(async (req, res) => {
       }
 
       const token = jwt.sign({ id: 9999, username, role }, JWT_SECRET, { expiresIn: '15m' });
-      const refreshToken = jwt.sign({ id: 9999, username, role }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+      const refreshToken = jwt.sign({ id: 9999, username, role }, JWT_REFRESH_SECRET, {
+        expiresIn: '7d',
+      });
 
       res.setHeader('Set-Cookie', [
-        serializeCookie('vd_token', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 15 * 60 }),
-        serializeCookie('vd_refresh_token', refreshToken, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 7 * 24 * 60 * 60 })
+        serializeCookie('vd_token', token, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'Lax',
+          path: '/',
+          maxAge: 15 * 60,
+        }),
+        serializeCookie('vd_refresh_token', refreshToken, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'Lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60,
+        }),
       ]);
 
       return sendJson(res, 200, { success: true, id: 9999, role, username });
@@ -305,7 +381,7 @@ const server = http.createServer(async (req, res) => {
     { path: '/api/data', method: 'POST' },
     { path: '/api/data', method: 'DELETE' },
     { path: '/api/sync-sheet', method: 'POST' },
-    { path: '/api/migrate', method: 'POST' }
+    { path: '/api/migrate', method: 'POST' },
   ];
 
   const authRoutes = [
@@ -313,12 +389,16 @@ const server = http.createServer(async (req, res) => {
     { path: '/api/sync-status', method: 'GET' },
     { path: '/api/sheets', method: 'GET' },
     { path: '/api/config', method: 'GET' },
-    { path: '/api/security-status', method: 'GET' }
+    { path: '/api/security-status', method: 'GET' },
   ];
 
-  const isAdminRoute = adminOnlyRoutes.some(r => r.path === pathname && r.method === req.method);
-  const isAuthRoute = authRoutes.some(r => r.path === pathname && r.method === req.method) ||
-                      (pathname.startsWith('/api/') && req.method === 'GET' && pathname !== '/api/health' && pathname !== '/api/login');
+  const isAdminRoute = adminOnlyRoutes.some((r) => r.path === pathname && r.method === req.method);
+  const isAuthRoute =
+    authRoutes.some((r) => r.path === pathname && r.method === req.method) ||
+    (pathname.startsWith('/api/') &&
+      req.method === 'GET' &&
+      pathname !== '/api/health' &&
+      pathname !== '/api/login');
 
   if (isAdminRoute) {
     if (!requireAuth(req, res, ['admin'])) return;
@@ -354,9 +434,9 @@ const server = http.createServer(async (req, res) => {
 
   // ── Static files ──────────────────────────────────────────────────────────
   const projectRoot = path.resolve(__dirname, '..', '..');
-  const staticRoot  = path.join(projectRoot, 'dist');
+  const staticRoot = path.join(projectRoot, 'dist');
 
-  const staticFile  = path.join(staticRoot, pathname === '/' ? 'index.html' : pathname);
+  const staticFile = path.join(staticRoot, pathname === '/' ? 'index.html' : pathname);
 
   if (!staticFile.startsWith(staticRoot)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
@@ -365,23 +445,24 @@ const server = http.createServer(async (req, res) => {
 
   if (fs.existsSync(staticFile) && fs.statSync(staticFile).isFile()) {
     const ext = path.extname(staticFile);
-    const mime = {
-      '.html':  'text/html',
-      '.js':    'text/javascript',
-      '.jsx':   'text/javascript',
-      '.mjs':   'text/javascript',
-      '.css':   'text/css',
-      '.json':  'application/json',
-      '.svg':   'image/svg+xml',
-      '.png':   'image/png',
-      '.jpg':   'image/jpeg',
-      '.jpeg':  'image/jpeg',
-      '.ico':   'image/x-icon',
-      '.woff':  'font/woff',
-      '.woff2': 'font/woff2',
-      '.ttf':   'font/ttf',
-      '.map':   'application/json',
-    }[ext] || 'application/octet-stream';
+    const mime =
+      {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.jsx': 'text/javascript',
+        '.mjs': 'text/javascript',
+        '.css': 'text/css',
+        '.json': 'application/json',
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.ico': 'image/x-icon',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.ttf': 'font/ttf',
+        '.map': 'application/json',
+      }[ext] || 'application/octet-stream';
     res.writeHead(200, { 'Content-Type': mime });
     return res.end(fs.readFileSync(staticFile));
   }
@@ -400,7 +481,9 @@ const server = http.createServer(async (req, res) => {
 // ── Startup: init Neon table → load rows → start listening ───────────────────
 async function startup() {
   if (isMock) {
-    console.warn('\n[WARNING] DATABASE_URL is not set or set to mock. Running with in-memory MockPool database.');
+    console.warn(
+      '\n[WARNING] DATABASE_URL is not set or set to mock. Running with in-memory MockPool database.'
+    );
   } else {
     console.log('\n[DB] Connecting to Neon PostgreSQL…');
   }
@@ -408,7 +491,9 @@ async function startup() {
 
   // Run migration check automatically at startup
   try {
-    const checkRes = await pool.query("SELECT COUNT(*) FROM velan_rows WHERE row_key LIKE '%||%||%||%||%'");
+    const checkRes = await pool.query(
+      "SELECT COUNT(*) FROM velan_rows WHERE row_key LIKE '%||%||%||%||%'"
+    );
     if (Number(checkRes.rows[0].count) > 0) {
       console.log('[DB] Migration needed: Converting old row keys and deduplicating...');
       await runKeyMigration();
@@ -419,7 +504,9 @@ async function startup() {
 
   // Load last sync timestamp from logs
   try {
-    const syncRes = await pool.query("SELECT created_at FROM sync_logs WHERE status = 'success' ORDER BY created_at DESC LIMIT 1");
+    const syncRes = await pool.query(
+      "SELECT created_at FROM sync_logs WHERE status = 'success' ORDER BY created_at DESC LIMIT 1"
+    );
     if (syncRes.rows.length > 0) {
       state._lastSync = new Date(syncRes.rows[0].created_at).toLocaleString('en-IN');
     }
@@ -428,9 +515,14 @@ async function startup() {
   state._db = await loadDB();
   const liveDb = await loadLiveDB();
   state._liveRows = liveDb;
-  console.log(`[DB] Loaded ${state._db.length} archive rows and ${state._liveRows.length} live rows from Neon`);
+  console.log(
+    `[DB] Loaded ${state._db.length} archive rows and ${state._liveRows.length} live rows from Neon`
+  );
   console.log('[STATIC] Serving from:', path.resolve(__dirname, '..', '..', 'dist'));
-  console.log('[STATIC] index.html exists:', fs.existsSync(path.join(path.resolve(__dirname, '..', '..', 'dist'), 'index.html')));
+  console.log(
+    '[STATIC] index.html exists:',
+    fs.existsSync(path.join(path.resolve(__dirname, '..', '..', 'dist'), 'index.html'))
+  );
 
   server.listen(PORT, () => {
     console.log(`\n┌─────────────────────────────────────────────────┐`);
@@ -443,14 +535,18 @@ async function startup() {
     console.log(`│  Health: http://localhost:${PORT}/api/health        │`);
     console.log(`└─────────────────────────────────────────────────┘`);
     console.log(`  Storage: Neon PostgreSQL (no local file needed)`);
-    console.log(`  DB rows: ${state._db.length} archive rows | ${state._liveRows.length} live rows`);
-    console.log(`  LIVE_URL:    ${LIVE_URL    ? LIVE_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
-    console.log(`  HISTORY_URL: ${HISTORY_URL ? HISTORY_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
+    console.log(
+      `  DB rows: ${state._db.length} archive rows | ${state._liveRows.length} live rows`
+    );
+    console.log(`  LIVE_URL:    ${LIVE_URL ? LIVE_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
+    console.log(
+      `  HISTORY_URL: ${HISTORY_URL ? HISTORY_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`
+    );
     console.log('');
   });
 }
 
-startup().catch(err => {
+startup().catch((err) => {
   console.error('[STARTUP FAILED]', err.message);
   process.exit(1);
 });
@@ -466,4 +562,4 @@ async function gracefulShutdown(signal) {
   setTimeout(() => process.exit(1), 5000);
 }
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

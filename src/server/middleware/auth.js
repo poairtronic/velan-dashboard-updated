@@ -1,13 +1,14 @@
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'velan_secret_default_key_123456';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'velan_refresh_secret_default_key_789012';
+const JWT_REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET || 'velan_refresh_secret_default_key_789012';
 
 function parseCookies(req) {
   const list = {};
   const cookieHeader = req.headers.cookie;
   if (!cookieHeader) return list;
-  cookieHeader.split(';').forEach(cookie => {
+  cookieHeader.split(';').forEach((cookie) => {
     let [name, ...rest] = cookie.split('=');
     name = name.trim();
     if (!name) return;
@@ -57,23 +58,23 @@ function authenticate(req, res) {
   if (refreshToken) {
     try {
       const decodedRefresh = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
-      
+
       // Generate new access token
       const newAccessToken = jwt.sign(
         { id: decodedRefresh.id, username: decodedRefresh.username, role: decodedRefresh.role },
         JWT_SECRET,
         { expiresIn: '15m' }
       );
-      
+
       // Set new access token cookie
       const accessCookie = serializeCookie('vd_token', newAccessToken, {
         httpOnly: true,
         secure: true,
         sameSite: 'Lax',
         path: '/',
-        maxAge: 15 * 60 // 15 minutes
+        maxAge: 15 * 60, // 15 minutes
       });
-      
+
       res.setHeader('Set-Cookie', accessCookie);
       req.user = decodedRefresh;
       return true;

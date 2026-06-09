@@ -13,12 +13,14 @@ async function handleHealthRoute(req, res, pathname) {
     }
     const uptime = Math.round(process.uptime()) + 's';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({
-      database,
-      rows,
-      lastSync: state._lastSync || 'never',
-      uptime,
-    }));
+    return res.end(
+      JSON.stringify({
+        database,
+        rows,
+        lastSync: state._lastSync || 'never',
+        uptime,
+      })
+    );
   }
 }
 
