@@ -21,7 +21,7 @@ function useLiveSync(liveConfig, syncLiveDataNow) {
     }, sec * 1000);
 
     return () => clearInterval(timer);
-  }, [user, liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec, syncLiveDataNow]);
+  }, [isAdmin, liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec, syncLiveDataNow]);
 }
 
 export default useLiveSync;
