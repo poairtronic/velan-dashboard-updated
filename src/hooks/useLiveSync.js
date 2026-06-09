@@ -4,6 +4,11 @@ import { useAuth } from './useAuth';
 
 function useLiveSync(liveConfig, syncLiveDataNow) {
   const { isAdmin } = useAuth();
+  const syncRef = React.useRef(syncLiveDataNow);
+
+  React.useEffect(() => {
+    syncRef.current = syncLiveDataNow;
+  }, [syncLiveDataNow]);
 
   React.useEffect(() => {
     if (!isAdmin) return;
@@ -13,15 +18,15 @@ function useLiveSync(liveConfig, syncLiveDataNow) {
 
     const sec = Math.max(30, Number(liveConfig.intervalSec) || 300);
     // Initial sync
-    syncLiveDataNow(url);
+    syncRef.current(url);
 
     // Setup periodic polling interval
     const timer = setInterval(() => {
-      syncLiveDataNow(url);
+      syncRef.current(url);
     }, sec * 1000);
 
     return () => clearInterval(timer);
-  }, [isAdmin, liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec, syncLiveDataNow]);
+  }, [isAdmin, liveConfig?.enabled, liveConfig?.url, liveConfig?.intervalSec]);
 }
 
 export default useLiveSync;
