@@ -61,6 +61,7 @@ function FilterBar() {
       
       <select
         className="filter-select"
+        aria-label="Filter by PO"
         value={filters.po}
         onChange={e => setFilters(f => ({ ...f, po: e.target.value }))}
       >
@@ -70,6 +71,7 @@ function FilterBar() {
 
       <select
         className="filter-select"
+        aria-label="Filter by Stage"
         value={filters.stage}
         onChange={e => setFilters(f => ({ ...f, stage: e.target.value }))}
       >
@@ -79,6 +81,7 @@ function FilterBar() {
 
       <select
         className="filter-select"
+        aria-label="Filter by Type"
         value={filters.type}
         onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
       >
@@ -88,6 +91,7 @@ function FilterBar() {
 
       <select
         className="filter-select"
+        aria-label="Filter by Category"
         value={filters.category}
         onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
       >
@@ -99,6 +103,7 @@ function FilterBar() {
 
       <select
         className="filter-select"
+        aria-label="Filter by Inhouse or Vendor"
         value={filters.inhouse}
         onChange={e => setFilters(f => ({ ...f, inhouse: e.target.value }))}
       >
@@ -109,6 +114,7 @@ function FilterBar() {
 
       <input
         className="filter-input"
+        aria-label="Search"
         placeholder="Search SC / Product / PO..."
         value={searchInput}
         onChange={handleSearchChange}
