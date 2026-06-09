@@ -18,6 +18,7 @@ import DataTable from '../components/DataTable';
 
 function UploadPage() {
   const {
+    data = [],
     uploadStatus,
     setUploadStatus,
     importState,
