@@ -10,7 +10,9 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css,html}\"",
-    "format:check": "prettier --check \"src/**/*.{js,jsx,css,html}\""
+    "format:check": "prettier --check \"src/**/*.{js,jsx,css,html}\"",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "dashboard",
@@ -20,6 +22,9 @@
   "author": "Velan Metrology",
   "license": "ISC",
   "dependencies": {
+    "@sentry/browser": "^10.57.0",
+    "@sentry/react": "^10.57.0",
+    "@tanstack/react-query": "^5.101.0",
     "@vitejs/plugin-react": "^4.2.0",
     "bcrypt": "^6.0.0",
     "chart.js": "^4.4.1",
@@ -27,6 +32,7 @@
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.5.28",
     "lodash": "^4.18.1",
+    "logrocket": "^12.1.1",
     "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -38,11 +44,18 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
-    "rollup-plugin-visualizer": "^7.0.1"
+    "rollup-plugin-visualizer": "^7.0.1",
+    "vitest": "^4.1.8"
   }
 }

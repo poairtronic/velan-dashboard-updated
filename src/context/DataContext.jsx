@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import { useFilters } from './FilterContext';
 import { useUI } from './UIContext';
@@ -86,68 +87,99 @@ export function DataProvider({ children }) {
     setHistoryConfig,
   });
 
+  const queryClient = useQueryClient();
+
+  const saveRowsMutation = useMutation({
+    mutationFn: ({ rows, syncType }) => saveRows(rows, syncType),
+    onSuccess: (result, variables) => {
+      if (result && result.success) {
+        if (result.lastSync) setLastSync(result.lastSync);
+        queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
+        setUploadStatus({
+          type: 'success',
+          msg: `✅ Saved ${variables.rows.length} rows to live dashboard`,
+          detail: `Live: ${result.liveTotal} rows | DB: ${result.total} rows total (+${result.newRows || 0} new entries added to Database).`,
+        });
+        toast.success('Live dashboard data saved.');
+      }
+    },
+    onError: (err) => {
+      logger.error('saveRowsToServer failed:', err);
+      setUploadStatus({
+        type: 'warn',
+        msg: '⚠ Backend save failed',
+        detail: 'Data is loaded locally, but backend storage is unavailable.',
+      });
+      toast.error('Failed to save data to backend.');
+    }
+  });
+
+  const importRowsMutation = useMutation({
+    mutationFn: (rows) => importRows(rows),
+    onSuccess: (result) => {
+      const msg = result.success
+        ? '✅ Imported ' +
+          result.imported +
+          ' new rows to DB (' +
+          result.skipped +
+          ' duplicates skipped). Total DB: ' +
+          result.total
+        : '❌ Import failed';
+      setImportState({ loading: false, lastMsg: msg });
+      if (result.success) toast.success('Data imported to history successfully.');
+      else toast.error('Import failed.');
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
+    },
+    onError: (err) => {
+      logger.error('importRowsToDb failed:', err);
+      setImportState({ loading: false, lastMsg: '❌ ' + String(err.message || err) });
+      toast.error('Failed to import data: ' + (err.message || String(err)));
+    }
+  });
+
+  const resetDBMutation = useMutation({
+    mutationFn: () => resetDB(),
+    onSuccess: (json) => {
+      if (json.success) {
+        setData([]);
+        setImportState({
+          loading: false,
+          lastMsg:
+            '✅ Database cleared. All history rows deleted. Re-import your dataset using History Import above.',
+        });
+        toast.success('Database cleared.');
+        queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
+      } else {
+        setImportState({
+          loading: false,
+          lastMsg: '❌ Reset failed: ' + (json.error || 'Unknown error'),
+        });
+        toast.error('Reset failed: ' + (json.error || 'Unknown error'));
+      }
+    },
+    onError: (err) => {
+      logger.error('resetDBAction failed:', err);
+      setImportState({ loading: false, lastMsg: '❌ Reset error: ' + String(err) });
+      toast.error('Reset error: ' + String(err));
+    }
+  });
+
   // Network actions
   const saveRowsToServer = useCallback(
     (rows, syncType = 'Manual Upload') => {
       if (!rows || rows.length === 0) return;
-      saveRows(rows, syncType)
-        .then((result) => {
-          if (result && result.success) {
-            if (result.lastSync) setLastSync(result.lastSync);
-            return fetchData().then((payload) => {
-              setData(Array.isArray(payload.rows) ? payload.rows : []);
-              setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
-              setUploadStatus({
-                type: 'success',
-                msg: `✅ Saved ${rows.length} rows to live dashboard`,
-                detail: `Live: ${result.liveTotal} rows | DB: ${result.total} rows total (+${result.newRows || 0} new entries added to Database).`,
-              });
-              toast.success('Live dashboard data saved.');
-            });
-          }
-        })
-        .catch((err) => {
-          logger.error('saveRowsToServer failed:', err);
-          setUploadStatus({
-            type: 'warn',
-            msg: '⚠ Backend save failed',
-            detail: 'Data is loaded locally, but backend storage is unavailable.',
-          });
-          toast.error('Failed to save data to backend.');
-        });
+      saveRowsMutation.mutate({ rows, syncType });
     },
-    [setUploadStatus]
+    [saveRowsMutation]
   );
 
   const importRowsToDb = useCallback(
     (rows) => {
       if (!rows || rows.length === 0) return;
       setImportState({ loading: true, lastMsg: 'Importing…' });
-
-      importRows(rows)
-        .then((result) => {
-          const msg = result.success
-            ? '✅ Imported ' +
-              result.imported +
-              ' new rows to DB (' +
-              result.skipped +
-              ' duplicates skipped). Total DB: ' +
-              result.total
-            : '❌ Import failed';
-          setImportState({ loading: false, lastMsg: msg });
-          if (result.success) toast.success('Data imported to history successfully.');
-          else toast.error('Import failed.');
-          return fetchData().then((payload) => {
-            setData(Array.isArray(payload.rows) ? payload.rows : []);
-          });
-        })
-        .catch((err) => {
-          logger.error('importRowsToDb failed:', err);
-          setImportState({ loading: false, lastMsg: '❌ ' + String(err.message || err) });
-          toast.error('Failed to import data: ' + (err.message || String(err)));
-        });
+      importRowsMutation.mutate(rows);
     },
-    [setImportState]
+    [importRowsMutation, setImportState]
   );
 
   const syncHistorySheet = useCallback(async () => {
@@ -174,7 +206,7 @@ export function DataProvider({ children }) {
     }
   }, [historyConfig.url, importRowsToDb, setImportState]);
 
-  const resetDBAction = useCallback(async () => {
+  const resetDBAction = useCallback(() => {
     if (
       !window.confirm(
         '⚠️ DANGER: This will permanently DELETE ALL rows from the Neon database.\n\nThis CANNOT be undone.\n\nClick OK only if you want to clear history and start fresh.'
@@ -182,33 +214,8 @@ export function DataProvider({ children }) {
     )
       return;
     setImportState({ loading: true, lastMsg: '⏳ Clearing database…' });
-
-    try {
-      const json = await resetDB();
-      if (json.success) {
-        setData([]);
-        setImportState({
-          loading: false,
-          lastMsg:
-            '✅ Database cleared. All history rows deleted. Re-import your 2K dataset using History Import above.',
-        });
-        toast.success('Database cleared.');
-      } else {
-        setImportState({
-          loading: false,
-          lastMsg: '❌ Reset failed: ' + (json.error || 'Unknown error'),
-        });
-        toast.error('Reset failed: ' + (json.error || 'Unknown error'));
-      }
-    } catch (err) {
-      logger.error('resetDBAction failed:', err);
-      setImportState({ loading: false, lastMsg: '❌ Reset error: ' + String(err) });
-      toast.error('Reset error: ' + String(err));
-    } finally {
-      // Ensure loading state is reset if it wasn't already
-      setImportState((prev) => ({ ...prev, loading: false }));
-    }
-  }, [setImportState]);
+    resetDBMutation.mutate();
+  }, [resetDBMutation, setImportState]);
 
   const uploadHandlers = useUploadHandlers({
     setLiveRows,

@@ -1,8 +1,5 @@
-/**
- * Centralized logging utility
- * Abstracts console methods and provides a foundation for future integration
- * with error monitoring tools like Sentry, Datadog, etc.
- */
+import * as Sentry from '@sentry/react';
+import LogRocket from 'logrocket';
 
 const isDevelopment = import.meta.env.MODE === 'development';
 
@@ -10,12 +7,17 @@ class Logger {
   info(message, data) {
     if (isDevelopment) {
       console.log(`[INFO] ${message}`, data || '');
+    } else {
+      LogRocket.info(message, data);
     }
   }
 
   warn(message, data) {
     if (isDevelopment) {
       console.warn(`[WARN] ${message}`, data || '');
+    } else {
+      LogRocket.warn(message, data);
+      Sentry.captureMessage(message, 'warning');
     }
   }
 
@@ -23,9 +25,19 @@ class Logger {
     if (isDevelopment) {
       console.error(`[ERROR] ${message}`, error, context);
     } else {
-      // Production logging hook (e.g., Sentry.captureException)
-      // For now, fallback to console.error
-      console.error(`[ERROR] ${message}`, error, context);
+      LogRocket.error(message, error, context);
+      Sentry.captureException(error, {
+        extra: {
+          message,
+          ...context,
+        }
+      });
+    }
+  }
+
+  debug(message, data) {
+    if (isDevelopment) {
+      console.debug(`[DEBUG] ${message}`, data || '');
     }
   }
 }

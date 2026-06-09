@@ -51,7 +51,7 @@ function FilterBar() {
     resetFilters(); // clear all context filters
   }, [debouncedSearch, resetFilters]);
 
-  if (activeNav === 'database' || activeNav === 'upload') {
+  if (activeNav === 'database' || activeNav === 'upload' || activeNav === 'users') {
     return null;
   }
 
