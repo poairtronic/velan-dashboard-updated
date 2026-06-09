@@ -8,8 +8,6 @@ import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
-import ErrorBoundary from '../components/ErrorBoundary';
-
 // Helper for stage gradients
 const getStageGradient = (stage) => {
   const color = getStageColor(stage);

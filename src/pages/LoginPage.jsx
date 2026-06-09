@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { toast } from 'react-hot-toast';
+import { logger } from '../utils/logger';
+import { apiClient } from '../services/apiClient';
 
 function IconShield({ size = 16 }) {
   return (
@@ -372,16 +375,13 @@ function LoginPage() {
     setLoading(true);
     try {
       const apiBase = import.meta.env.VITE_API_BASE || '';
-      const res = await fetch(`${apiBase}/api/auth/register`, {
+      await apiClient(`${apiBase}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
       setSuccess('Your account is awaiting admin approval.');
+      toast.success('Registration submitted for approval.');
       setPassword('');
       setConfirmPassword('');
       setTimeout(() => {
@@ -390,7 +390,9 @@ function LoginPage() {
         setApprovalStatus('pending');
       }, 2000);
     } catch (err) {
+      logger.error('Registration failed:', err);
       setError(err.message || 'Registration failed');
+      toast.error(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

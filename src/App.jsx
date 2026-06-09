@@ -5,7 +5,8 @@ import { ThemeProvider } from './context/ThemeContext';
 import { UIProvider, useUI } from './context/UIContext';
 import { FilterProvider } from './context/FilterContext';
 import { DataProvider } from './context/DataContext';
-import ErrorBoundary from './components/ErrorBoundary';
+import AppErrorBoundary from './components/common/AppErrorBoundary';
+import { Toaster } from 'react-hot-toast';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import FilterBar from './components/FilterBar';
@@ -52,6 +53,14 @@ function AppRoutes() {
   );
 }
 
+const RouteWrapper = ({ children }) => (
+  <AppErrorBoundary>
+    <Suspense fallback={<LoadingScreen />}>
+      {children}
+    </Suspense>
+  </AppErrorBoundary>
+);
+
 function DashboardLayout() {
   const { isLoading } = useUI();
 
@@ -68,32 +77,30 @@ function DashboardLayout() {
           {isLoading ? (
             <LoadingScreen />
           ) : (
-            <Suspense fallback={<LoadingScreen />}>
-              <Routes>
-                <Route path="/" element={<OverviewPage />} />
-                <Route path="/overview" element={<Navigate to="/" replace />} />
-                <Route path="/monthday" element={<MonthDayPage />} />
-                <Route path="/database" element={<DatabasePage />} />
-                <Route path="/production" element={<ProductionPage />} />
-                <Route path="/wip" element={<WIPPage />} />
-                <Route path="/cycleTime" element={<CycleTimePage />} />
-                <Route path="/bottleneck" element={<BottleneckPage />} />
-                <Route path="/po" element={<POPage />} />
-                <Route path="/sc" element={<SCPage />} />
-                <Route path="/vendor" element={<VendorPage />} />
-                <Route path="/users" element={
-                  <ProtectedRoute adminOnly={true}>
-                    <UserManagementPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/upload" element={
-                  <ProtectedRoute adminOnly={true}>
-                    <UploadPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
+            <Routes>
+              <Route path="/" element={<RouteWrapper><OverviewPage /></RouteWrapper>} />
+              <Route path="/overview" element={<Navigate to="/" replace />} />
+              <Route path="/monthday" element={<RouteWrapper><MonthDayPage /></RouteWrapper>} />
+              <Route path="/database" element={<RouteWrapper><DatabasePage /></RouteWrapper>} />
+              <Route path="/production" element={<RouteWrapper><ProductionPage /></RouteWrapper>} />
+              <Route path="/wip" element={<RouteWrapper><WIPPage /></RouteWrapper>} />
+              <Route path="/cycleTime" element={<RouteWrapper><CycleTimePage /></RouteWrapper>} />
+              <Route path="/bottleneck" element={<RouteWrapper><BottleneckPage /></RouteWrapper>} />
+              <Route path="/po" element={<RouteWrapper><POPage /></RouteWrapper>} />
+              <Route path="/sc" element={<RouteWrapper><SCPage /></RouteWrapper>} />
+              <Route path="/vendor" element={<RouteWrapper><VendorPage /></RouteWrapper>} />
+              <Route path="/users" element={
+                <ProtectedRoute adminOnly={true}>
+                  <RouteWrapper><UserManagementPage /></RouteWrapper>
+                </ProtectedRoute>
+              } />
+              <Route path="/upload" element={
+                <ProtectedRoute adminOnly={true}>
+                  <RouteWrapper><UploadPage /></RouteWrapper>
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           )}
         </div>
       </div>
@@ -103,7 +110,24 @@ function DashboardLayout() {
 
 function App() {
   return (
-    <ErrorBoundary>
+    <AppErrorBoundary>
+      <Toaster 
+        position="top-right" 
+        toastOptions={{
+          style: {
+            background: '#050b14',
+            color: '#e2e8f0',
+            border: '1px solid rgba(0,201,255,0.2)',
+            fontFamily: 'Share Tech Mono, monospace',
+          },
+          success: {
+            iconTheme: { primary: '#00c9ff', secondary: '#050b14' },
+          },
+          error: {
+            iconTheme: { primary: '#ff3d5a', secondary: '#050b14' },
+          },
+        }} 
+      />
       <AuthProvider>
         <ThemeProvider>
           <UIProvider>
@@ -115,7 +139,7 @@ function App() {
           </UIProvider>
         </ThemeProvider>
       </AuthProvider>
-    </ErrorBoundary>
+    </AppErrorBoundary>
   );
 }
 

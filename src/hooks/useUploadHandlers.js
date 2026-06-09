@@ -2,6 +2,8 @@ import React from 'react';
 import { inferType } from '../services/dataNormalizer';
 import { normalizeRow } from '../utils/normalizeRow';
 import { parseWorksheet, parseRawCsv, parseRowsFromHeaderAoA } from '../services/excelParser';
+import { toast } from 'react-hot-toast';
+import { logger } from '../utils/logger';
 // ─── FILE UPLOAD HANDLERS HOOK ───────────────────────────────────────────────
 
 function useUploadHandlers(options) {
@@ -54,7 +56,9 @@ function useUploadHandlers(options) {
           rows.forEach(r => { if (!r.type) r.type = inferType(r.product || r['Product Name'] || ''); });
           finalizeRows(rows, file.name);
         } catch (err) {
+          logger.error('Failed to parse JSON:', err);
           setUploadStatus({ type: 'error', msg: 'Invalid JSON.', detail: String(err) });
+          toast.error('Invalid JSON file.');
         }
       };
       reader.readAsText(file);
@@ -67,7 +71,9 @@ function useUploadHandlers(options) {
           const parsedRows = await parseWorksheet(ws);
           finalizeRows(parsedRows, file.name);
         } catch (err) {
+          logger.error('Failed to read Excel:', err);
           setUploadStatus({ type: 'error', msg: 'Failed to read Excel.', detail: String(err) });
+          toast.error('Failed to read Excel file.');
         }
       };
       reader.readAsArrayBuffer(file);
@@ -78,7 +84,9 @@ function useUploadHandlers(options) {
           const rows   = parseRowsFromHeaderAoA(rawAoA);
           finalizeRows(rows, file.name);
         } catch (err) {
+          logger.error('Failed to parse CSV:', err);
           setUploadStatus({ type: 'error', msg: 'Failed to parse CSV.', detail: String(err) });
+          toast.error('Failed to parse CSV file.');
         }
       };
       reader.readAsText(file);
@@ -115,7 +123,9 @@ function useUploadHandlers(options) {
           rows.forEach(r => { if (!r.type) r.type = inferType(r.product || r['Product Name'] || ''); });
           processRows(rows);
         } catch (err) {
+          logger.error('Invalid JSON:', err);
           setImportState({ loading: false, lastMsg: '❌ Invalid JSON: ' + String(err) });
+          toast.error('Invalid JSON file.');
         }
       };
       reader.readAsText(file);
@@ -128,7 +138,9 @@ function useUploadHandlers(options) {
           const parsedRows = await parseWorksheet(ws);
           processRows(parsedRows);
         } catch (err) {
+          logger.error('Failed to read Excel:', err);
           setImportState({ loading: false, lastMsg: '❌ Failed to read Excel: ' + String(err) });
+          toast.error('Failed to read Excel file.');
         }
       };
       reader.readAsArrayBuffer(file);
@@ -139,7 +151,9 @@ function useUploadHandlers(options) {
           const rows = parseRowsFromHeaderAoA(rawAoA);
           processRows(rows);
         } catch (err) {
+          logger.error('Failed to parse CSV:', err);
           setImportState({ loading: false, lastMsg: '❌ Failed to parse CSV: ' + String(err) });
+          toast.error('Failed to parse CSV file.');
         }
       };
       reader.readAsText(file);

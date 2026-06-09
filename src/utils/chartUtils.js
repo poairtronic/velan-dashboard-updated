@@ -45,6 +45,25 @@ function useChart(ref, config, deps) {
       const existing = chartRef.current;
       const typeMatch = existing && existing.config.type === config.type;
 
+      // ── EMPTY DATA CHECK ─────────────────────────────────────────────────────
+      const hasData = config.data?.datasets?.some(ds => ds.data?.length > 0 && ds.data.some(v => v !== null && v !== undefined));
+      if (!hasData) {
+        if (existing) {
+          try { existing.destroy(); } catch (_) {}
+          chartRef.current = null;
+        }
+        const ctx = ref.current.getContext('2d');
+        const w = ref.current.width;
+        const h = ref.current.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '14px "Share Tech Mono"';
+        ctx.fillStyle = isLight ? '#9ca3af' : '#7ba7cc';
+        ctx.fillText('No Data Available', w / 2, h / 2);
+        return;
+      }
+
       // ── REUSE PATH: same chart type, no theme change ─────────────────────────
       if (existing && typeMatch && !themeChanged) {
         // Update datasets in-place without destroying the instance

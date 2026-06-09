@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { toast } from 'react-hot-toast';
+import { logger } from '../utils/logger';
+import { apiClient } from '../services/apiClient';
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
 
@@ -15,14 +18,11 @@ function UserManagementPage() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch(`${apiBase}/api/auth/users`, {
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      });
-      if (!res.ok) throw new Error('Failed to fetch');
+      const res = await apiClient(`${apiBase}/api/auth/users`);
       const data = await res.json();
       setUsers(data);
-    } catch {
+    } catch (err) {
+      logger.error('Failed to load users:', err);
       setMsg({ type: 'error', text: 'Failed to load users' });
     }
   }, []);
@@ -36,22 +36,22 @@ function UserManagementPage() {
     setMsg(null);
     setLoading(true);
     try {
-      const res = await fetch(`${apiBase}/api/auth/admin-create`, {
+      await apiClient(`${apiBase}/api/auth/admin-create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role }),
-        credentials: 'include'
+        body: JSON.stringify({ username, password, role })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create user');
       setMsg({ type: 'success', text: `User "${username}" created successfully` });
+      toast.success(`User "${username}" created successfully.`);
       setUsername('');
       setPassword('');
       setRole('user');
       fetchUsers();
       window.dispatchEvent(new CustomEvent('pending-users-updated'));
     } catch (err) {
+      logger.error('Create user failed:', err);
       setMsg({ type: 'error', text: err.message });
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -60,19 +60,19 @@ function UserManagementPage() {
   const handleUpdateStatus = async (id, status, targetUsername) => {
     setMsg(null);
     try {
-      const res = await fetch(`${apiBase}/api/auth/users/${id}/status`, {
+      await apiClient(`${apiBase}/api/auth/users/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-        credentials: 'include'
+        body: JSON.stringify({ status })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Failed to update status to ${status}`);
       setMsg({ type: 'success', text: `User "${targetUsername}" has been ${status === 'approved' ? 'approved' : 'denied'}` });
+      toast.success(`User status updated to ${status}.`);
       fetchUsers();
       window.dispatchEvent(new CustomEvent('pending-users-updated'));
     } catch (err) {
+      logger.error('Update status failed:', err);
       setMsg({ type: 'error', text: err.message });
+      toast.error(err.message);
     }
   };
 
@@ -80,20 +80,17 @@ function UserManagementPage() {
     if (!window.confirm(`Delete user "${delUsername}"?`)) return;
     setMsg(null);
     try {
-      const res = await fetch(`${apiBase}/api/auth/users/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
+      await apiClient(`${apiBase}/api/auth/users/${id}`, {
+        method: 'DELETE'
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to delete');
-      }
       setMsg({ type: 'success', text: `User "${delUsername}" deleted` });
+      toast.success(`User "${delUsername}" deleted.`);
       fetchUsers();
       window.dispatchEvent(new CustomEvent('pending-users-updated'));
     } catch (err) {
+      logger.error('Delete user failed:', err);
       setMsg({ type: 'error', text: err.message });
+      toast.error(err.message);
     }
   };
 

@@ -11,7 +11,8 @@ import useDashboardData from '../hooks/useDashboardData';
 import useLiveSync from '../hooks/useLiveSync';
 import useUploadHandlers from '../hooks/useUploadHandlers';
 import { normalizeGoogleSheetsUrl } from '../services/googleSheets';
-
+import { toast } from 'react-hot-toast';
+import { logger } from '../utils/logger';
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
@@ -74,15 +75,18 @@ export function DataProvider({ children }) {
               msg: `✅ Saved ${rows.length} rows to live dashboard`,
               detail: `Live: ${result.liveTotal} rows | DB: ${result.total} rows total (+${result.newRows || 0} new entries added to Database).`,
             });
+            toast.success('Live dashboard data saved.');
           });
         }
       })
       .catch(err => {
+        logger.error('saveRowsToServer failed:', err);
         setUploadStatus({
           type: 'warn',
           msg: '⚠ Backend save failed',
           detail: 'Data is loaded locally, but backend storage is unavailable.',
         });
+        toast.error('Failed to save data to backend.');
       });
   }, [setUploadStatus]);
 
@@ -96,12 +100,16 @@ export function DataProvider({ children }) {
           ? '✅ Imported ' + result.imported + ' new rows to DB (' + result.skipped + ' duplicates skipped). Total DB: ' + result.total
           : '❌ Import failed';
         setImportState({ loading: false, lastMsg: msg });
+        if (result.success) toast.success('Data imported to history successfully.');
+        else toast.error('Import failed.');
         return fetchData().then(payload => {
           setData(Array.isArray(payload.rows) ? payload.rows : []);
         });
       })
       .catch(err => {
+        logger.error('importRowsToDb failed:', err);
         setImportState({ loading: false, lastMsg: '❌ ' + String(err.message || err) });
+        toast.error('Failed to import data: ' + (err.message || String(err)));
       });
   }, [setImportState]);
 
@@ -109,6 +117,7 @@ export function DataProvider({ children }) {
     const url = String(historyConfig.url || '').trim();
     if (!url) {
       setImportState({ loading: false, lastMsg: '❌ No backup sheet URL set.' });
+      toast.error('No backup sheet URL set.');
       return;
     }
     setImportState({ loading: true, lastMsg: 'Fetching backup data from Google Sheet…' });
@@ -116,12 +125,15 @@ export function DataProvider({ children }) {
       const rawRows = await fetchDataUrl(url);
       if (!rawRows || rawRows.length === 0) {
         setImportState({ loading: false, lastMsg: '❌ No rows found in backup sheet.' });
+        toast.error('No rows found in backup sheet.');
         return;
       }
       const normalized = rawRows.map(normalizeRow).filter(r => r && (r.sc || r.po));
       importRowsToDb(normalized);
     } catch (err) {
+      logger.error('syncHistorySheet failed:', err);
       setImportState({ loading: false, lastMsg: '❌ Fetch error: ' + String(err) });
+      toast.error('Failed to fetch backup data.');
     }
   }, [historyConfig.url, importRowsToDb, setImportState]);
 
@@ -134,11 +146,18 @@ export function DataProvider({ children }) {
       if (json.success) {
         setData([]);
         setImportState({ loading: false, lastMsg: '✅ Database cleared. All history rows deleted. Re-import your 2K dataset using History Import above.' });
+        toast.success('Database cleared.');
       } else {
         setImportState({ loading: false, lastMsg: '❌ Reset failed: ' + (json.error || 'Unknown error') });
+        toast.error('Reset failed: ' + (json.error || 'Unknown error'));
       }
     } catch (err) {
+      logger.error('resetDBAction failed:', err);
       setImportState({ loading: false, lastMsg: '❌ Reset error: ' + String(err) });
+      toast.error('Reset error: ' + String(err));
+    } finally {
+      // Ensure loading state is reset if it wasn't already
+      setImportState(prev => ({ ...prev, loading: false }));
     }
   }, [setImportState]);
 
@@ -151,6 +170,7 @@ export function DataProvider({ children }) {
     const sourceUrl = String(urlOverride || liveConfig.url || '').trim();
     if (!sourceUrl) {
       setUploadStatus({ type: 'error', msg: 'Live source URL is empty.', detail: 'Paste your Google Sheets URL (share link, edit link, or CSV export link).' });
+      toast.error('Live source URL is empty.');
       return;
     }
 
@@ -162,6 +182,7 @@ export function DataProvider({ children }) {
       const rows = await fetchDataUrl(sourceUrl);
       if (!rows || rows.length === 0) {
         setUploadStatus({ type: 'error', msg: 'No valid rows found in file.', detail: 'Check that the file has data and correct column names.' });
+        toast.error('No valid rows found in live source.');
         return;
       }
       const normalizedRows = rows.map(normalizeRow).filter(r => r && (r.sc || r.po));
@@ -172,9 +193,12 @@ export function DataProvider({ children }) {
       const sourceName = isGSheets ? 'GOOGLE SHEETS (LIVE)' : 'LIVE SOURCE';
       setUploadStatus({ type: 'success', msg: `✅ ${normalizedRows.length} rows loaded from "${sourceName}" — live latest status resolved`, detail: missingStage > 0 ? `⚠ ${missingStage} rows have no stage value` : null });
       setLiveState({ active: true, lastSync: new Date().toLocaleString('en-IN'), lastError: '' });
+      toast.success('Live sync completed.');
     } catch (err) {
+      logger.error('syncLiveDataNow failed:', err);
       setLiveState(prev => ({ ...prev, active: false, lastError: String(err) }));
       setUploadStatus({ type: 'error', msg: 'Live sync failed.', detail: `${String(err)}\n\n💡 For Google Sheets: File → Share → Publish to web → Entire Document → CSV → Publish\n   Copy the /pub?output=csv link and paste it above.` });
+      toast.error('Live sync failed. Check URL or network.');
     }
   }, [liveConfig.url, saveRowsToServer, setUploadStatus, setLiveState]);
 

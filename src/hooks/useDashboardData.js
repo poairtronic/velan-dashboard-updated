@@ -2,6 +2,7 @@ import React from 'react';
 import { fetchData } from '../services/dataService';
 import { loadConfig } from '../services/configService';
 import { useAuth } from './useAuth';
+import { logger } from '../utils/logger';
 
 function useDashboardData(options) {
   const { user } = useAuth();
@@ -33,6 +34,7 @@ function useDashboardData(options) {
         if (payload.lastSync) setLastSync(payload.lastSync);
         setServerStatus('ready');
       } catch (err) {
+        logger.error('loadServerData failed:', err);
         setServerStatus('offline');
         setData([]);
         setLiveRows([]);
