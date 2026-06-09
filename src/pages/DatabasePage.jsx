@@ -16,7 +16,7 @@ import { parseRawCsv, parseWorksheet } from '../services/excelParser';
 function DatabasePage() {
   const { isAdmin } = useAuth();
   const {
-    allDbData: data,
+    allDbData: rawData,
     data: historyRows,
     historyConfig,
     setHistoryConfig,
@@ -26,6 +26,42 @@ function DatabasePage() {
     handleHistoryFileUpload,
     handleHistoryDragDrop,
   } = useDashboard();
+
+  const data = React.useMemo(() => {
+    if (!rawData) return [];
+    const scGroups = {};
+    rawData.forEach(r => {
+      if (!r.sc) return;
+      if (!scGroups[r.sc]) scGroups[r.sc] = [];
+      scGroups[r.sc].push(r);
+    });
+    const activeRows = [];
+    rawData.forEach(r => {
+      if (!r.sc) {
+        activeRows.push(r);
+        return;
+      }
+      const group = scGroups[r.sc] || [];
+      const liveRows = group.filter(row => row._isLive);
+      let activePOs = [];
+      if (liveRows.length > 0) {
+        activePOs = [...new Set(liveRows.map(row => row.po).filter(Boolean))];
+      } else {
+        const sorted = [...group].sort((a, b) => {
+          const tA = a.timestamp || a.poDate || '';
+          const tB = b.timestamp || b.poDate || '';
+          return tB.localeCompare(tA);
+        });
+        if (sorted[0] && sorted[0].po) {
+          activePOs = [sorted[0].po];
+        }
+      }
+      if (activePOs.includes(r.po)) {
+        activeRows.push(r);
+      }
+    });
+    return activeRows;
+  }, [rawData]);
 
   // --- State for filters ---
   const [dateType, setDateType] = React.useState('poDate');
