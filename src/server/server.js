@@ -325,7 +325,16 @@ const server = http.createServer(async (req, res) => {
     return handleSheetsRoutes(req, res, pathname, parsed);
   }
 
-
+  if (pathname === '/debug-sc' && req.method === 'GET') {
+    try {
+      const sc = parsed.searchParams.get('sc') || '';
+      const result = await pool.query("SELECT * FROM velan_live_rows WHERE row_key LIKE $1", [`%${sc}%`]);
+      const result2 = await pool.query("SELECT * FROM velan_rows WHERE row_key LIKE $1", [`%${sc}%`]);
+      return sendJson(res, 200, { live: result.rows, archive: result2.rows });
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
+  }
 
   if (['/api/config', '/api/security-status'].includes(pathname)) {
     return handleConfigRoutes(req, res, pathname);
