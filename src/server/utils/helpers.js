@@ -69,6 +69,7 @@ function applySecurityHeaders(res) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "font-src 'self' https://fonts.gstatic.com; " +
       "connect-src 'self' https://docs.google.com https://docs.googleusercontent.com https://*.logrocket.io https://*.logrocket.com https://*.logr-in.com https://*.lr-in.com https://*.lr-in-est.com https://*.lr-ingest.com; " +
+      "worker-src 'self' blob:; " +
       "img-src 'self' data:; " +
       "frame-ancestors 'none';"
   );
