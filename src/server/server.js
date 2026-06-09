@@ -136,6 +136,15 @@ const server = http.createServer(async (req, res) => {
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) return sendJson(res, 401, { error: 'Invalid credentials' });
 
+      if (user.role !== 'admin') {
+        if (user.status === 'pending') {
+          return sendJson(res, 403, { error: 'Waiting for admin approval.', status: 'pending' });
+        }
+        if (user.status === 'denied') {
+          return sendJson(res, 403, { error: 'Your account request was denied by admin.', status: 'denied' });
+        }
+      }
+
       const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
       return sendJson(res, 200, { token, role: user.role, username: user.username });
     } catch (err) {
@@ -153,11 +162,11 @@ const server = http.createServer(async (req, res) => {
 
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       const result = await pool.query(
-        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
-        [username, hash, 'user']
+        'INSERT INTO users (username, password_hash, role, status) VALUES ($1, $2, $3, $4) RETURNING id, username, role, status',
+        [username, hash, 'user', 'pending']
       );
       const u = result.rows[0];
-      return sendJson(res, 201, { id: u.id, username: u.username, role: u.role });
+      return sendJson(res, 201, { id: u.id, username: u.username, role: u.role, status: u.status });
     } catch (err) {
       if (err.code === '23505') return sendJson(res, 400, { error: 'Username already taken' });
       return sendJson(res, 400, { error: 'Registration failed' });
@@ -175,14 +184,25 @@ const server = http.createServer(async (req, res) => {
 
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       const result = await pool.query(
-        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
-        [username, hash, finalRole]
+        'INSERT INTO users (username, password_hash, role, status) VALUES ($1, $2, $3, $4) RETURNING id, username, role, status',
+        [username, hash, finalRole, 'approved']
       );
       const u = result.rows[0];
-      return sendJson(res, 201, { id: u.id, username: u.username, role: u.role });
+      return sendJson(res, 201, { id: u.id, username: u.username, role: u.role, status: u.status });
     } catch (err) {
       if (err.code === '23505') return sendJson(res, 400, { error: 'Username already taken' });
       return sendJson(res, 400, { error: 'Failed to create user' });
+    }
+  }
+
+  // GET /api/auth/users/pending-count — admin only
+  if (pathname === '/api/auth/users/pending-count' && req.method === 'GET') {
+    if (!requireAuth(req, res, ['admin'])) return;
+    try {
+      const result = await pool.query("SELECT COUNT(*) FROM users WHERE status = 'pending'");
+      return sendJson(res, 200, { count: parseInt(result.rows[0].count, 10) });
+    } catch (err) {
+      return sendJson(res, 500, { error: 'Failed to fetch pending count' });
     }
   }
 
@@ -191,7 +211,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireAuth(req, res, ['admin'])) return;
     try {
       const result = await pool.query(
-        'SELECT id, username, role, created_at FROM users ORDER BY created_at DESC'
+        'SELECT id, username, role, status, created_at FROM users ORDER BY created_at DESC'
       );
       return sendJson(res, 200, result.rows);
     } catch (err) {
@@ -199,8 +219,32 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // PUT /api/auth/users/:id/status — admin only
+  if (pathname.startsWith('/api/auth/users/') && pathname.endsWith('/status') && req.method === 'PUT') {
+    if (!requireAuth(req, res, ['admin'])) return;
+    const parts = pathname.split('/');
+    const id = parseInt(parts[4], 10);
+    if (!id) return sendJson(res, 400, { error: 'Invalid user ID' });
+    if (req.user.id === id) return sendJson(res, 400, { error: 'Cannot change your own status' });
+    try {
+      const body = JSON.parse(await readBody(req));
+      const { status } = body;
+      if (!['approved', 'denied'].includes(status)) {
+        return sendJson(res, 400, { error: 'Invalid status' });
+      }
+      const result = await pool.query(
+        'UPDATE users SET status = $1 WHERE id = $2 RETURNING id, username, role, status',
+        [status, id]
+      );
+      if (result.rows.length === 0) return sendJson(res, 404, { error: 'User not found' });
+      return sendJson(res, 200, { message: `User status updated to ${status}`, user: result.rows[0] });
+    } catch (err) {
+      return sendJson(res, 500, { error: 'Failed to update user status' });
+    }
+  }
+
   // DELETE /api/auth/users/:id — admin only (cannot delete self)
-  if (pathname.startsWith('/api/auth/users/') && req.method === 'DELETE') {
+  if (pathname.startsWith('/api/auth/users/') && req.method === 'DELETE' && !pathname.endsWith('/status')) {
     if (!requireAuth(req, res, ['admin'])) return;
     const id = parseInt(pathname.split('/')[4], 10);
     if (!id) return sendJson(res, 400, { error: 'Invalid user ID' });

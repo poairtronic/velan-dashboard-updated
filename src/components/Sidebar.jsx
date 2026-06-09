@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../hooks/useAuth';
@@ -22,10 +22,39 @@ const NAV_ITEMS = [
 
 function Sidebar() {
   const { activeNav, setActiveNav } = useDashboard();
-  const { isAdmin } = useAuth();
+  const { isAdmin, token } = useAuth();
   const navigate = useNavigate();
+  const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(n => (n.id !== 'upload' && n.id !== 'users') || isAdmin);
+
+  const fetchPendingCount = useCallback(async () => {
+    if (!isAdmin || !token) return;
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      const res = await fetch(`${apiBase}/api/auth/users/pending-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPendingCount(data.count);
+      }
+    } catch (err) {
+      console.error('Failed to fetch pending count:', err);
+    }
+  }, [isAdmin, token]);
+
+  useEffect(() => {
+    fetchPendingCount();
+    window.addEventListener('pending-users-updated', fetchPendingCount);
+    // Poll every 30 seconds as fallback
+    const interval = setInterval(fetchPendingCount, 30000);
+
+    return () => {
+      window.removeEventListener('pending-users-updated', fetchPendingCount);
+      clearInterval(interval);
+    };
+  }, [fetchPendingCount]);
 
   const handleNavClick = (id) => {
     setActiveNav(id);
@@ -40,9 +69,28 @@ function Sidebar() {
           key={n.id}
           className={`nav-item ${activeNav === n.id ? 'active' : ''}`}
           onClick={() => handleNavClick(n.id)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}
         >
-          <span className="nav-icon">{n.icon}</span>
-          {n.label}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="nav-icon">{n.icon}</span>
+            {n.label}
+          </div>
+          {n.id === 'users' && pendingCount > 0 && (
+            <span className="pending-badge" style={{
+              background: '#ff3d5a',
+              color: '#fff',
+              borderRadius: '10px',
+              padding: '2px 6px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              minWidth: '16px',
+              textAlign: 'center',
+              lineHeight: '1',
+              marginRight: '8px'
+            }}>
+              {pendingCount}
+            </span>
+          )}
         </div>
       ))}
     </div>

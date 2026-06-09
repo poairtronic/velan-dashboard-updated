@@ -18,6 +18,7 @@ function UserManagementPage() {
   const [role, setRole] = useState('user');
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('existing'); // 'existing' or 'pending'
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -53,10 +54,29 @@ function UserManagementPage() {
       setPassword('');
       setRole('user');
       fetchUsers();
+      window.dispatchEvent(new CustomEvent('pending-users-updated'));
     } catch (err) {
       setMsg({ type: 'error', text: err.message });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (id, status, targetUsername) => {
+    setMsg(null);
+    try {
+      const res = await fetch(`${apiBase}/api/auth/users/${id}/status`, {
+        method: 'PUT',
+        headers: authHeaders(token),
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed to update status to ${status}`);
+      setMsg({ type: 'success', text: `User "${targetUsername}" has been ${status === 'approved' ? 'approved' : 'denied'}` });
+      fetchUsers();
+      window.dispatchEvent(new CustomEvent('pending-users-updated'));
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
     }
   };
 
@@ -74,10 +94,15 @@ function UserManagementPage() {
       }
       setMsg({ type: 'success', text: `User "${delUsername}" deleted` });
       fetchUsers();
+      window.dispatchEvent(new CustomEvent('pending-users-updated'));
     } catch (err) {
       setMsg({ type: 'error', text: err.message });
     }
   };
+
+  const pendingUsers = users.filter(u => u.status === 'pending');
+  const existingUsers = users.filter(u => u.status !== 'pending');
+  const displayedUsers = activeTab === 'pending' ? pendingUsers : existingUsers;
 
   return (
     <div>
@@ -160,10 +185,67 @@ function UserManagementPage() {
         </form>
       </div>
 
+      <div style={{ display: 'flex', gap: 16, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <button
+          onClick={() => setActiveTab('existing')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: activeTab === 'existing' ? '#4B3ADB' : 'var(--text-muted)',
+            borderBottom: activeTab === 'existing' ? '2px solid #4B3ADB' : '2px solid transparent',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontFamily: "'Exo 2', sans-serif",
+            fontSize: 14,
+            transition: 'all 0.2s',
+          }}
+        >
+          Existing Users ({existingUsers.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('pending')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: activeTab === 'pending' ? '#4B3ADB' : 'var(--text-muted)',
+            borderBottom: activeTab === 'pending' ? '2px solid #4B3ADB' : '2px solid transparent',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontFamily: "'Exo 2', sans-serif",
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.2s',
+          }}
+        >
+          Pending Approvals
+          {pendingUsers.length > 0 && (
+            <span style={{
+              background: '#ff3d5a',
+              color: '#fff',
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: 10,
+              lineHeight: 1
+            }}>
+              {pendingUsers.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       <div className="table-card">
         <div className="table-header">
-          <div className="chart-title" style={{ fontSize: 14 }}>Existing Users</div>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{users.length} user{users.length !== 1 ? 's' : ''}</span>
+          <div className="chart-title" style={{ fontSize: 14 }}>
+            {activeTab === 'pending' ? 'Pending Approvals' : 'Existing Users'}
+          </div>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {displayedUsers.length} user{displayedUsers.length !== 1 ? 's' : ''}
+          </span>
         </div>
         <div className="table-wrap">
           <table>
@@ -171,15 +253,20 @@ function UserManagementPage() {
               <tr>
                 <th>Username</th>
                 <th>Role</th>
+                {activeTab === 'existing' && <th>Status</th>}
                 <th>Created</th>
                 <th style={{ textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {users.length === 0 ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No users found</td></tr>
+              {displayedUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={activeTab === 'existing' ? 5 : 4} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>
+                    No users found
+                  </td>
+                </tr>
               ) : (
-                users.map(u => (
+                displayedUsers.map(u => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.username}</td>
                     <td>
@@ -192,26 +279,69 @@ function UserManagementPage() {
                         {u.role === 'admin' ? 'Admin' : 'User'}
                       </span>
                     </td>
+                    {activeTab === 'existing' && (
+                      <td>
+                        <span className="status-pill"
+                          style={{
+                            background: u.status === 'approved' ? 'rgba(0,230,118,0.15)' : u.status === 'denied' ? 'rgba(255,61,90,0.15)' : 'rgba(156,163,175,0.2)',
+                            color: u.status === 'approved' ? 'var(--success, #00e676)' : u.status === 'denied' ? 'var(--danger, #ff3d5a)' : '#9ca3af',
+                          }}
+                        >
+                          {u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1) : 'Approved'}
+                        </span>
+                      </td>
+                    )}
                     <td className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       {new Date(u.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => handleDelete(u.id, u.username)}
-                        className="filter-btn"
-                        style={{
-                          color: 'var(--danger)',
-                          borderColor: 'rgba(255,61,90,0.3)',
-                          padding: '4px 14px',
-                          fontSize: 11,
-                          cursor: u.id === JSON.parse(atob(token.split('.')[1])).id ? 'not-allowed' : 'pointer',
-                          opacity: u.id === JSON.parse(atob(token.split('.')[1])).id ? 0.4 : 1,
-                        }}
-                        disabled={u.id === JSON.parse(atob(token.split('.')[1])).id}
-                        title={u.id === JSON.parse(atob(token.split('.')[1])).id ? 'Cannot delete yourself' : 'Delete user'}
-                      >
-                        Delete
-                      </button>
+                      {activeTab === 'pending' ? (
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                          <button
+                            onClick={() => handleUpdateStatus(u.id, 'approved', u.username)}
+                            className="filter-btn"
+                            style={{
+                              color: 'var(--success, #00e676)',
+                              borderColor: 'rgba(0,230,118,0.3)',
+                              padding: '4px 10px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(u.id, 'denied', u.username)}
+                            className="filter-btn"
+                            style={{
+                              color: 'var(--danger, #ff3d5a)',
+                              borderColor: 'rgba(255,61,90,0.3)',
+                              padding: '4px 10px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleDelete(u.id, u.username)}
+                          className="filter-btn"
+                          style={{
+                            color: 'var(--danger)',
+                            borderColor: 'rgba(255,61,90,0.3)',
+                            padding: '4px 14px',
+                            fontSize: 11,
+                            cursor: u.id === JSON.parse(atob(token.split('.')[1])).id ? 'not-allowed' : 'pointer',
+                            opacity: u.id === JSON.parse(atob(token.split('.')[1])).id ? 0.4 : 1,
+                          }}
+                          disabled={u.id === JSON.parse(atob(token.split('.')[1])).id}
+                          title={u.id === JSON.parse(atob(token.split('.')[1])).id ? 'Cannot delete yourself' : 'Delete user'}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

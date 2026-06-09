@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
 
 let pool;
 const isMock = !process.env.DATABASE_URL || process.env.DATABASE_URL === 'mock';
@@ -17,6 +18,24 @@ if (!isMock) {
       this.rows = [];
       this.liveRows = [];
       this.syncLogs = [];
+      this.users = [
+        {
+          id: 1,
+          username: 'admin',
+          password_hash: bcrypt.hashSync('admin123', 10),
+          role: 'admin',
+          status: 'approved',
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 2,
+          username: 'user',
+          password_hash: bcrypt.hashSync('user123', 10),
+          role: 'user',
+          status: 'approved',
+          created_at: new Date().toISOString()
+        }
+      ];
     }
     async connect() {
       return {
@@ -81,6 +100,52 @@ if (!isMock) {
         this.syncLogs.unshift(log);
         return { rowCount: 1, rows: [] };
       }
+      if (cleanSql.includes("SELECT COUNT(*) FROM USERS WHERE STATUS = 'PENDING'")) {
+        const count = this.users.filter(u => u.status === 'pending').length;
+        return { rows: [{ count }] };
+      }
+      if (cleanSql.includes('SELECT * FROM USERS WHERE USERNAME = $1')) {
+        const user = this.users.find(u => u.username === params[0]);
+        return { rows: user ? [user] : [] };
+      }
+      if (cleanSql.includes('INSERT INTO USERS')) {
+        const username = params[0];
+        const password_hash = params[1];
+        const role = params[2];
+        const status = params[3] || 'approved';
+        const newUser = {
+          id: this.users.length + 1,
+          username,
+          password_hash,
+          role,
+          status,
+          created_at: new Date().toISOString()
+        };
+        this.users.push(newUser);
+        return { rows: [newUser], rowCount: 1 };
+      }
+      if (cleanSql.includes('UPDATE USERS SET STATUS = $1 WHERE ID = $2')) {
+        const status = params[0];
+        const id = parseInt(params[1], 10);
+        const user = this.users.find(u => u.id === id);
+        if (user) {
+          user.status = status;
+          return { rows: [user], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      }
+      if (cleanSql.includes('DELETE FROM USERS WHERE ID = $1')) {
+        const id = parseInt(params[0], 10);
+        const idx = this.users.findIndex(u => u.id === id);
+        if (idx >= 0) {
+          const deleted = this.users.splice(idx, 1);
+          return { rows: deleted, rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      }
+      if (cleanSql.includes('FROM USERS')) {
+        return { rows: [...this.users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) };
+      }
       return { rows: [] };
     }
     async end() {}
@@ -132,8 +197,14 @@ async function initDB() {
         username      VARCHAR(50) UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         role          VARCHAR(10) NOT NULL DEFAULT 'user',
+        status        VARCHAR(15) NOT NULL DEFAULT 'approved',
         created_at    TIMESTAMPTZ DEFAULT NOW()
       )
+    `);
+
+    // Ensure status column exists for users migrating from older versions
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(15) NOT NULL DEFAULT 'approved'
     `);
 
     // 5. Create indices for speed optimization

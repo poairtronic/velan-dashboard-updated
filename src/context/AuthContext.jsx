@@ -26,7 +26,9 @@ export function AuthProvider({ children }) {
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Invalid credentials');
+      const err = new Error(data.error || 'Invalid credentials');
+      if (data.status) err.status = data.status;
+      throw err;
     }
 
     const authData = { token: data.token, role: data.role, username: data.username };

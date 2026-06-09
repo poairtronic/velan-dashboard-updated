@@ -278,6 +278,38 @@ const s = {
     fontFamily: "'Exo 2', sans-serif",
     maxWidth: 260,
   },
+  pendingNotice: {
+    background: 'rgba(217, 119, 6, 0.15)',
+    border: '1px solid rgba(217, 119, 6, 0.4)',
+    borderRadius: 8,
+    padding: '16px',
+    color: '#f59e0b',
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontFamily: "'Exo 2', sans-serif",
+    textAlign: 'center',
+    marginBottom: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deniedNotice: {
+    background: 'rgba(239, 68, 68, 0.15)',
+    border: '1px solid rgba(239, 68, 68, 0.4)',
+    borderRadius: 8,
+    padding: '16px',
+    color: '#f87171',
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontFamily: "'Exo 2', sans-serif",
+    textAlign: 'center',
+    marginBottom: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+  },
 };
 
 function LoginPage() {
@@ -294,6 +326,7 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState(null);
 
   const isAdmin = role === 'admin';
 
@@ -301,12 +334,16 @@ function LoginPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setApprovalStatus(null);
     setLoading(true);
     try {
       await login(username, password);
       navigate('/');
     } catch (err) {
       setError(err.message || 'Invalid credentials');
+      if (err.status) {
+        setApprovalStatus(err.status);
+      }
     } finally {
       setLoading(false);
     }
@@ -316,6 +353,7 @@ function LoginPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setApprovalStatus(null);
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -338,13 +376,14 @@ function LoginPage() {
       if (!res.ok) {
         throw new Error(data.error || 'Registration failed');
       }
-      setSuccess('Account created successfully!');
+      setSuccess('Your account is awaiting admin approval.');
       setPassword('');
       setConfirmPassword('');
       setTimeout(() => {
         setTab('login');
         setSuccess('');
-      }, 1500);
+        setApprovalStatus('pending');
+      }, 2000);
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -356,6 +395,7 @@ function LoginPage() {
     setTab(newTab);
     setError('');
     setSuccess('');
+    setApprovalStatus(null);
     setPassword('');
     setConfirmPassword('');
   };
@@ -428,18 +468,43 @@ function LoginPage() {
                   </button>
                 </div>
               </div>
-              <div style={s.linkRow}>
-                <span style={{ ...s.link, fontSize: 12 }}>Terms &amp; Conditions</span>
-                <span style={{ ...s.link, fontSize: 12 }}>Forgot Password?</span>
-              </div>
-              <button type="submit" disabled={loading} style={s.btn(loading)}>
-                {loading ? 'Signing in\u2026' : 'Log In'}
-              </button>
-              {!isAdmin && (
-                <div style={s.switchLink}>
-                  Don&apos;t have an account?{' '}
-                  <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('register')}>Register</span>
+              {approvalStatus ? (
+                <div style={{ marginTop: 20 }}>
+                  {approvalStatus === 'pending' ? (
+                    <div style={s.pendingNotice}>
+                      <span style={{ fontSize: 24 }}>🕐</span>
+                      <strong>Waiting for admin approval.</strong>
+                      <span>Please check back later.</span>
+                    </div>
+                  ) : (
+                    <div style={s.deniedNotice}>
+                      <span style={{ fontSize: 24 }}>❌</span>
+                      <strong>Your registration was denied.</strong>
+                      <span>Contact admin.</span>
+                    </div>
+                  )}
+                  <div style={{ textAlign: 'center', marginTop: 12 }}>
+                    <span style={{ ...s.link, fontSize: 13, cursor: 'pointer' }} onClick={() => setApprovalStatus(null)}>
+                      Back to Log In
+                    </span>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div style={s.linkRow}>
+                    <span style={{ ...s.link, fontSize: 12 }}>Terms &amp; Conditions</span>
+                    <span style={{ ...s.link, fontSize: 12 }}>Forgot Password?</span>
+                  </div>
+                  <button type="submit" disabled={loading} style={s.btn(loading)}>
+                    {loading ? 'Signing in\u2026' : 'Log In'}
+                  </button>
+                  {!isAdmin && (
+                    <div style={s.switchLink}>
+                      Don&apos;t have an account?{' '}
+                      <span style={{ ...s.link, cursor: 'pointer' }} onClick={() => resetForm('register')}>Register</span>
+                    </div>
+                  )}
+                </>
               )}
             </form>
           ) : (
