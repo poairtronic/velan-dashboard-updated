@@ -3,10 +3,10 @@ import { useAuth } from './useAuth';
 // ─── LIVE OPERATIONAL SHEET BACKGROUND SYNC HOOK ──────────────────────────────
 
 function useLiveSync(liveConfig, syncLiveDataNow) {
-  const { user } = useAuth();
+  const { isAdmin } = useAuth();
 
   React.useEffect(() => {
-    if (!user) return;
+    if (!isAdmin) return;
     const enabled = liveConfig?.enabled === true;
     const url = String(liveConfig?.url || '').trim();
     if (!enabled || !url) return;
