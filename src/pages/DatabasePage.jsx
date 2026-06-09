@@ -78,13 +78,15 @@ function DatabasePage() {
         if (scTimestamps.length > 0) {
           const latestSCTime = new Date(scTimestamps.sort().pop()).getTime();
           const prodRows = activeGroupRows.filter(row => (row.product || '').trim() === (r.product || '').trim());
-          const prodTimestamps = prodRows.map(row => row.timestamp).filter(Boolean);
+           const prodTimestamps = prodRows.map(row => row.timestamp).filter(Boolean);
           if (prodTimestamps.length > 0) {
             const latestProdTime = new Date(prodTimestamps.sort().pop()).getTime();
             const diffDays = (latestSCTime - latestProdTime) / (1000 * 60 * 60 * 24);
             if (diffDays > 3) {
               return;
             }
+          } else {
+            return;
           }
         }
       }
