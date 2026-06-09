@@ -11,7 +11,7 @@ import useChart from '../utils/chartUtils';
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
-  const { kpis, liveData: data, setActiveNav, setSelectedPONum } = useDashboard();
+  const { kpis, filtered: data, setActiveNav, setSelectedPONum } = useDashboard();
   const navigate = useNavigate();
   const [selectedSC, setSelectedSC] = React.useState(null);
   const [selectedItem, setSelectedItem] = React.useState(null);
