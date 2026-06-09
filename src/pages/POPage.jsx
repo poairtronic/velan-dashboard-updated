@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
+import { getStageColor } from '../services/dataNormalizer';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
