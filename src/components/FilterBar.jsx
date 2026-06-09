@@ -60,6 +60,8 @@ function FilterBar() {
       <div className="filter-label">FILTERS</div>
       
       <select
+        id="filter-po"
+        name="filter-po"
         className="filter-select"
         aria-label="Filter by PO"
         value={filters.po}
@@ -70,6 +72,8 @@ function FilterBar() {
       </select>
 
       <select
+        id="filter-stage"
+        name="filter-stage"
         className="filter-select"
         aria-label="Filter by Stage"
         value={filters.stage}
@@ -80,6 +84,8 @@ function FilterBar() {
       </select>
 
       <select
+        id="filter-type"
+        name="filter-type"
         className="filter-select"
         aria-label="Filter by Type"
         value={filters.type}
@@ -90,6 +96,8 @@ function FilterBar() {
       </select>
 
       <select
+        id="filter-category"
+        name="filter-category"
         className="filter-select"
         aria-label="Filter by Category"
         value={filters.category}
@@ -102,6 +110,8 @@ function FilterBar() {
       </select>
 
       <select
+        id="filter-inhouse"
+        name="filter-inhouse"
         className="filter-select"
         aria-label="Filter by Inhouse or Vendor"
         value={filters.inhouse}
@@ -113,6 +123,8 @@ function FilterBar() {
       </select>
 
       <input
+        id="filter-search"
+        name="filter-search"
         className="filter-input"
         aria-label="Search"
         placeholder="Search SC / Product / PO..."
