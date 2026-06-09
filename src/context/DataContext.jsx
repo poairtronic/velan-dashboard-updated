@@ -258,7 +258,7 @@ export function DataProvider({ children }) {
   const uniqueTypes   = useMemo(() => [...new Set(liveData.map(r => r.type))].filter(Boolean).sort(), [liveData]);
 
   const contextValue = useMemo(() => ({
-    data, liveRows, lastSync, now,
+    data, liveRows, lastSync,
     liveConfig, setLiveConfig, liveState, setLiveState,
     historyConfig, setHistoryConfig,
     saveRowsToServer, importRowsToDb, syncHistorySheet, resetDB: resetDBAction,
@@ -266,7 +266,7 @@ export function DataProvider({ children }) {
     processedData, allDbData, liveData, filtered, scGroups, poGroups,
     kpis, uniquePOs, uniqueStages, uniqueTypes
   }), [
-    data, liveRows, lastSync, now, liveConfig, liveState, historyConfig,
+    data, liveRows, lastSync, liveConfig, liveState, historyConfig,
     saveRowsToServer, importRowsToDb, syncHistorySheet, resetDBAction,
     handleFileUpload, handleHistoryFileUpload, handleHistoryDragDrop, syncLiveDataNow,
     processedData, allDbData, liveData, filtered, scGroups, poGroups,
