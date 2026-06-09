@@ -203,4 +203,20 @@ function getSCLastTimestamp(items) {
   return ts;
 }
 
-export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp, TARGET_DAYS, AIRPLUG_TYPES, MASTER_TYPES };
+function normalizeProductsInGroup(rows) {
+  if (!rows || rows.length === 0) return rows;
+  const fullNames = [...new Set(rows.map(r => (r.product || '').trim()).filter(p => p && !p.endsWith('...')))];
+  return rows.map(r => {
+    const prod = (r.product || '').trim();
+    if (prod.endsWith('...')) {
+      const prefix = prod.slice(0, -3);
+      const match = fullNames.find(f => f.startsWith(prefix));
+      if (match) {
+        return { ...r, product: match };
+      }
+    }
+    return r;
+  });
+}
+
+export { workingDaysBetween, daysBetween, getProductCategory, parseDateTime, hoursBetween, minutesBetween, calculateProcessCycleTime, isSLAViolation, calculateVendorAging, calculateProcessEfficiency, getVendorCode, isSCComplete, getSCLastTimestamp, normalizeProductsInGroup, TARGET_DAYS, AIRPLUG_TYPES, MASTER_TYPES };

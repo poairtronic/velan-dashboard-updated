@@ -6,7 +6,7 @@ import useLiveSync from '../hooks/useLiveSync';
 import { apiSaveRows, apiImportRows, apiResetDB, apiFetchData, apiFetchDataUrl } from '../services/api';
 import { normalizeGoogleSheetsUrl } from '../services/googleSheets';
 import { normalizeRow } from '../utils/normalizeRow';
-import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, TARGET_DAYS, parseDateTime } from '../utils/calculationUtils';
+import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, TARGET_DAYS, parseDateTime, normalizeProductsInGroup } from '../utils/calculationUtils';
 // ─── DASHBOARD CONTEXT & STATE PROVIDER ───────────────────────────────────────
 
 const DashboardContext = React.createContext();
@@ -345,7 +345,8 @@ function DashboardProvider({ children }) {
     });
     return Object.values(g).map(sg => {
       const latestMap = {};
-      sg._all.forEach(r => {
+      const normalizedRows = normalizeProductsInGroup(sg._all);
+      normalizedRows.forEach(r => {
         const key = (r.product || '__none__').trim();
         const ex = latestMap[key];
         if (!ex) { latestMap[key] = r; return; }

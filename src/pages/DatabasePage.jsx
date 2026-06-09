@@ -2,7 +2,7 @@ import React from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../hooks/useAuth';
 import { getStageColor } from '../services/dataNormalizer';
-import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
+import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, normalizeProductsInGroup } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
@@ -123,6 +123,9 @@ function DatabasePage() {
       if (!m[r.sc]) m[r.sc] = [];
       m[r.sc].push(r);
     });
+    Object.keys(m).forEach(sc => {
+      m[sc] = normalizeProductsInGroup(m[sc]);
+    });
     return m;
   }, [data]);
 
@@ -133,6 +136,9 @@ function DatabasePage() {
       if (!r.sc) return;
       if (!m[r.sc]) m[r.sc] = [];
       m[r.sc].push(r);
+    });
+    Object.keys(m).forEach(sc => {
+      m[sc] = normalizeProductsInGroup(m[sc]);
     });
     return m;
   }, [filtered]);
@@ -157,19 +163,27 @@ function DatabasePage() {
     };
 
     const _scFinalMap = {};
+    const dataBySc = {};
     data.forEach(r => {
       if (!r.sc) return;
-      if (!_scFinalMap[r.sc]) _scFinalMap[r.sc] = {};
-      const pkey = (r.product || '__none__').trim();
-      const ex = _scFinalMap[r.sc][pkey];
-      if (!ex) { _scFinalMap[r.sc][pkey] = r; return; }
-      const rDone = _isDoneOrVA(r.currentStage);
-      const exDone = _isDoneOrVA(ex.currentStage);
-      if (rDone && !exDone) { _scFinalMap[r.sc][pkey] = r; return; }
-      if (!rDone && exDone) return;
-      if (r._isLive && !ex._isLive) { _scFinalMap[r.sc][pkey] = r; return; }
-      if (!r._isLive && ex._isLive) return;
-      if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[r.sc][pkey] = r;
+      if (!dataBySc[r.sc]) dataBySc[r.sc] = [];
+      dataBySc[r.sc].push(r);
+    });
+    Object.entries(dataBySc).forEach(([sc, rows]) => {
+      _scFinalMap[sc] = {};
+      const normalizedRows = normalizeProductsInGroup(rows);
+      normalizedRows.forEach(r => {
+        const pkey = (r.product || '__none__').trim();
+        const ex = _scFinalMap[sc][pkey];
+        if (!ex) { _scFinalMap[sc][pkey] = r; return; }
+        const rDone = _isDoneOrVA(r.currentStage);
+        const exDone = _isDoneOrVA(ex.currentStage);
+        if (rDone && !exDone) { _scFinalMap[sc][pkey] = r; return; }
+        if (!rDone && exDone) return;
+        if (r._isLive && !ex._isLive) { _scFinalMap[sc][pkey] = r; return; }
+        if (!r._isLive && ex._isLive) return;
+        if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) _scFinalMap[sc][pkey] = r;
+      });
     });
 
     const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0 };
@@ -679,14 +693,23 @@ function DatabasePage() {
         <button className="filter-btn" style={{ background: 'rgba(255,61,90,0.08)', color: 'var(--danger)', fontWeight: 700 }} onClick={exportPDF}>⬇ PDF</button>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>EXPORT COMPLETED ITEMS ({(() => {
           const dm = {};
+          const groups = {};
           filtered.forEach(r => {
-            const k = (r.sc || '') + '||' + (r.product || '').trim();
-            const ex = dm[k];
-            if (!ex) { dm[k] = r; return; }
-            const rD = isDoneStage(r.currentStage), eD = isDoneStage(ex.currentStage);
-            if (rD && !eD) { dm[k] = r; return; } if (!rD && eD) return;
-            if (r._isLive && !ex._isLive) { dm[k] = r; return; } if (!r._isLive && ex._isLive) return;
-            if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dm[k] = r;
+            if (!r.sc) return;
+            if (!groups[r.sc]) groups[r.sc] = [];
+            groups[r.sc].push(r);
+          });
+          Object.keys(groups).forEach(sc => {
+            const normalized = normalizeProductsInGroup(groups[sc]);
+            normalized.forEach(r => {
+              const k = (r.sc || '') + '||' + (r.product || '').trim();
+              const ex = dm[k];
+              if (!ex) { dm[k] = r; return; }
+              const rD = isDoneStage(r.currentStage), eD = isDoneStage(ex.currentStage);
+              if (rD && !eD) { dm[k] = r; return; } if (!rD && eD) return;
+              if (r._isLive && !ex._isLive) { dm[k] = r; return; } if (!r._isLive && ex._isLive) return;
+              if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dm[k] = r;
+            });
           });
           return Object.values(dm).filter(r => isDoneStage(r.currentStage)).length;
         })()} rows — READY / STOCK / STORES / EXSTOCK only):</span>
@@ -695,17 +718,26 @@ function DatabasePage() {
       {/* DATA TABLE — READY / STOCK / STORES only (completed items, deduplicated) */}
       {(() => {
         const dedupeMap = {};
+        const groups = {};
         filtered.forEach(r => {
-          const key = (r.sc || '') + '||' + (r.product || '__none__').trim();
-          const ex = dedupeMap[key];
-          if (!ex) { dedupeMap[key] = r; return; }
-          const rDone = isDoneStage(r.currentStage);
-          const exDone = isDoneStage(ex.currentStage);
-          if (rDone && !exDone) { dedupeMap[key] = r; return; }
-          if (!rDone && exDone) return;
-          if (r._isLive && !ex._isLive) { dedupeMap[key] = r; return; }
-          if (!r._isLive && ex._isLive) return;
-          if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dedupeMap[key] = r;
+          if (!r.sc) return;
+          if (!groups[r.sc]) groups[r.sc] = [];
+          groups[r.sc].push(r);
+        });
+        Object.keys(groups).forEach(sc => {
+          const normalized = normalizeProductsInGroup(groups[sc]);
+          normalized.forEach(r => {
+            const key = (r.sc || '') + '||' + (r.product || '__none__').trim();
+            const ex = dedupeMap[key];
+            if (!ex) { dedupeMap[key] = r; return; }
+            const rDone = isDoneStage(r.currentStage);
+            const exDone = isDoneStage(ex.currentStage);
+            if (rDone && !exDone) { dedupeMap[key] = r; return; }
+            if (!rDone && exDone) return;
+            if (r._isLive && !ex._isLive) { dedupeMap[key] = r; return; }
+            if (!r._isLive && ex._isLive) return;
+            if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dedupeMap[key] = r;
+          });
         });
         const deduped = Object.values(dedupeMap).sort((a, b) => {
           const da = a.poDate ? new Date(a.poDate).getTime() : 0;
