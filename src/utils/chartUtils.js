@@ -1,10 +1,10 @@
 import React from 'react';
 import Chart from 'chart.js/auto';
-import { useDashboard } from '../context/DashboardContext';
+import { useTheme } from '../context/ThemeContext';
 // ─── CHART HELPERS ────────────────────────────────────────────────────────────
 
 function useChart(ref, config, deps) {
-  const { theme } = useDashboard();
+  const { theme } = useTheme();
   // Store the chart instance across renders so we can reuse it
   const chartRef = React.useRef(null);
   // Track the last theme used to detect theme switches

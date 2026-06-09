@@ -1,5 +1,6 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -11,15 +12,20 @@ import * as XLSX from 'xlsx';
 
 function UploadPage() {
   const {
+    uploadStatus, setUploadStatus,
+    importState,
+    saveRowsToServer,
+    importRowsToDb,
     handleFileUpload,
-    data,
-    uploadStatus,
-    setUploadStatus,
-    liveConfig,
-    setLiveConfig,
+    handleHistoryFileUpload,
+    handleHistoryDragDrop,
     syncLiveDataNow,
-    liveState,
-  } = useDashboard();
+    syncHistorySheet,
+    resetDB,
+    liveConfig, setLiveConfig,
+    historyConfig, setHistoryConfig
+  } = useData();
+  const { liveState } = useUI();
 
   const [drag, setDrag] = React.useState(false);
   const fileRef = React.useRef();

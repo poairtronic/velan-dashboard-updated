@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -13,7 +13,7 @@ import * as XLSX from 'xlsx';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {
-  const { kpis, filtered } = useDashboard();
+  const { kpis, filtered } = useData();
   const scoreRef   = React.useRef();
   const queueRef   = React.useRef();
   const [timeSearch, setTimeSearch] = React.useState('');

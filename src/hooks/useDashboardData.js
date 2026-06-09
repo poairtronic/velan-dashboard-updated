@@ -1,7 +1,7 @@
 import React from 'react';
-import { apiFetchData, apiLoadConfig } from '../services/api';
+import { fetchData } from '../services/dataService';
+import { loadConfig } from '../services/configService';
 import { useAuth } from './useAuth';
-// ─── INITIAL DATA INITIALIZATION HOOK ─────────────────────────────────────────
 
 function useDashboardData(options) {
   const { user } = useAuth();
@@ -27,7 +27,7 @@ function useDashboardData(options) {
     async function loadServerData() {
       setIsLoading(true);
       try {
-        const payload = await apiFetchData();
+        const payload = await fetchData();
         setData(Array.isArray(payload.rows) ? payload.rows : []);
         setLiveRows(Array.isArray(payload.liveRows) ? payload.liveRows : []);
         if (payload.lastSync) setLastSync(payload.lastSync);
@@ -47,12 +47,12 @@ function useDashboardData(options) {
     if (!user) return;
     async function loadServerConfig() {
       try {
-        const cfg = await apiLoadConfig();
+        const cfg = await loadConfig();
         if (cfg.liveUrl) {
           setLiveConfig(prev => ({ ...prev, url: prev.url ? prev.url : cfg.liveUrl }));
         }
         if (cfg.historyUrl) {
-          setHistoryConfig(prev => ({ url: prev.url ? prev.url : cfg.historyUrl }));
+          setHistoryConfig(prev => ({ ...prev, url: prev.url ? prev.url : cfg.historyUrl }));
         }
       } catch { /* ignore */ }
     }

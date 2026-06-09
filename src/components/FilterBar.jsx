@@ -1,21 +1,14 @@
 import React from 'react';
 import debounce from 'lodash/debounce';
-import { useDashboard } from '../context/DashboardContext';
+import { useFilters } from '../context/FilterContext';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
 // ─── FILTERBAR UI COMPONENT ───────────────────────────────────────────────────
 
 function FilterBar() {
-  const {
-    activeNav,
-    filters,
-    setFilters,
-    uniquePOs,
-    uniqueStages,
-    uniqueTypes,
-    filtered,
-    liveData,
-    data,
-    resetFilters,
-  } = useDashboard();
+  const { filters, setFilters, resetFilters } = useFilters();
+  const { uniquePOs, uniqueStages, uniqueTypes, filtered, liveData, data } = useData();
+  const { activeNav } = useUI();
 
   // Local state tracks raw input value for instant visual feedback
   const [searchInput, setSearchInput] = React.useState(filters.search);

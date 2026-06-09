@@ -1,5 +1,6 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
 import { useAuth } from '../hooks/useAuth';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, normalizeProductsInGroup } from '../utils/calculationUtils';
@@ -21,11 +22,11 @@ function DatabasePage() {
     historyConfig,
     setHistoryConfig,
     syncHistorySheet: onSyncHistory,
-    importState,
     resetDB: onResetDB,
     handleHistoryFileUpload,
     handleHistoryDragDrop,
-  } = useDashboard();
+  } = useData();
+  const { importState } = useUI();
 
   const data = React.useMemo(() => {
     if (!rawData) return [];

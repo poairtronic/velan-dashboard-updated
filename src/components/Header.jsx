@@ -1,13 +1,18 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDashboard } from '../context/DashboardContext';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useUI } from '../context/UIContext';
+import { useData } from '../context/DataContext';
+import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 // ─── HEADER UI COMPONENT ──────────────────────────────────────────────────────
 
 function Header() {
-  const { liveState, now, setActiveNav, theme, toggleTheme } = useDashboard();
-  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { liveState, setActiveNav } = useUI();
+  const { now } = useData();
+  const { theme, toggleTheme } = useTheme();
+  const { user, logout, isAdmin } = useAuth();
 
   const handleSignOut = () => {
     logout();

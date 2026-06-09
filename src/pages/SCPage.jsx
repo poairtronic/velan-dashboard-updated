@@ -1,15 +1,15 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
-// ─── SC SETS PAGE COMPONENT ───────────────────────────────────────────────────
+// ─── SC COMPONENT SET COMPLETION PAGE COMPONENT ───────────────────────────────
 
 function SCPage() {
-  const { kpis, scGroups } = useDashboard();
+  const { kpis, scGroups } = useData();
   const [tab, setTab] = React.useState('all');
   const [selectedSC, setSelectedSC] = React.useState(null);
   const [search, setSearch] = React.useState('');

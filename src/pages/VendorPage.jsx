@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, TARGET_DAYS } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -11,7 +12,8 @@ import useChart from '../utils/chartUtils';
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
-  const { kpis, filtered: data, setActiveNav, setSelectedPONum } = useDashboard();
+  const { kpis, filtered: data } = useData();
+  const { setActiveNav, setSelectedPONum } = useUI();
   const navigate = useNavigate();
   const [selectedSC, setSelectedSC] = React.useState(null);
   const [selectedItem, setSelectedItem] = React.useState(null);

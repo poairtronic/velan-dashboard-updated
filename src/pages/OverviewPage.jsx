@@ -1,5 +1,6 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -8,6 +9,19 @@ import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 import ErrorBoundary from '../components/ErrorBoundary';
+
+// Helper for stage gradients
+const getStageGradient = (stage) => {
+  const color = getStageColor(stage);
+  if (color === '#6b7280') return 'linear-gradient(135deg, #2d3748, #4a5568)';
+  if (color === '#ef4444') return 'linear-gradient(135deg, #ff3d5a, #ff6b35)';
+  if (color === '#10b981') return 'linear-gradient(135deg, #00e676, #00c9ff)';
+  if (color === '#f59e0b') return 'linear-gradient(135deg, #ffd60a, #ff9b00)';
+  if (color === '#3b82f6') return 'linear-gradient(135deg, #00c9ff, #0fa8e0)';
+  if (color === '#8b5cf6') return 'linear-gradient(135deg, #b24bff, #7a00ff)';
+  return 'linear-gradient(135deg, #1e293b, #334155)';
+};
+
 // ─── OVERVIEW PAGE COMPONENT ──────────────────────────────────────────────────
 
 // Stable todayStr — computed once at module level (single page load)
@@ -33,7 +47,9 @@ function groupByPO(items) {
 }
 
 function OverviewPage() {
-  const { kpis, filtered, liveData, data } = useDashboard();
+  const { kpis, filtered, liveData, data } = useData();
+  const { setActiveNav } = useUI();
+  const poRef = React.useRef();
   const [selectedCategory, setSelectedCategory] = React.useState(null);
   const [showReadyDetails, setShowReadyDetails] = React.useState(false);
   const [openPOIds, setOpenPOIds] = React.useState({});

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, TARGET_DAYS } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -10,7 +10,7 @@ import useChart from '../utils/chartUtils';
 // ─── CYCLE TIME PAGE COMPONENT ────────────────────────────────────────────────
 
 function CycleTimePage() {
-  const { kpis, filtered } = useDashboard();
+  const { kpis, filtered } = useData();
   const [selectedStage, setSelectedStage] = React.useState(null);
   const ctBarRef  = React.useRef();
   const ctLineRef = React.useRef();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -10,7 +10,8 @@ import useChart from '../utils/chartUtils';
 // ─── WORK IN PROGRESS (WIP) PAGE COMPONENT ────────────────────────────────────
 
 function WIPPage() {
-  const { kpis, filtered } = useDashboard();
+  const { kpis, filtered } = useData();
+  const [selectedStage, setSelectedStage] = React.useState(null);
   const [expandedItem, setExpandedItem] = React.useState(null);
   const wipRef = React.useRef();
   const stages = Object.entries(kpis.stageCounts).sort((a, b) => b[1] - a[1]);

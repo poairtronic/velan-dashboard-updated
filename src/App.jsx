@@ -1,7 +1,10 @@
 import React, { Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useDashboard, DashboardProvider } from './context/DashboardContext';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { UIProvider, useUI } from './context/UIContext';
+import { FilterProvider } from './context/FilterContext';
+import { DataProvider } from './context/DataContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -25,7 +28,7 @@ const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
 
 function AppRoutes() {
-  const { setActiveNav } = useDashboard();
+  const { setActiveNav } = useUI();
   const location = useLocation();
 
   useEffect(() => {
@@ -50,7 +53,7 @@ function AppRoutes() {
 }
 
 function DashboardLayout() {
-  const { isLoading } = useDashboard();
+  const { isLoading } = useUI();
 
   return (
     <div>
@@ -102,9 +105,15 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <DashboardProvider>
-          <AppRoutes />
-        </DashboardProvider>
+        <ThemeProvider>
+          <UIProvider>
+            <FilterProvider>
+              <DataProvider>
+                <AppRoutes />
+              </DataProvider>
+            </FilterProvider>
+          </UIProvider>
+        </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

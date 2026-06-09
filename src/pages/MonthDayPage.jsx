@@ -1,6 +1,5 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
-import { getStageColor } from '../services/dataNormalizer';
+import { useData } from '../context/DataContext';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, TARGET_DAYS } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
@@ -9,7 +8,8 @@ import DataTable from '../components/DataTable';
 // ─── MONTH / DAY TIMELINE VIEW PAGE COMPONENT ──────────────────────────────────
 
 function MonthDayPage() {
-  const { liveData } = useDashboard();
+  const { liveData } = useData();
+  const barRef = React.useRef();
   const todayDate = new Date();
   const [viewMode, setViewMode] = React.useState('month');
   const [selMonth, setSelMonth] = React.useState(todayDate.getMonth());

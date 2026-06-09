@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useData } from '../context/DataContext';
 import { getStageColor } from '../services/dataNormalizer';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
@@ -10,7 +10,7 @@ import useChart from '../utils/chartUtils';
 // ─── PRODUCTION PAGE COMPONENT ────────────────────────────────────────────────
 
 function ProductionPage() {
-  const { kpis, filtered, scGroups } = useDashboard();
+  const { kpis, filtered, scGroups } = useData();
   const dailyRef = React.useRef();
   const setsRef  = React.useRef();
   const catRef   = React.useRef();

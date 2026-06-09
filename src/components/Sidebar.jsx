@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDashboard } from '../context/DashboardContext';
+import { useUI } from '../context/UIContext';
 import { useAuth } from '../hooks/useAuth';
 // ─── SIDEBAR UI COMPONENT ──────────────────────────────────────────────────────
 
@@ -21,9 +21,9 @@ const NAV_ITEMS = [
 ];
 
 function Sidebar() {
-  const { activeNav, setActiveNav } = useDashboard();
-  const { isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { activeNav, setActiveNav } = useUI();
+  const { isAdmin } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(n => (n.id !== 'upload' && n.id !== 'users') || isAdmin);

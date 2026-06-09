@@ -1,6 +1,6 @@
 import React from 'react';
-import { useDashboard } from '../context/DashboardContext';
-import { getStageColor } from '../services/dataNormalizer';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
 import { workingDaysBetween, daysBetween, calculateProcessCycleTime, isSCComplete, getSCLastTimestamp, getProductCategory } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
@@ -14,7 +14,10 @@ function isPOComplete(scGroupsForPO) {
 }
 
 function POPage() {
-  const { kpis, poGroups, scGroups, selectedPONum, setSelectedPONum } = useDashboard();
+  const { kpis, poGroups, scGroups } = useData();
+  const { selectedPONum, setSelectedPONum } = useUI();
+
+  const handleSearch = (e) => setSelectedPONum(e.target.value.trim().toUpperCase());
   const leadsRef = React.useRef();
   const [tab, setTab]           = React.useState('all');
   const [selectedPO, setSelectedPO] = React.useState(null);
