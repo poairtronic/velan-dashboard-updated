@@ -335,7 +335,7 @@ function OverviewPage() {
 
       {/* Category Cards */}
       <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}
       >
         {categoryCards.map((cat) => (
           <button

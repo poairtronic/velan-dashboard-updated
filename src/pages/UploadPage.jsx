@@ -609,20 +609,7 @@ function UploadPage() {
       <div className="chart-card">
         <div className="chart-title">Current Data Preview — {data.length} rows loaded</div>
         <div className="chart-sub">FIRST 50 ROWS OF ACTIVE DATASET</div>
-        <div className="table-wrap" style={{ marginTop: 12, maxHeight: 320 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>SC</th>
-                <th>PO</th>
-                <th>PRODUCT</th>
-                <th>TYPE</th>
-                <th>STAGE</th>
-                <th>INHOUSE</th>
-                <th>TIMESTAMP</th>
-              </tr>
-            </thead>
-            <tbody>
+            <DataTable headers={['SC', 'PO', 'PRODUCT', 'TYPE', 'STAGE', 'INHOUSE', 'TIMESTAMP']} isLoading={uploadStatus?.type === 'loading'} isEmpty={data.length === 0} emptyMessage="Upload data to preview">
               {data.slice(0, 50).map((r, i) => (
                 <tr key={i}>
                   <td className="mono text-accent">{r.sc || '—'}</td>
@@ -664,9 +651,7 @@ function UploadPage() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </DataTable>
       </div>
     </div>
   );

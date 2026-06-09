@@ -1,9 +1,23 @@
 import React from 'react';
-// ─── DATATABLE UI COMPONENT ───────────────────────────────────────────────────
+import { TableSkeleton } from './ui/skeletons/Skeletons';
+import EmptyState from './ui/EmptyState';
 
-function DataTable({ headers, children, style, className = 'db-table' }) {
+function DataTable({ 
+  headers, 
+  children, 
+  style, 
+  className = 'db-table',
+  isLoading = false,
+  isEmpty = false,
+  emptyMessage = 'No data found.'
+}) {
+  if (isLoading) {
+    return <TableSkeleton />;
+  }
+
   return (
     <div
+      className="table-wrap"
       style={{
         overflowX: 'auto',
         width: '100%',
@@ -22,7 +36,17 @@ function DataTable({ headers, children, style, className = 'db-table' }) {
             </tr>
           </thead>
         )}
-        <tbody>{children}</tbody>
+        <tbody>
+          {isEmpty ? (
+            <tr>
+              <td colSpan={headers ? headers.length : 1} style={{ textAlign: 'center', padding: '40px 0' }}>
+                <EmptyState title="No Records Found" description={emptyMessage} />
+              </td>
+            </tr>
+          ) : (
+            children
+          )}
+        </tbody>
       </table>
     </div>
   );

@@ -1,31 +1,25 @@
 import React from 'react';
-// ─── LOADING SCREEN UI COMPONENT ──────────────────────────────────────────────
+import { DashboardSkeleton } from './ui/skeletons/Skeletons';
 
 function LoadingScreen() {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '80vh',
-        fontFamily: 'Share Tech Mono, monospace',
-        color: 'var(--accent1)',
-      }}
-    >
-      <div
-        style={{
-          width: 50,
-          height: 50,
-          border: '3px solid rgba(0, 201, 255, 0.1)',
-          borderTop: '3px solid var(--accent1)',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          marginBottom: 16,
-        }}
-      />
-      <div style={{ letterSpacing: 2 }}>LOADING PRODUCTION METRICS...</div>
+    <div style={{ width: '100%', minHeight: '80vh' }}>
+      <div style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)' }}>
+        <div
+          style={{
+            width: 16,
+            height: 16,
+            border: '2px solid rgba(0, 201, 255, 0.2)',
+            borderTop: '2px solid var(--accent1)',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }}
+        />
+        <span style={{ fontSize: '11px', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 1 }}>
+          LOADING DATA...
+        </span>
+      </div>
+      <DashboardSkeleton />
     </div>
   );
 }

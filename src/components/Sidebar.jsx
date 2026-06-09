@@ -67,7 +67,7 @@ function Sidebar() {
     <div className="sidebar">
       <div className="nav-section">NAVIGATION</div>
       {filteredNavItems.map((n) => (
-        <div
+        <button
           key={n.id}
           className={`nav-item ${activeNav === n.id ? 'active' : ''}`}
           onClick={() => handleNavClick(n.id)}
@@ -77,6 +77,11 @@ function Sidebar() {
             justifyContent: 'space-between',
             width: '100%',
             gap: 8,
+            background: 'transparent',
+            border: 'none',
+            borderLeft: '3px solid transparent',
+            fontFamily: 'inherit',
+            textAlign: 'left'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -102,7 +107,7 @@ function Sidebar() {
               {pendingCount}
             </span>
           )}
-        </div>
+        </button>
       ))}
     </div>
   );
