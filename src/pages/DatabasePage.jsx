@@ -44,8 +44,11 @@ function DatabasePage() {
       const group = scGroups[r.sc] || [];
       const liveRows = group.filter(row => row._isLive);
       let activePOs = [];
+      let activeProducts = [];
       if (liveRows.length > 0) {
         activePOs = [...new Set(liveRows.map(row => row.po).filter(Boolean))];
+        const normalizedLive = normalizeProductsInGroup(liveRows);
+        activeProducts = [...new Set(normalizedLive.map(row => (row.product || '').trim()).filter(Boolean))];
       } else {
         const sorted = [...group].sort((a, b) => {
           const tA = a.timestamp || a.poDate || '';
@@ -56,9 +59,21 @@ function DatabasePage() {
           activePOs = [sorted[0].po];
         }
       }
-      if (activePOs.includes(r.po)) {
-        activeRows.push(r);
+      if (!activePOs.includes(r.po)) return;
+      if (liveRows.length > 0 && activeProducts.length > 0) {
+        const cleanProduct = (r.product || '').trim();
+        let productMatch = activeProducts.includes(cleanProduct);
+        if (!productMatch) {
+          if (cleanProduct.endsWith('...')) {
+            const prefix = cleanProduct.slice(0, -3);
+            productMatch = activeProducts.some(ap => ap.startsWith(prefix));
+          } else {
+            productMatch = activeProducts.some(ap => ap.endsWith('...') && cleanProduct.startsWith(ap.slice(0, -3)));
+          }
+        }
+        if (!productMatch) return;
       }
+      activeRows.push(r);
     });
     return activeRows;
   }, [rawData]);
