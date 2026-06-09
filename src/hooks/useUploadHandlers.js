@@ -1,5 +1,4 @@
 import React from 'react';
-import * as XLSX from 'xlsx';
 import { inferType } from '../services/dataNormalizer';
 import { normalizeRow } from '../utils/normalizeRow';
 import { parseWorksheet, parseRawCsv, parseRowsFromHeaderAoA } from '../services/excelParser';
@@ -60,11 +59,12 @@ function useUploadHandlers(options) {
       };
       reader.readAsText(file);
     } else if (['xlsx', 'xls'].includes(ext)) {
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await import('xlsx');
           const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true, raw: false });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const parsedRows = parseWorksheet(ws);
+          const parsedRows = await parseWorksheet(ws);
           finalizeRows(parsedRows, file.name);
         } catch (err) {
           setUploadStatus({ type: 'error', msg: 'Failed to read Excel.', detail: String(err) });
@@ -120,11 +120,12 @@ function useUploadHandlers(options) {
       };
       reader.readAsText(file);
     } else if (['xlsx', 'xls'].includes(ext)) {
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await import('xlsx');
           const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true, raw: false });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const parsedRows = parseWorksheet(ws);
+          const parsedRows = await parseWorksheet(ws);
           processRows(parsedRows);
         } catch (err) {
           setImportState({ loading: false, lastMsg: '❌ Failed to read Excel: ' + String(err) });

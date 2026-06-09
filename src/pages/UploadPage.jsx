@@ -7,7 +7,6 @@ import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
-import * as XLSX from 'xlsx';
 // ─── UPLOAD DATA PAGE COMPONENT ───────────────────────────────────────────────
 
 function UploadPage() {
@@ -47,7 +46,7 @@ function UploadPage() {
     }
   }
 
-  function downloadTemplate() {
+  async function downloadTemplate() {
     const rows = [
       { 'SNO': 1, 'PO NO': 'AGIPLPO2326', 'PO RECD DATE': '2026-03-25', 'SC': '1170', 'Product Name': 'ARG DIA 15.2 +0.03', 'QTY': '1 NO', 'STATUS 1': 'LATHE COMPLETED, MOVE TO M1', 'STATUS 2': 'MOVE TO STORES', 'INHOUSE/ VENDOR': 'INHOUSE', 'OP': 'READY', 'TIMESTAMP': '2026-04-15 19:20:04' },
       { 'SNO': '', 'PO NO': '', 'PO RECD DATE': '', 'SC': '1170', 'Product Name': 'SP DIA 15.2 +0.03', 'QTY': '1 SET', 'STATUS 1': 'SET MOVE TO FB', 'STATUS 2': 'MOVE TO STORES', 'INHOUSE/ VENDOR': 'INHOUSE', 'OP': 'READY', 'TIMESTAMP': '2026-04-15 19:24:04' },
@@ -56,6 +55,7 @@ function UploadPage() {
       { 'SNO': '', 'PO NO': '', 'PO RECD DATE': '', 'SC': '1187', 'Product Name': 'SRG DIA 24.0 -0.007/-0.028', 'QTY': '1 NO', 'STATUS 1': 'HT,SZ COMPLETED,MOVE TO SG', 'STATUS 2': 'MOVE TO STORES', 'INHOUSE/ VENDOR': 'INHOUSE', 'OP': 'READY', 'TIMESTAMP': '2026-04-13 18:23:27' },
       { 'SNO': '', 'PO NO': '', 'PO RECD DATE': '', 'SC': '1187', 'Product Name': 'VERTICAL BENCH MOUNT PLATE', 'QTY': '1 NO', 'STATUS 1': 'INHOUSE', 'STATUS 2': '', 'INHOUSE/ VENDOR': 'VENDOR', 'OP': 'SDV', 'TIMESTAMP': '2026-04-13 17:01:58' },
     ];
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 30 }, { wch: 8 }, { wch: 35 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
@@ -63,7 +63,8 @@ function UploadPage() {
     XLSX.writeFile(wb, 'velan_template.xlsx');
   }
 
-  function exportCurrentData() {
+  async function exportCurrentData() {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Production');

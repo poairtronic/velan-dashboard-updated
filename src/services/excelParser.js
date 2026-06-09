@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { toIsoDateString } from '../utils/dateUtils';
 import { normalizeInhouse, inferType, normalizeTimestamp } from './dataNormalizer';
 import { resolveLatestStage } from './stageResolver';
@@ -228,7 +227,8 @@ function parseRowsFromHeaderAoA(rawAoA) {
   return result.filter(r => r.sc || r.po);
 }
 
-function parseWorksheet(ws) {
+async function parseWorksheet(ws) {
+  const XLSX = await import('xlsx');
   const rawAoA = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
   const headerMapped = parseRowsFromHeaderAoA(rawAoA);
   if (headerMapped.length > 0) return headerMapped;

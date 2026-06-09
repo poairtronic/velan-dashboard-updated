@@ -10,8 +10,13 @@ function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const { liveState, setActiveNav } = useUI();
-  const { now } = useData();
   const { theme, toggleTheme } = useTheme();
+  const [now, setNow] = React.useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   const { user, logout, isAdmin } = useAuth();
 
   const handleSignOut = () => {

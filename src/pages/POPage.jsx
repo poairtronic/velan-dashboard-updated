@@ -9,6 +9,12 @@ import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 // ─── PO ANALYSIS PAGE COMPONENT ───────────────────────────────────────────────
 
+const _now = new Date();
+const MODULE_TODAY_STR =
+  _now.getFullYear() + '-' +
+  String(_now.getMonth() + 1).padStart(2, '0') + '-' +
+  String(_now.getDate()).padStart(2, '0');
+
 function isPOComplete(scGroupsForPO) {
   return scGroupsForPO.length > 0 && scGroupsForPO.every(sg => isSCComplete(sg.items));
 }
@@ -23,27 +29,23 @@ function POPage() {
   const [selectedPO, setSelectedPO] = React.useState(null);
   const [search, setSearch]     = React.useState('');
 
-  // Build PO → SC mapping from scGroups
-  const poSCMap = {};
-  scGroups.forEach(sg => {
-    if (!poSCMap[sg.po]) poSCMap[sg.po] = [];
-    poSCMap[sg.po].push(sg);
-  });
+  const poRows = React.useMemo(() => {
+    const poSCMap = {};
+    scGroups.forEach(sg => {
+      if (!poSCMap[sg.po]) poSCMap[sg.po] = [];
+      poSCMap[sg.po].push(sg);
+    });
 
-  // Build enriched PO rows
-  const poRows = poGroups.map(pg => {
-    const scs    = poSCMap[pg.po] || [];
-    const done   = isPOComplete(scs);
-    const lastTs = getSCLastTimestamp(pg.items);
-    const days   = daysBetween(pg.poDate, lastTs);
-    return { ...pg, scs, done, lastTs, days };
-  });
+    return poGroups.map(pg => {
+      const scs    = poSCMap[pg.po] || [];
+      const done   = isPOComplete(scs);
+      const lastTs = getSCLastTimestamp(pg.items);
+      const days   = daysBetween(pg.poDate, lastTs);
+      return { ...pg, scs, done, lastTs, days };
+    });
+  }, [poGroups, scGroups]);
 
-  const now = new Date();
-  const todayStr =
-    now.getFullYear() + '-' +
-    String(now.getMonth() + 1).padStart(2, '0') + '-' +
-    String(now.getDate()).padStart(2, '0');
+  const todayStr = MODULE_TODAY_STR;
 
   // Auto-expand and highlight PO from context state
   React.useEffect(() => {
@@ -69,10 +71,10 @@ function POPage() {
       })
     : tabFiltered;
 
-  const completePOs   = poRows.filter(p => p.done).length;
-  const inProgressPOs = poRows.filter(p => !p.done).length;
+  const completePOs   = React.useMemo(() => poRows.filter(p => p.done).length, [poRows]);
+  const inProgressPOs = React.useMemo(() => poRows.filter(p => !p.done).length, [poRows]);
 
-  const leadData = kpis.bottleneck.slice(0, 15);
+  const leadData = React.useMemo(() => kpis.bottleneck.slice(0, 15), [kpis.bottleneck]);
   useChart(leadsRef, {
     type: 'bar',
     data: {
@@ -211,7 +213,7 @@ function POPage() {
 }
 
 // ─── PO DETAILS EXPANDABLE COMPONENT ──────────────────────────────────────────────
-function PODetailsExpandable({ poRow, todayStr }) {
+const PODetailsExpandable = React.memo(function PODetailsExpandable({ poRow, todayStr }) {
   const [expandedSCs, setExpandedSCs] = React.useState({});
   
   const toggleSC = (sc) => {
@@ -314,6 +316,6 @@ function PODetailsExpandable({ poRow, todayStr }) {
       </div>
     </div>
   );
-}
+});
 
-export default POPage;
+export default React.memo(POPage);

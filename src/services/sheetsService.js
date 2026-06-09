@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { normalizeGoogleSheetsUrl } from './googleSheets';
 import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet } from './excelParser';
 import { apiBase, apiClient } from './apiClient';
@@ -36,8 +35,9 @@ export async function fetchDataUrl(sourceUrl) {
     const res = await apiClient(fetchUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = await res.arrayBuffer();
+    const XLSX = await import('xlsx');
     const wb = XLSX.read(buf, { type: 'array', cellDates: true, raw: false });
-    return parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
+    return await parseWorksheet(wb.Sheets[wb.SheetNames[0]]);
   } else {
     throw new Error('Paste a Google Sheets URL, or a direct .xlsx/.csv/.json link.');
   }

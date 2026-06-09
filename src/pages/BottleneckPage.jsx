@@ -7,9 +7,6 @@ import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {
@@ -43,9 +40,10 @@ function BottleneckPage() {
       });
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     const rows = getStuckRows();
     if (!rows.length) return;
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 10 }, { wch: 24 }, { wch: 36 }, { wch: 10 }, { wch: 28 }, { wch: 12 }, { wch: 10 }, { wch: 14 }];
     const wb = XLSX.utils.book_new();
@@ -81,10 +79,11 @@ function BottleneckPage() {
     URL.revokeObjectURL(url);
   }
 
-  function exportPDF() {
+  async function exportPDF() {
     const rows = getStuckRows();
     if (!rows.length) return;
-    // jsPDF imported at top
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
     const doc = new jsPDF({ orientation: 'landscape' });
     const d = new Date();
     doc.setFontSize(14); doc.setTextColor(40);

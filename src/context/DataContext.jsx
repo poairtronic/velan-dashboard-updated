@@ -43,9 +43,16 @@ export function DataProvider({ children }) {
   useEffect(() => localStorage.setItem('velan_live_source_v1', JSON.stringify(liveConfig || {})), [liveConfig]);
   useEffect(() => localStorage.setItem('velan_history_source_v1', JSON.stringify(historyConfig || {})), [historyConfig]);
 
-  const [now, setNow] = useState(new Date());
+  const [todayStr, setTodayStr] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  });
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
+    const timer = setInterval(() => {
+      const d = new Date();
+      const current = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      setTodayStr(prev => prev !== current ? current : prev);
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -175,16 +182,14 @@ export function DataProvider({ children }) {
 
   // Computed data
   const processedData = useMemo(() => {
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     return data.map(row => ({
       ...row,
       pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
       cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }));
-  }, [data, now]);
+  }, [data, todayStr]);
 
   const allDbData = useMemo(() => {
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const seen = new Set();
     const liveProcessed = liveRows.map(row => ({
       ...row,
@@ -204,16 +209,15 @@ export function DataProvider({ children }) {
       seen.add(key);
       return true;
     });
-  }, [processedData, liveRows, now]);
+  }, [processedData, liveRows, todayStr]);
 
   const liveData = useMemo(() => {
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     return liveRows.map(row => ({
       ...row,
       pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
       cycleTime: (row.timestamp && row.poDate) ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }));
-  }, [liveRows, now]);
+  }, [liveRows, todayStr]);
 
   const filtered = useMemo(() => filterRows(liveData), [liveData, filterRows]);
 
@@ -247,7 +251,7 @@ export function DataProvider({ children }) {
     return Object.values(g);
   }, [liveData]);
 
-  const kpis = useKPIs(filtered, scGroups, poGroups, liveData, now);
+  const kpis = useKPIs(filtered, scGroups, poGroups, liveData, todayStr);
 
   const uniquePOs     = useMemo(() => [...new Set(liveData.map(r => r.po))].sort(), [liveData]);
   const uniqueStages  = useMemo(() => [...new Set(liveData.map(r => r.currentStage))].filter(Boolean).sort(), [liveData]);

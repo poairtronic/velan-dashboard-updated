@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 // ─── DATE UTILITIES ──────────────────────────────────────────────────────────
 
 // Resolution rule for ambiguous A/B/YYYY or A/B/YY where A<=12 and B<=12:
@@ -81,12 +80,6 @@ function toIsoDateString(value) {
   // Excel serial number (e.g. 46148)
   const num = Number(text);
   if (!isNaN(num) && num > 20000 && num < 80000) {
-    if (XLSX?.SSF?.parse_date_code) {
-      const dc = XLSX.SSF.parse_date_code(num);
-      if (dc && dc.y && dc.m && dc.d) {
-        return `${dc.y}-${String(dc.m).padStart(2,'0')}-${String(dc.d).padStart(2,'0')}`;
-      }
-    }
     const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
     const y2  = epoch.getFullYear();
     const mo2 = String(epoch.getMonth() + 1).padStart(2, '0');

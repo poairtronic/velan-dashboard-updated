@@ -8,9 +8,6 @@ import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import { parseRawCsv, parseWorksheet } from '../services/excelParser';
 // ─── DATABASE PAGE COMPONENT ──────────────────────────────────────────────────
 
@@ -476,8 +473,9 @@ function DatabasePage() {
     URL.revokeObjectURL(url);
   }
 
-  function exportPDF() {
-    // jsPDF imported at top
+  async function exportPDF() {
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
     const exportRows = filtered.filter(r => isDoneStage(r.currentStage));

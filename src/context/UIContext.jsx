@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useMemo } from 'react';
 
 const UIContext = createContext();
 
@@ -13,16 +13,20 @@ export function UIProvider({ children }) {
   const [importState, setImportState] = useState({ loading: false, lastMsg: '' });
   const [liveState, setLiveState] = useState({ active: false, lastSync: '', lastError: '' });
 
+  const value = useMemo(() => ({
+    activeNav, setActiveNav,
+    selectedPONum, setSelectedPONum,
+    isLoading, setIsLoading,
+    serverStatus, setServerStatus,
+    uploadStatus, setUploadStatus,
+    importState, setImportState,
+    liveState, setLiveState
+  }), [
+    activeNav, selectedPONum, isLoading, serverStatus, uploadStatus, importState, liveState
+  ]);
+
   return (
-    <UIContext.Provider value={{
-      activeNav, setActiveNav,
-      selectedPONum, setSelectedPONum,
-      isLoading, setIsLoading,
-      serverStatus, setServerStatus,
-      uploadStatus, setUploadStatus,
-      importState, setImportState,
-      liveState, setLiveState
-    }}>
+    <UIContext.Provider value={value}>
       {children}
     </UIContext.Provider>
   );

@@ -347,7 +347,7 @@ function OverviewPage() {
 }
 
 // ─── OVERVIEW STATS MODAL COMPONENT ──────────────────────────────────────────────
-function OverviewStatsModal({ category, data, todayStr }) {
+const OverviewStatsModal = React.memo(function OverviewStatsModal({ category, data, todayStr }) {
   const [expandedPOs, setExpandedPOs] = React.useState({});
   const [expandedSCs, setExpandedSCs] = React.useState({});
 
@@ -473,6 +473,6 @@ function OverviewStatsModal({ category, data, todayStr }) {
       })}
     </div>
   );
-}
+});
 
-export default OverviewPage;
+export default React.memo(OverviewPage);

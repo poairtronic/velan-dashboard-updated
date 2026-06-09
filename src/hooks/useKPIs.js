@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { workingDaysBetween, daysBetween, isSCComplete, getSCLastTimestamp, TARGET_DAYS, parseDateTime } from '../utils/calculationUtils';
 
-export function useKPIs(filtered, scGroups, poGroups, liveData, now) {
+export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
   return useMemo(() => {
     const totalItems = filtered.length;
 
@@ -29,7 +29,7 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, now) {
     const inhouse = filtered.filter(r => r.inhouse === 'INHOUSE').length;
     const vendor = filtered.filter(r => r.inhouse === 'VENDOR').length;
 
-    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const today = todayStr;
 
     let onTime = 0, delayed = 0, onTimePOs = [], delayedPOs = [], completedPOCount = 0;
     poGroups.forEach(pg => {
@@ -332,5 +332,5 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, now) {
       delayedPOs, onTimePOs,
       dailyOutput, dailyOutputArray,
     };
-  }, [filtered, scGroups, poGroups, liveData, now]);
+  }, [filtered, scGroups, poGroups, liveData, todayStr]);
 }

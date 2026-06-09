@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { getProductCategory } from '../utils/calculationUtils';
 
 const FilterContext = createContext();
@@ -54,12 +54,14 @@ export function FilterProvider({ children }) {
     });
   }, [filters]);
 
+  const value = useMemo(() => ({
+    filters, setFilters,
+    dateRange, setDateRange,
+    resetFilters, filterRows
+  }), [filters, dateRange, resetFilters, filterRows]);
+
   return (
-    <FilterContext.Provider value={{
-      filters, setFilters,
-      dateRange, setDateRange,
-      resetFilters, filterRows
-    }}>
+    <FilterContext.Provider value={value}>
       {children}
     </FilterContext.Provider>
   );
