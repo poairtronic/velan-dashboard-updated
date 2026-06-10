@@ -377,11 +377,6 @@ function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // If session check is done and user is already logged in, send to dashboard
-  if (!isLoading && isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
-
   const [role, setRole] = useState('user');
   const [tab, setTab] = useState('login');
   const [username, setUsername] = useState('');
@@ -393,6 +388,11 @@ function LoginPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState(null);
+
+  // If session check is done and user is already logged in, send to dashboard
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   const isAdmin = role === 'admin';
 
