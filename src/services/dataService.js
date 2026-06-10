@@ -1,7 +1,7 @@
 import { apiBase, apiClient } from './apiClient';
 
-export async function fetchData() {
-  const res = await apiClient(`${apiBase}/api/data`);
+export async function fetchData(page = 1, limit = 100000) {
+  const res = await apiClient(`${apiBase}/api/data?page=${page}&limit=${limit}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }

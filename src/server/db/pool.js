@@ -364,8 +364,13 @@ async function logSync(syncType, rowCount, status) {
   }
 }
 
+const crypto = require('crypto');
+
 // ── Refactored Row Key Generator ──────────────────────────────────────────────
-const makeKey = (r) => `${r.sc || ''}||${r.po || ''}||${r.product || ''}||${r.currentStage || ''}`;
+const makeKey = (r) => {
+  const content = `${r.sc || ''}||${r.po || ''}||${r.product || ''}||${r.currentStage || ''}||${r.status1 || ''}||${r.status2 || ''}||${r.inhouse || ''}||${r.timestamp || ''}||${r.qty || ''}`;
+  return crypto.createHash('md5').update(content).digest('hex');
+};
 
 // ── Bulk Upsert archive rows into Neon ─────────────────────────────────────────
 async function insertRows(rows) {
