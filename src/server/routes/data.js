@@ -1,22 +1,35 @@
 const state = require('../state');
 const { readBody } = require('../utils/helpers');
-const { loadDB, loadLiveDB, saveLiveRows, insertRows, logSync, pool } = require('../db/pool');
+const { queryRowsPaginated, getTotalCount, loadLiveDB, saveLiveRows, insertRows, logSync, pool } = require('../db/pool');
 const { dataUploadSchema } = require('../schemas/upload.schema');
 const { validateBody } = require('../middleware/validation');
+const { getOrSetCache, invalidatePattern, TTL } = require('../cache/cacheService');
+const keys = require('../cache/cacheKeys');
 
 async function handleDataRoutes(req, res, pathname, method, parsed) {
   // ── GET /api/data ─────────────────────────────────────────────────────────
   if (pathname === '/api/data' && method === 'GET') {
     try {
-      const dbRows = await loadDB();
-      const liveDbRows = await loadLiveDB();
+      const page = parseInt(parsed.searchParams.get('page') || '1', 10);
+      const limit = parseInt(parsed.searchParams.get('limit') || '500', 10);
+      const search = parsed.searchParams.get('search') || '';
+      const offset = (page - 1) * limit;
+
+      const cacheKey = keys.DASHBOARD_DATA(page, limit, search);
+      const dbRows = await getOrSetCache(cacheKey, TTL.SHORT, () => queryRowsPaginated({ limit, offset, search }));
+      
+      const liveDbRows = await getOrSetCache(keys.DASHBOARD_LIVE, TTL.SHORT, () => loadLiveDB());
+      const total = await getOrSetCache(keys.DASHBOARD_STATS, TTL.SHORT, () => getTotalCount());
+      
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(
         JSON.stringify({
           rows: dbRows,
           liveRows: liveDbRows.length > 0 ? liveDbRows : dbRows,
           lastSync: state._lastSync,
-          total: dbRows.length,
+          total: total,
+          page,
+          limit
         })
       );
     } catch (err) {
@@ -55,14 +68,17 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
       // 2. Save/Upsert new rows to velan_rows in Neon
       const saved = await insertRows(incoming);
 
-      state._db = await loadDB();
+      const currentTotal = await getTotalCount();
       state._lastSync = new Date().toLocaleString('en-IN');
+
+      // Invalidate caches
+      await invalidatePattern('dashboard:*');
 
       // 3. Log the successful sync
       await logSync(syncType, incomingLength, 'success');
 
       console.log(
-        `[POST /api/data] Live: ${incoming.length} | DB: ${state._db.length} (+${saved} upserted to Neon)`
+        `[POST /api/data] Live: ${incoming.length} | DB: ${currentTotal} (+${saved} upserted to Neon)`
       );
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -70,7 +86,7 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
         JSON.stringify({
           success: true,
           liveTotal: incoming.length,
-          total: state._db.length,
+          total: currentTotal,
           newRows: saved,
           lastSync: state._lastSync,
         })
@@ -88,9 +104,12 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
     try {
       await pool.query('DELETE FROM velan_rows');
       await pool.query('DELETE FROM velan_live_rows');
-      state._db = [];
       state._liveRows = [];
       state._lastSync = '';
+      
+      // Invalidate caches
+      await invalidatePattern('dashboard:*');
+      
       console.log('[DELETE /api/data] All rows wiped from Neon DB');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: true, message: 'All rows deleted from database.' }));
@@ -156,10 +175,14 @@ async function handleDataRoutes(req, res, pathname, method, parsed) {
       } finally {
         client.release();
       }
-      state._db = await loadDB();
-      console.log(`[POST /api/migrate] Fixed ${fixed} rows | DB now: ${state._db.length}`);
+      const newTotal = await getTotalCount();
+      
+      // Invalidate caches
+      await invalidatePattern('dashboard:*');
+      
+      console.log(`[POST /api/migrate] Fixed ${fixed} rows | DB now: ${newTotal}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, fixed, total: state._db.length }));
+      return res.end(JSON.stringify({ success: true, fixed, total: newTotal }));
     } catch (err) {
       console.error('[POST /api/migrate]', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });

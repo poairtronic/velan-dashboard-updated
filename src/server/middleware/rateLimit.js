@@ -1,39 +1,43 @@
-const rateLimitStore = new Map();
+const redisClient = require('../cache/redisClient');
 
 function createLimiter(name, maxRequests, windowMs) {
-  return function (req, res) {
+  return async function (req, res) {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anonymous';
-    const storeKey = `${name}:${ip}`;
+    const storeKey = `rate-limit:${name}:${ip}`;
     const now = Date.now();
+    const windowStart = now - windowMs;
 
-    if (!rateLimitStore.has(storeKey)) {
-      rateLimitStore.set(storeKey, []);
+    try {
+      // Remove timestamps older than the window
+      await redisClient.zremrangebyscore(storeKey, 0, windowStart);
+      
+      // Get count of remaining active timestamps
+      const activeCount = await redisClient.zcard(storeKey);
+
+      if (activeCount >= maxRequests) {
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'Retry-After': Math.ceil(windowMs / 1000),
+        });
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: `Too Many Requests. Rate limit exceeded for ${name}. Try again later.`,
+          })
+        );
+        return false;
+      }
+
+      // Add current timestamp
+      await redisClient.zadd(storeKey, now, now);
+      // Set expiry on the key to prevent memory leaks
+      await redisClient.expire(storeKey, Math.ceil(windowMs / 1000));
+      return true;
+    } catch (err) {
+      console.error('[RateLimit Error]', err.message);
+      // Fail open if Redis is down
+      return true; 
     }
-
-    const timestamps = rateLimitStore.get(storeKey);
-    const activeTimestamps = timestamps.filter((ts) => now - ts < windowMs);
-
-    if (activeTimestamps.length >= maxRequests) {
-      const oldestActive = activeTimestamps[0];
-      const msLeft = windowMs - (now - oldestActive);
-      const retryAfterSeconds = Math.max(1, Math.ceil(msLeft / 1000));
-
-      res.writeHead(429, {
-        'Content-Type': 'application/json',
-        'Retry-After': retryAfterSeconds,
-      });
-      res.end(
-        JSON.stringify({
-          success: false,
-          error: `Too Many Requests. Rate limit exceeded for ${name}. Try again in ${retryAfterSeconds} seconds.`,
-        })
-      );
-      return false;
-    }
-
-    activeTimestamps.push(now);
-    rateLimitStore.set(storeKey, activeTimestamps);
-    return true;
   };
 }
 

@@ -8,7 +8,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 
-const { pool, isMock, initDB, runKeyMigration, loadDB, loadLiveDB } = require('./db/pool');
+const { pool, isMock, initDB, runKeyMigration, getTotalCount, loadLiveDB } = require('./db/pool');
 const state = require('./state');
 const { validateSheetsUrl, readBody } = require('./utils/helpers');
 const jwt = require('jsonwebtoken');
@@ -34,6 +34,10 @@ const handleImportRoutes = require('./routes/import');
 const handleSheetsRoutes = require('./routes/sheets');
 const handleHealthRoute = require('./routes/health');
 const handleConfigRoutes = require('./routes/config');
+const handleReportsRoutes = require('./routes/reports');
+
+// Initialize background workers
+require('./workers/exportWorker');
 
 const PORT = process.env.PORT || 10000;
 const LIVE_URL = process.env.LIVE_URL || process.env.SHEETS_URL || '';
@@ -139,7 +143,7 @@ const server = http.createServer(async (req, res) => {
 
   // POST /api/auth/login — authenticate against users table with bcrypt
   if (pathname === '/api/auth/login' && req.method === 'POST') {
-    if (!loginLimiter(req, res)) return;
+    if (!(await loginLimiter(req, res))) return;
     try {
       const bodyStr = await readBody(req);
       const parsedBody = JSON.parse(bodyStr);
@@ -202,7 +206,7 @@ const server = http.createServer(async (req, res) => {
 
   // POST /api/auth/register — self-registration (always 'user' role)
   if (pathname === '/api/auth/register' && req.method === 'POST') {
-    if (!loginLimiter(req, res)) return;
+    if (!(await loginLimiter(req, res))) return;
     try {
       const bodyStr = await readBody(req);
       const parsedBody = JSON.parse(bodyStr);
@@ -226,7 +230,7 @@ const server = http.createServer(async (req, res) => {
   // POST /api/auth/admin-create — admin only
   if (pathname === '/api/auth/admin-create' && req.method === 'POST') {
     if (!requireAuth(req, res, ['admin'])) return;
-    if (!adminLimiter(req, res)) return;
+    if (!(await adminLimiter(req, res))) return;
     try {
       const bodyStr = await readBody(req);
       const parsedBody = JSON.parse(bodyStr);
@@ -250,7 +254,7 @@ const server = http.createServer(async (req, res) => {
   // GET /api/auth/users/pending-count — admin only
   if (pathname === '/api/auth/users/pending-count' && req.method === 'GET') {
     if (!requireAuth(req, res, ['admin'])) return;
-    if (!adminLimiter(req, res)) return;
+    if (!(await adminLimiter(req, res))) return;
     try {
       const result = await pool.query("SELECT COUNT(*) FROM users WHERE status = 'pending'");
       return sendJson(res, 200, { count: parseInt(result.rows[0].count, 10) });
@@ -262,7 +266,7 @@ const server = http.createServer(async (req, res) => {
   // GET /api/auth/users — admin only
   if (pathname === '/api/auth/users' && req.method === 'GET') {
     if (!requireAuth(req, res, ['admin'])) return;
-    if (!adminLimiter(req, res)) return;
+    if (!(await adminLimiter(req, res))) return;
     try {
       const result = await pool.query(
         'SELECT id, username, role, status, created_at FROM users ORDER BY created_at DESC'
@@ -280,7 +284,7 @@ const server = http.createServer(async (req, res) => {
     req.method === 'PUT'
   ) {
     if (!requireAuth(req, res, ['admin'])) return;
-    if (!adminLimiter(req, res)) return;
+    if (!(await adminLimiter(req, res))) return;
     const parts = pathname.split('/');
     const id = parseInt(parts[4], 10);
     if (!id) return sendJson(res, 400, { error: 'Invalid user ID' });
@@ -313,7 +317,7 @@ const server = http.createServer(async (req, res) => {
     !pathname.endsWith('/status')
   ) {
     if (!requireAuth(req, res, ['admin'])) return;
-    if (!adminLimiter(req, res)) return;
+    if (!(await adminLimiter(req, res))) return;
     const id = parseInt(pathname.split('/')[4], 10);
     if (!id) return sendJson(res, 400, { error: 'Invalid user ID' });
     if (req.user.id === id) return sendJson(res, 400, { error: 'Cannot delete your own account' });
@@ -328,7 +332,7 @@ const server = http.createServer(async (req, res) => {
 
   // ── Legacy Login (env-based, kept for backward compatibility) ───────────────
   if (pathname === '/api/login' && req.method === 'POST') {
-    if (!loginLimiter(req, res)) return;
+    if (!(await loginLimiter(req, res))) return;
     try {
       const bodyStr = await readBody(req);
       const parsedBody = JSON.parse(bodyStr);
@@ -404,9 +408,9 @@ const server = http.createServer(async (req, res) => {
   if (isAdminRoute) {
     if (!requireAuth(req, res, ['admin'])) return;
     if (['/api/data', '/api/import'].includes(pathname) && req.method === 'POST') {
-      if (!uploadLimiter(req, res)) return;
+      if (!(await uploadLimiter(req, res))) return;
     } else {
-      if (!adminLimiter(req, res)) return;
+      if (!(await adminLimiter(req, res))) return;
     }
   } else if (isAuthRoute) {
     if (!requireAuth(req, res, ['admin', 'user'])) return;
@@ -418,7 +422,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (['/api/import', '/api/reset'].includes(pathname)) {
-    return handleImportRoutes(req, res, pathname, req.method);
+    return handleImportRoutes(req, res, pathname, method);
+  }
+
+  if (pathname.startsWith('/api/reports')) {
+    return handleReportsRoutes(req, res, pathname, method);
   }
 
   if (pathname === '/api/sheets') {
@@ -513,11 +521,11 @@ async function startup() {
     }
   } catch (_) {}
 
-  state._db = await loadDB();
+  const totalCount = await getTotalCount();
   const liveDb = await loadLiveDB();
   state._liveRows = liveDb;
   console.log(
-    `[DB] Loaded ${state._db.length} archive rows and ${state._liveRows.length} live rows from Neon`
+    `[DB] Loaded ${totalCount} archive rows and ${state._liveRows.length} live rows from Neon`
   );
   console.log('[STATIC] Serving from:', path.resolve(__dirname, '..', '..', 'dist'));
   console.log(
@@ -537,7 +545,7 @@ async function startup() {
     console.log(`└─────────────────────────────────────────────────┘`);
     console.log(`  Storage: Neon PostgreSQL (no local file needed)`);
     console.log(
-      `  DB rows: ${state._db.length} archive rows | ${state._liveRows.length} live rows`
+      `  DB rows: ${totalCount} archive rows | ${state._liveRows.length} live rows`
     );
     console.log(`  LIVE_URL:    ${LIVE_URL ? LIVE_URL.substring(0, 60) + '...' : '⚠  NOT SET'}`);
     console.log(

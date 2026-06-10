@@ -1,8 +1,9 @@
 const state = require('../state');
 const { readBody, fetchRemote, parseCSV } = require('../utils/helpers');
-const { insertRows, saveLiveRows, loadDB, logSync, pool } = require('../db/pool');
+const { insertRows, saveLiveRows, getTotalCount, logSync, pool } = require('../db/pool');
 const { importUploadSchema } = require('../schemas/upload.schema');
 const { validateBody } = require('../middleware/validation');
+const { invalidatePattern } = require('../cache/cacheService');
 
 const HISTORY_URL = process.env.HISTORY_URL || '';
 
@@ -13,9 +14,11 @@ async function handleImportRoutes(req, res, pathname, method) {
       // 1. Wipe Neon
       await pool.query('DELETE FROM velan_rows');
       await pool.query('DELETE FROM velan_live_rows');
-      state._db = [];
       state._liveRows = [];
       state._lastSync = '';
+      
+      await invalidatePattern('dashboard:*');
+      
       console.log('[POST /api/reset] Neon DB wiped');
 
       // 2. Re-import from HISTORY_URL env var (if set)
@@ -36,18 +39,20 @@ async function handleImportRoutes(req, res, pathname, method) {
       const rows = parseCSV(raw);
 
       const imported = await insertRows(rows);
-      state._db = await loadDB();
+      const totalCount = await getTotalCount();
       state._lastSync = new Date().toLocaleString('en-IN');
+
+      await invalidatePattern('dashboard:*');
 
       await logSync('History Import', rows.length, 'success');
 
-      console.log(`[POST /api/reset] Re-imported ${imported} rows | DB now: ${state._db.length}`);
+      console.log(`[POST /api/reset] Re-imported ${imported} rows | DB now: ${totalCount}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(
         JSON.stringify({
           success: true,
           imported,
-          total: state._db.length,
+          total: totalCount,
           lastSync: state._lastSync,
         })
       );
@@ -90,18 +95,19 @@ async function handleImportRoutes(req, res, pathname, method) {
       if (validated.replace === true) {
         await pool.query('DELETE FROM velan_rows');
         await pool.query('DELETE FROM velan_live_rows');
-        state._db = [];
         state._liveRows = [];
         console.log('[POST /api/import] replace=true → wiped existing Neon rows');
       }
 
       const imported = await insertRows(incoming);
-      state._db = await loadDB();
+      const currentTotal = await getTotalCount();
       state._lastSync = new Date().toLocaleString('en-IN');
+
+      await invalidatePattern('dashboard:*');
 
       await logSync('History Import', incomingLength, 'success');
 
-      console.log(`[POST /api/import] Imported/Updated: ${imported} | DB: ${state._db.length}`);
+      console.log(`[POST /api/import] Imported/Updated: ${imported} | DB: ${currentTotal}`);
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(
@@ -109,7 +115,7 @@ async function handleImportRoutes(req, res, pathname, method) {
           success: true,
           imported,
           skipped: incomingLength - imported,
-          total: state._db.length,
+          total: currentTotal,
           lastSync: state._lastSync,
         })
       );

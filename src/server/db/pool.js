@@ -8,7 +8,7 @@ if (!isMock) {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 5, // max 5 concurrent connections (Neon free tier safe)
+    max: parseInt(process.env.DB_POOL_MAX, 10) || 20, // Increased for 10k+ users handling
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
@@ -227,6 +227,16 @@ async function initDB() {
       'CREATE INDEX IF NOT EXISTS idx_velan_live_rows_key ON velan_live_rows (row_key)'
     );
 
+    // Scalability Indices for fast searching, filtering, and sorting
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_stage ON velan_rows ((data->>'currentStage'))");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_sc ON velan_rows ((data->>'sc'))");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_po ON velan_rows ((data->>'po'))");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_product ON velan_rows ((data->>'product'))");
+    await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_added_at ON velan_rows (added_at DESC)');
+    
+    // Additional GIN index on jsonb data for unstructured searches if needed
+    await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_data_gin ON velan_rows USING GIN (data)');
+
     await client.query('COMMIT');
     console.log('[DB] Neon tables and indices initialized successfully');
   } catch (err) {
@@ -290,19 +300,44 @@ async function runKeyMigration() {
   }
 }
 
-// ── Load all rows from Neon into memory ───────────────────────────────────────
+// ── Load all rows from Neon into memory (DEPRECATED - DO NOT USE FOR PROD) ─────
 async function loadDB() {
-  const res = await pool.query('SELECT data FROM velan_rows ORDER BY id');
+  const res = await pool.query('SELECT data FROM velan_rows ORDER BY added_at DESC LIMIT 1000'); // Failsafe limit
   return res.rows.map((r) => {
     const d = r.data;
-    if (!d.currentStage && d.op) {
-      d.currentStage = String(d.op).trim();
-    }
-    if (!d.currentStage && d.OP) {
-      d.currentStage = String(d.OP).trim();
-    }
+    if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
+    if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
     return d;
   });
+}
+
+// ── Paginated Query ───────────────────────────────────────────────────────────
+async function queryRowsPaginated({ limit = 500, offset = 0, search = '' }) {
+  let queryText = 'SELECT data FROM velan_rows';
+  const queryParams = [];
+
+  if (search) {
+    queryText += ` WHERE data->>'sc' ILIKE $1 OR data->>'po' ILIKE $1 OR data->>'product' ILIKE $1 OR data->>'currentStage' ILIKE $1`;
+    queryParams.push(`%${search}%`);
+  }
+
+  queryText += ` ORDER BY added_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+  queryParams.push(limit, offset);
+
+  const res = await pool.query(queryText, queryParams);
+  
+  return res.rows.map((r) => {
+    const d = r.data;
+    if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
+    if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
+    return d;
+  });
+}
+
+// Get Total Count
+async function getTotalCount() {
+  const res = await pool.query('SELECT COUNT(*) as count FROM velan_rows');
+  return parseInt(res.rows[0].count, 10);
 }
 
 // ── Load all live operational rows from Neon ─────────────────────────
@@ -437,6 +472,8 @@ module.exports = {
   runKeyMigration,
   loadDB,
   loadLiveDB,
+  queryRowsPaginated,
+  getTotalCount,
   logSync,
   makeKey,
   insertRows,
