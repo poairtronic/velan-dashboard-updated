@@ -422,11 +422,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (['/api/import', '/api/reset'].includes(pathname)) {
-    return handleImportRoutes(req, res, pathname, method);
+    return handleImportRoutes(req, res, pathname, req.method);
   }
 
   if (pathname.startsWith('/api/reports')) {
-    return handleReportsRoutes(req, res, pathname, method);
+    return handleReportsRoutes(req, res, pathname, req.method);
   }
 
   if (pathname === '/api/sheets') {
