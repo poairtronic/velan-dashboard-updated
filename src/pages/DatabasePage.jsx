@@ -654,8 +654,7 @@ function DatabasePage() {
           className="chart-card"
           style={{
             marginBottom: 18,
-            background: 'rgba(10,15,40,0.95)',
-            border: '1px solid rgba(100,120,255,0.35)',
+            border: '1px solid var(--border-bright)',
           }}
         >
           <div
@@ -682,8 +681,8 @@ function DatabasePage() {
             {(historyRows || []).length > 0 && (
               <span
                 style={{
-                  background: 'rgba(100,120,255,0.15)',
-                  border: '1px solid rgba(100,120,255,0.4)',
+                  background: 'var(--glow1)',
+                  border: '1px solid var(--border-bright)',
                   color: 'var(--accent3)',
                   borderRadius: 20,
                   padding: '4px 14px',
@@ -706,11 +705,12 @@ function DatabasePage() {
             style={{
               marginBottom: 16,
               padding: 16,
-              background: 'rgba(15,110,86,0.08)',
-              border: '2px dashed rgba(0,230,118,0.4)',
+              background: 'var(--glow2)',
+              border: '2px dashed var(--success)',
               borderRadius: 8,
               textAlign: 'center',
               cursor: 'pointer',
+              opacity: 0.9,
             }}
             onDragOver={(e) => {
               e.preventDefault();
@@ -770,7 +770,7 @@ function DatabasePage() {
                 style={{
                   width: '100%',
                   background: 'var(--bg-secondary)',
-                  border: '1px solid rgba(100,120,255,0.4)',
+                  border: '1px solid var(--border-bright)',
                   borderRadius: 6,
                   color: 'var(--text-primary)',
                   padding: '9px 12px',
@@ -784,10 +784,8 @@ function DatabasePage() {
                 className="filter-btn"
                 style={{
                   padding: '10px 18px',
-                  background: importState?.loading
-                    ? 'rgba(100,120,255,0.08)'
-                    : 'rgba(100,120,255,0.18)',
-                  border: '1px solid rgba(100,120,255,0.5)',
+                  background: importState?.loading ? 'var(--glow1)' : 'var(--bg-secondary)',
+                  border: '1px solid var(--border-bright)',
                   color: 'var(--accent3)',
                   fontWeight: 700,
                 }}

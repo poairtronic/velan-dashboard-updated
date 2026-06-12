@@ -12,8 +12,13 @@ function parseCookies(req) {
     let [name, ...rest] = cookie.split('=');
     name = name.trim();
     if (!name) return;
-    const value = rest.join('=').trim();
-    list[name] = decodeURIComponent(value);
+    let value = rest.join('=').trim();
+    try {
+      value = decodeURIComponent(value);
+    } catch (e) {
+      // Ignore malformed URI components
+    }
+    list[name] = value;
   });
   return list;
 }
