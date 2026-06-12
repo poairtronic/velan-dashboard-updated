@@ -863,8 +863,8 @@ function DatabasePage() {
               color: 'var(--text-muted)',
               lineHeight: 1.7,
               padding: '8px 12px',
-              background: 'rgba(100,120,255,0.04)',
-              border: '1px solid rgba(100,120,255,0.1)',
+              background: 'var(--glow1)',
+              border: '1px solid var(--border)',
               borderRadius: 7,
             }}
           >
@@ -877,7 +877,7 @@ function DatabasePage() {
       )}
 
       {/* FILTER BAR */}
-      <div className="chart-card" style={{ marginBottom: 16, background: 'rgba(0,20,40,0.9)' }}>
+      <div className="chart-card" style={{ marginBottom: 16, background: 'var(--bg-card2)' }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 4 }}>
             <button
