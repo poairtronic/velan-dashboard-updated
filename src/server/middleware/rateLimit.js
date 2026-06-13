@@ -1,8 +1,8 @@
 const redisClient = require('../cache/redisClient');
 
 function createLimiter(name, maxRequests, windowMs) {
-  return async function (req, res) {
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anonymous';
+  return async function (req, res, next) {
+    const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
     const storeKey = `rate-limit:${name}:${ip}`;
     const now = Date.now();
     const windowStart = now - windowMs;
@@ -15,28 +15,24 @@ function createLimiter(name, maxRequests, windowMs) {
       const activeCount = await redisClient.zcard(storeKey);
 
       if (activeCount >= maxRequests) {
-        res.writeHead(429, {
-          'Content-Type': 'application/json',
-          'Retry-After': Math.ceil(windowMs / 1000),
+        res.set({
+          'Retry-After': Math.ceil(windowMs / 1000)
         });
-        res.end(
-          JSON.stringify({
-            success: false,
-            error: `Too Many Requests. Rate limit exceeded for ${name}. Try again later.`,
-          })
-        );
-        return false;
+        return res.status(429).json({
+          success: false,
+          error: `Too Many Requests. Rate limit exceeded for ${name}. Try again later.`,
+        });
       }
 
       // Add current timestamp
       await redisClient.zadd(storeKey, now, now);
       // Set expiry on the key to prevent memory leaks
       await redisClient.expire(storeKey, Math.ceil(windowMs / 1000));
-      return true;
+      return next();
     } catch (err) {
       console.error('[RateLimit Error]', err.message);
       // Fail open if Redis is down
-      return true; 
+      return next(); 
     }
   };
 }

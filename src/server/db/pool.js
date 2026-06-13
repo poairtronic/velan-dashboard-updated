@@ -69,7 +69,7 @@ if (!isMock) {
       if (cleanSql.includes('SELECT SYNC_TYPE')) {
         return { rows: this.syncLogs };
       }
-      if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS')) {
+      if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS') || cleanSql.includes('SELECT COUNT(*) AS COUNT FROM VELAN_ROWS')) {
         return { rows: [{ count: this.rows.length }] };
       }
       if (

@@ -5,8 +5,10 @@ const { env } = require('../config/env');
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json({
-    liveUrl: env.LIVE_URL || null,
-    historyUrl: env.HISTORY_URL || null,
+    apiSecretEnabled: !!env.API_SECRET,
+    corsRestricted: !!env.ALLOWED_ORIGIN,
+    sheetsWhitelistEnabled: true,
+    rateLimitingEnabled: true,
   });
 }));
 

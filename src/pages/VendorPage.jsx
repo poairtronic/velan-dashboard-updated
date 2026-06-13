@@ -1,82 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
-import { getStageColor } from '../services/dataNormalizer';
 import {
-  workingDaysBetween,
-  daysBetween,
   calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
-  TARGET_DAYS,
+  daysBetween,
 } from '../utils/calculationUtils';
-import { fmtTs, fmtDate } from '../utils/dateUtils';
-import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
-import useChart from '../utils/chartUtils';
+import { fmtTs } from '../utils/dateUtils';
+
+// Modular Components
+import VendorKPIs from '../components/vendor/VendorKPIs';
+import VendorCharts from '../components/vendor/VendorCharts';
+import VendorSplitBar from '../components/vendor/VendorSplitBar';
+import VendorTimeRanking from '../components/vendor/VendorTimeRanking';
+import VendorEfficiencyTable from '../components/vendor/VendorEfficiencyTable';
+import VendorBottleneckAlert from '../components/vendor/VendorBottleneckAlert';
+import VendorFullTable from '../components/vendor/VendorFullTable';
+import VendorItemTable from '../components/vendor/VendorItemTable';
+
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
   const { kpis, filtered: data } = useData();
   const { setActiveNav, setSelectedPONum } = useUI();
   const navigate = useNavigate();
-  const [selectedSC, setSelectedSC] = React.useState(null);
-  const [selectedItem, setSelectedItem] = React.useState(null);
-  const vendorBarRef = React.useRef();
-  const vendorTimeRef = React.useRef();
-  const vendors = kpis.vendors;
-  const max = vendors.length > 0 ? Math.max(...vendors.map((v) => v.count)) : 1;
-  const maxDays = vendors.length > 0 ? Math.max(...vendors.map((v) => v.avgDays || 0)) : 1;
+  const [selectedSC, setSelectedSC] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
 
-  useChart(
-    vendorBarRef,
-    {
-      type: 'bar',
-      data: {
-        labels: vendors.map((v) => v.code),
-        datasets: [
-          {
-            label: 'Avg Pending Days (Today - Last Update)',
-            data: vendors.map((v) => v.avgDays || 0),
-            backgroundColor: vendors.map((v) =>
-              (v.avgDays || 0) > 21 ? '#ff3d5a99' : '#ffd60a99'
-            ),
-            borderColor: vendors.map((v) => ((v.avgDays || 0) > 21 ? '#ff3d5a' : '#ffd60a')),
-            borderWidth: 1,
-            borderRadius: 4,
-          },
-          {
-            label: 'Max Pending Days',
-            data: vendors.map((v) => v.maxDays || 0),
-            backgroundColor: 'rgba(255,107,53,0.3)',
-            borderColor: '#ff6b35',
-            borderWidth: 1,
-            borderRadius: 4,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { color: '#7ba7cc' } },
-          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y} days` } },
-        },
-        scales: {
-          x: { ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' } },
-          y: {
-            ticks: { color: '#7ba7cc' },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-            title: { display: true, text: 'Pending Days (Today - Last Update)', color: '#7ba7cc' },
-          },
-        },
-      },
-    },
-    [kpis]
-  );
+  const vendors = kpis.vendors || [];
+  const maxDays = vendors.length > 0 ? Math.max(...vendors.map((v) => v.avgDays || 0)) : 1;
 
   const inhPct = Math.round((kpis.inhouse / Math.max(kpis.inhouse + kpis.vendor, 1)) * 100);
   const venPct = 100 - inhPct;
@@ -88,6 +40,7 @@ function VendorPage() {
     (a, b) => ((b.delayed || 0) > (a.delayed || 0) ? b : a),
     vendors[0] || {}
   );
+  
   const now = new Date();
   const todayRef =
     now.getFullYear() +
@@ -103,52 +56,15 @@ function VendorPage() {
         <div className="section-line" />
       </div>
 
-      <div className="kpi-grid">
-        <KPICard
-          label="INHOUSE ITEMS"
-          value={kpis.inhouse}
-          sub={`${inhPct}% of total`}
-          color1="#00c9ff"
-          color2="#0fa8e0"
-        />
-        <KPICard
-          label="VENDOR ITEMS"
-          value={kpis.vendor}
-          sub={`${venPct}% of total`}
-          color1="#b24bff"
-          color2="#ff6b35"
-        />
-        <KPICard
-          label="VENDOR STAGES"
-          value={vendors.length}
-          sub="distinct vendor operations"
-          color1="#ffd60a"
-          color2="#b24bff"
-        />
-        <KPICard
-          label="SLOWEST VENDOR OP"
-          value={worstVendor?.code || '—'}
-          sub={`~${worstVendor?.avgDays || 0} days since last update`}
-          color1="#ff3d5a"
-          color2="#ff6b35"
-          badge={{ text: 'HIGHEST AGING', cls: 'badge-red' }}
-        />
-        <KPICard
-          label="MOST DELAYED"
-          value={mostDelayed?.code || '—'}
-          sub={`${mostDelayed?.delayed || 0} items >21 days pending`}
-          color1="#ff3d5a"
-          color2="#b24bff"
-          badge={{ text: 'DELAYED', cls: 'badge-red' }}
-        />
-        <KPICard
-          label="TOTAL VENDOR"
-          value={kpis.inhouse + kpis.vendor}
-          sub="all items tracked"
-          color1="#00ff9d"
-          color2="#00c9ff"
-        />
-      </div>
+      <VendorKPIs
+        kpis={kpis}
+        vendors={vendors}
+        worstVendor={worstVendor}
+        mostDelayed={mostDelayed}
+        inhPct={inhPct}
+        venPct={venPct}
+      />
+
       <div
         style={{
           marginTop: -8,
@@ -161,632 +77,30 @@ function VendorPage() {
         Aging reference date: {todayRef} (computed from last edit/update timestamp in sheet)
       </div>
 
-      {/* Inhouse vs Vendor split bar */}
-      <div
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 10,
-          padding: 18,
-          marginBottom: 16,
-        }}
-      >
-        <div className="chart-title">Inhouse vs Vendor Workload Split</div>
-        <div className="chart-sub">PERCENTAGE OF TOTAL ITEMS</div>
-        <div style={{ display: 'flex', gap: 20, marginTop: 12, alignItems: 'center' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden' }}>
-              <div
-                style={{
-                  width: `${inhPct}%`,
-                  background: 'linear-gradient(90deg,#00c9ff,#0fa8e0)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#000',
-                }}
-              >
-                {inhPct}% IH
-              </div>
-              <div
-                style={{
-                  width: `${venPct}%`,
-                  background: 'linear-gradient(90deg,#b24bff,#ff6b35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#fff',
-                }}
-              >
-                {venPct}% VN
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <span style={{ fontSize: 12, color: 'var(--accent1)' }}>■ Inhouse: {kpis.inhouse}</span>
-            <span style={{ fontSize: 12, color: 'var(--accent6)' }}>■ Vendor: {kpis.vendor}</span>
-          </div>
-        </div>
-      </div>
+      <VendorSplitBar
+        inhPct={inhPct}
+        venPct={venPct}
+        inhouseCount={kpis.inhouse}
+        vendorCount={kpis.vendor}
+      />
 
-      <div className="chart-grid">
-        <div className="chart-card">
-          <div className="chart-title">Items per Vendor Operation</div>
-          <div className="chart-sub">WORKLOAD BY VENDOR STAGE CODE</div>
-          <div className="chart-wrap">
-            <canvas ref={vendorBarRef} />
-          </div>
-        </div>
-        <div className="chart-card">
-          <div className="chart-title">⏱ Avg & Max Pending Days per Vendor Op</div>
-          <div className="chart-sub">TODAY - LAST UPDATE TIMESTAMP · RED = OVER 21 DAYS</div>
-          <div className="chart-wrap">
-            <canvas ref={vendorTimeRef} />
-          </div>
-        </div>
-      </div>
+      <VendorCharts vendors={vendors} />
 
-      {/* Vendor time ranking bars */}
-      <div className="chart-card" style={{ marginBottom: 16 }}>
-        <div className="chart-title">Vendor Operation — Time Ranking</div>
-        <div className="chart-sub">SORTED BY AVG PENDING DAYS (HIGHEST = NEEDS ATTENTION)</div>
-        <div className="vendor-bar-wrap" style={{ marginTop: 12 }}>
-          {[...vendors]
-            .sort((a, b) => (b.avgDays || 0) - (a.avgDays || 0))
-            .map((v, i) => {
-              const pct = Math.min(
-                100,
-                Math.round(((v.avgDays || 0) / Math.max(maxDays, 1)) * 100)
-              );
-              const overdue = (v.avgDays || 0) > TARGET_DAYS;
-              return (
-                <div className="vendor-row" key={i}>
-                  <div
-                    className="vendor-name"
-                    style={{ color: overdue ? 'var(--danger)' : 'var(--text-secondary)' }}
-                  >
-                    {v.code}
-                  </div>
-                  <div className="vendor-bar-bg">
-                    <div
-                      className="vendor-bar-fill"
-                      style={{
-                        width: `${pct}%`,
-                        background: overdue
-                          ? 'linear-gradient(90deg,#ff3d5a,#ff6b35)'
-                          : 'linear-gradient(90deg,#ffd60a,#b24bff)',
-                      }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      width: 110,
-                      textAlign: 'right',
-                      fontSize: 11,
-                      color: overdue ? 'var(--danger)' : 'var(--text-muted)',
-                    }}
-                  >
-                    {v.avgDays != null ? `${v.avgDays}d avg pending` : '-'} · {v.count} items
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      </div>
+      <VendorTimeRanking vendors={vendors} maxDays={maxDays} />
 
-      {/* Process Cycle Time & Efficiency Metrics */}
-      <div
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 10,
-          padding: 18,
-          marginBottom: 16,
-        }}
-      >
-        <div className="chart-title">⏱ Process Cycle Time & Efficiency by Vendor Operation</div>
-        <div className="chart-sub">
-          AVERAGE TIME FROM PO RECEIPT · PROCESS COMPLETION RATE · SLA VIOLATIONS (2d+ PENDING)
-        </div>
-        <div className="vendor-bar-wrap" style={{ marginTop: 12 }}>
-          {[...vendors]
-            .sort((a, b) => (b.avgDays || 0) - (a.avgDays || 0))
-            .map((v, i) => {
-              return (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '10px 0',
-                    borderBottom: '1px solid rgba(26,58,92,0.4)',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 90,
-                      fontFamily: 'Share Tech Mono',
-                      fontSize: 11,
-                      color: 'var(--accent1)',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {v.code}
-                  </div>
-                  <div style={{ flex: 0.25 }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      Avg Pending Days
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'Rajdhani',
-                        fontSize: 16,
-                        fontWeight: 700,
-                        color: 'var(--accent4)',
-                      }}
-                    >
-                      {v.avgDays != null ? `${v.avgDays}d` : '—'}
-                    </div>
-                  </div>
-                  <div style={{ flex: 0.25 }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      Completion Rate
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'Rajdhani',
-                        fontSize: 16,
-                        fontWeight: 700,
-                        color: 'var(--success)',
-                      }}
-                    >
-                      {v.processEfficiency != null ? `${v.processEfficiency}%` : '—'}
-                    </div>
-                  </div>
-                  <div style={{ flex: 0.25 }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      SLA Violations (2d+)
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'Rajdhani',
-                        fontSize: 16,
-                        fontWeight: 700,
-                        color: v.slaViolations > 0 ? 'var(--danger)' : 'var(--success)',
-                      }}
-                    >
-                      {v.slaViolations || 0}
-                    </div>
-                  </div>
-                  <div style={{ flex: 0.25 }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      Violation Rate
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'Rajdhani',
-                        fontSize: 16,
-                        fontWeight: 700,
-                        color:
-                          v.slaViolationRate > 20
-                            ? 'var(--danger)'
-                            : v.slaViolationRate > 10
-                              ? 'var(--warning)'
-                              : 'var(--success)',
-                      }}
-                    >
-                      {v.slaViolationRate != null ? `${v.slaViolationRate}%` : '—'}
-                    </div>
-                  </div>
-                  <div style={{ flex: 0.2 }}>
-                    <span
-                      className={`status-pill ${v.slaViolations === 0 ? 'badge-green' : v.slaViolationRate > 20 ? 'badge-red' : 'badge-yellow'}`}
-                    >
-                      {v.slaViolations === 0
-                        ? '✓ COMPLIANT'
-                        : v.slaViolationRate > 20
-                          ? '⚠ CRITICAL'
-                          : '⚡ WARNING'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      </div>
+      <VendorEfficiencyTable vendors={vendors} />
 
-      {/* Bottleneck Detection */}
-      {kpis.topVendorBottleneck && (
-        <div
-          style={{
-            background: 'linear-gradient(135deg,rgba(255,61,90,0.1),rgba(255,107,53,0.08))',
-            border: '1px solid rgba(255,61,90,0.3)',
-            borderRadius: 10,
-            padding: 18,
-            marginBottom: 16,
-          }}
-        >
-          <div className="chart-title" style={{ color: 'var(--danger)' }}>
-            ⚠️ Vendor Bottleneck Alert
-          </div>
-          <div className="chart-sub">HIGHEST RISK VENDOR OPERATION</div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4,1fr)',
-              gap: 16,
-              marginTop: 14,
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                Bottleneck Operation
-              </div>
-              <div
-                style={{
-                  fontFamily: 'Rajdhani',
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: 'var(--danger)',
-                }}
-              >
-                {kpis.topVendorBottleneck.vendor}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                Avg Pending Days
-              </div>
-              <div
-                style={{
-                  fontFamily: 'Rajdhani',
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: 'var(--accent4)',
-                }}
-              >
-                {kpis.topVendorBottleneck.avgPending}d
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                SLA Violations
-              </div>
-              <div
-                style={{
-                  fontFamily: 'Rajdhani',
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: 'var(--danger)',
-                }}
-              >
-                {kpis.topVendorBottleneck.slaViolations}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                Process Efficiency
-              </div>
-              <div
-                style={{
-                  fontFamily: 'Rajdhani',
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: 'var(--warning)',
-                }}
-              >
-                {kpis.topVendorBottleneck.efficiency}%
-              </div>
-            </div>
-          </div>
-          <div
-            style={{
-              marginTop: 12,
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-              fontStyle: 'italic',
-            }}
-          >
-            This vendor operation has the highest bottleneck score and requires immediate attention.
-            Consider process optimization or resource reallocation.
-          </div>
-        </div>
-      )}
+      <VendorBottleneckAlert bottleneck={kpis.topVendorBottleneck} />
 
-      {/* Full vendor detail table */}
-      <div className="table-card">
-        <div className="table-header">
-          <div className="chart-title">Full Vendor Evaluation Table</div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>VENDOR OP</th>
-                <th>ITEMS</th>
-                <th>% SHARE</th>
-                <th>AVG PENDING DAYS</th>
-                <th>MAX PENDING</th>
-                <th>DELAYED (&gt;21d)</th>
-                <th>PROCESS CYCLE</th>
-                <th>EFFICIENCY</th>
-                <th>SLA VIOLATIONS</th>
-                <th>LAST UPDATE</th>
-                <th>RATING</th>
-                <th>SAMPLE PRODUCTS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...vendors]
-                .sort((a, b) => (b.avgDays || 0) - (a.avgDays || 0))
-                .map((v, i) => {
-                  const overdue = (v.avgDays || 0) > TARGET_DAYS;
-                  const latestTs = v.items
-                    .map((it) => it.timestamp)
-                    .filter(Boolean)
-                    .sort()
-                    .pop();
-                  const rating = overdue ? '🔴 SLOW' : (v.avgDays || 0) > 14 ? '🟡 OK' : '🟢 FAST';
-                  return (
-                    <tr key={i}>
-                      <td>
-                        <span className="status-pill s-vendor">{v.code}</span>
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 18,
-                          color: 'var(--accent6)',
-                        }}
-                      >
-                        {v.count}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div
-                            style={{
-                              width: 60,
-                              height: 7,
-                              background: 'rgba(255,255,255,0.05)',
-                              borderRadius: 4,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${v.pct}%`,
-                                height: '100%',
-                                background: '#b24bff',
-                                borderRadius: 4,
-                              }}
-                            />
-                          </div>
-                          <span style={{ color: 'var(--accent6)', fontWeight: 700 }}>{v.pct}%</span>
-                        </div>
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 18,
-                          color: overdue ? 'var(--danger)' : 'var(--warning)',
-                        }}
-                      >
-                        {v.avgDays != null ? `${v.avgDays}d` : '—'}
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 16,
-                          color: 'var(--accent4)',
-                        }}
-                      >
-                        {v.maxDays != null ? `${v.maxDays}d` : '—'}
-                      </td>
-                      <td
-                        style={{
-                          color: v.delayed > 0 ? 'var(--danger)' : 'var(--success)',
-                          fontWeight: 700,
-                          fontFamily: 'Rajdhani',
-                          fontSize: 17,
-                        }}
-                      >
-                        {v.delayed}
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color: 'var(--accent1)',
-                        }}
-                      >
-                        {v.avgDays != null ? `${v.avgDays}d` : '—'}
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color:
-                            v.processEfficiency >= 80
-                              ? 'var(--success)'
-                              : v.processEfficiency >= 60
-                                ? 'var(--warning)'
-                                : 'var(--danger)',
-                        }}
-                      >
-                        {v.processEfficiency != null ? `${v.processEfficiency}%` : '—'}
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color: v.slaViolations > 0 ? 'var(--danger)' : 'var(--success)',
-                        }}
-                      >
-                        {v.slaViolations || 0}
-                      </td>
-                      <td className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                        {fmtTs(latestTs)}
-                      </td>
-                      <td style={{ fontSize: 12 }}>{rating}</td>
-                      <td
-                        style={{
-                          fontSize: 10,
-                          color: 'var(--text-muted)',
-                          maxWidth: 220,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {v.items
-                          .slice(0, 3)
-                          .map((it) => it.product)
-                          .join(' · ')}
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <VendorFullTable vendors={vendors} />
 
-      <div className="table-card" style={{ marginTop: 16 }}>
-        <div className="table-header">
-          <div className="chart-title">
-            Vendor Process Aging & Cycle Time — Item Level (Today Reference)
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>SC</th>
-                <th>PO</th>
-                <th>PRODUCT</th>
-                <th>PROCESS</th>
-                <th>LAST UPDATE</th>
-                <th>PENDING DAYS</th>
-                <th>CYCLE TIME</th>
-                <th>SLA STATUS</th>
-                <th>STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data
-                .filter((r) => r.inhouse === 'VENDOR')
-                .map((r) => {
-                  const pendingDays = daysBetween(r.timestamp, todayRef);
-                  const cycleTime = calculateProcessCycleTime(r.poDate, r.timestamp);
-                  const slaViolation = pendingDays !== null && pendingDays > 2;
-                  return { ...r, pendingDays, cycleTime, slaViolation };
-                })
-                .sort((a, b) => (b.pendingDays || 0) - (a.pendingDays || 0))
-                .slice(0, 300)
-                .map((r, i) => {
-                  const pending = r.pendingDays;
-                  const cycle = r.cycleTime;
-                  const overdue = pending != null && pending > TARGET_DAYS;
-                  const slaStatus = r.slaViolation ? 'VIOLATION' : 'COMPLIANT';
-                  return (
-                    <tr
-                      key={`${r.sc || '—'}-${r.po}-${i}`}
-                      onClick={() => setSelectedItem(r)}
-                      style={{
-                        cursor: 'pointer',
-                        backgroundColor:
-                          selectedItem === r ? 'rgba(255,107,53,0.08)' : 'transparent',
-                      }}
-                      title="Click to view item details"
-                    >
-                      <td>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSC(r.sc);
-                          }}
-                          className="mono text-accent fw7"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                            cursor: 'pointer',
-                            textDecoration: 'underline',
-                            fontSize: 12,
-                          }}
-                          title={`View all products for SC ${r.sc || '—'}`}
-                        >
-                          {r.sc || '—'}
-                        </button>
-                      </td>
-                      <td style={{ fontSize: 11 }}>{r.po || '—'}</td>
-                      <td
-                        style={{
-                          fontSize: 11,
-                          maxWidth: 260,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {r.product || '—'}
-                      </td>
-                      <td>
-                        <span className="status-pill s-vendor">{r.currentStage || 'UNKNOWN'}</span>
-                      </td>
-                      <td className="mono" style={{ fontSize: 10 }}>
-                        {fmtTs(r.timestamp)}
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color: overdue ? 'var(--danger)' : 'var(--success)',
-                        }}
-                      >
-                        {pending != null ? `${pending}d` : '—'}
-                      </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color: 'var(--accent1)',
-                        }}
-                      >
-                        {cycle != null ? `${cycle}d` : '—'}
-                      </td>
-                      <td>
-                        <span
-                          className={`status-pill ${r.slaViolation ? 'badge-red' : 'badge-green'}`}
-                        >
-                          {slaStatus}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`status-pill ${overdue ? 'badge-red' : 'badge-green'}`}>
-                          {overdue ? 'DELAYED' : 'ACTIVE'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <VendorItemTable
+        data={data}
+        todayRef={todayRef}
+        selectedItem={selectedItem}
+        setSelectedItem={setSelectedItem}
+        setSelectedSC={setSelectedSC}
+      />
 
       {/* SC Detail Modal */}
       {selectedSC && (
@@ -854,14 +168,7 @@ function VendorPage() {
                   .filter((r) => r.sc === selectedSC && r.inhouse === 'VENDOR')
                   .map((item, idx) => {
                     const cycleTime = calculateProcessCycleTime(item.poDate, item.timestamp);
-                    const now = new Date();
-                    const today =
-                      now.getFullYear() +
-                      '-' +
-                      String(now.getMonth() + 1).padStart(2, '0') +
-                      '-' +
-                      String(now.getDate()).padStart(2, '0');
-                    const pendingDays = daysBetween(item.timestamp, today);
+                    const pendingDays = daysBetween(item.timestamp, todayRef);
                     const isDelayed = pendingDays !== null && pendingDays > 2;
                     const isOnTime = cycleTime !== null && cycleTime <= 21;
                     const completionStatus = ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(
@@ -976,14 +283,7 @@ function VendorPage() {
                   ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(r.currentStage)
                 ).length;
                 const delayedItems = scItems.filter((r) => {
-                  const now = new Date();
-                  const today =
-                    now.getFullYear() +
-                    '-' +
-                    String(now.getMonth() + 1).padStart(2, '0') +
-                    '-' +
-                    String(now.getDate()).padStart(2, '0');
-                  const pending = daysBetween(r.timestamp, today);
+                  const pending = daysBetween(r.timestamp, todayRef);
                   return pending !== null && pending > 2;
                 }).length;
                 const avgCycleTime =
@@ -1240,14 +540,7 @@ function VendorPage() {
                   selectedItem.poDate,
                   selectedItem.timestamp
                 );
-                const now = new Date();
-                const today =
-                  now.getFullYear() +
-                  '-' +
-                  String(now.getMonth() + 1).padStart(2, '0') +
-                  '-' +
-                  String(now.getDate()).padStart(2, '0');
-                const pending = daysBetween(selectedItem.timestamp, today);
+                const pending = daysBetween(selectedItem.timestamp, todayRef);
                 const isDelayed = pending !== null && pending > 2;
                 const isOnTime = cycle !== null && cycle <= 21;
 
@@ -1358,14 +651,7 @@ function VendorPage() {
                   selectedItem.poDate,
                   selectedItem.timestamp
                 );
-                const now = new Date();
-                const today =
-                  now.getFullYear() +
-                  '-' +
-                  String(now.getMonth() + 1).padStart(2, '0') +
-                  '-' +
-                  String(now.getDate()).padStart(2, '0');
-                const pending = daysBetween(selectedItem.timestamp, today);
+                const pending = daysBetween(selectedItem.timestamp, todayRef);
                 const isDelayed = pending !== null && pending > 2;
                 const isOnTime = cycle !== null && cycle <= 21;
                 const isCompleted = ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(
