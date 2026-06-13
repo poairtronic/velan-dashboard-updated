@@ -7,7 +7,7 @@ export function UIProvider({ children }) {
   const [selectedPONum, setSelectedPONum] = useState('');
 
   // App-level Statuses
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState('loading'); // loading, ready, offline
   const [uploadStatus, setUploadStatus] = useState(null);
   const [importState, setImportState] = useState({ loading: false, lastMsg: '' });
