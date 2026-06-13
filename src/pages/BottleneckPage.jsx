@@ -1,47 +1,37 @@
 import React from 'react';
-import { useBottlenecksQuery, useDashboardDataQuery } from '../hooks/queries/useDashboardQueries';
-import { useFilters } from '../context/FilterContext';
+import { useData } from '../context/DataContext';
 import { getStageColor } from '../services/dataNormalizer';
-import { daysBetween } from '../utils/calculationUtils';
+import {
+  workingDaysBetween,
+  daysBetween,
+  calculateProcessCycleTime,
+  isSCComplete,
+  getSCLastTimestamp,
+  getProductCategory,
+} from '../utils/calculationUtils';
+import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
+import Modal from '../components/Modal';
+import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
-import VirtualizedTable from '../components/ui/VirtualizedTable';
-
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {
-  const { filters } = useFilters();
-  const { data: bottlenecksRes, isLoading: bottlenecksLoading } = useBottlenecksQuery(filters);
+  const { kpis, filtered } = useData();
   const scoreRef = React.useRef();
   const queueRef = React.useRef();
   const [timeSearch, setTimeSearch] = React.useState('');
 
-  const bottlenecks = bottlenecksRes?.data?.bottlenecks || [];
-  
-  const stages = bottlenecks.map(b => ({
-    stage: b.stage,
-    count: b.queueSize,
-    duration: b.avgDays,
-    score: b.queueSize * b.avgDays
-  })).sort((a, b) => b.score - a.score);
-
-  const top = stages[0] || null;
+  const stages = kpis.bottleneckStages.filter((s) => s.count > 0);
   const maxScore = stages.length > 0 ? stages[0].score : 1;
-
-  const { data: tableRes } = useDashboardDataQuery(
-    { ...filters, stage: top?.stage || 'NONE' }, 
-    1, 
-    500,
-    { enabled: !!top }
-  );
-  
-  const filtered = tableRes?.data?.rows || [];
+  const top = kpis.topBottleneck;
 
   // Export helpers - export "Items Currently Stuck" table
   function getStuckRows() {
     if (!top) return [];
     const today = new Date().toISOString().substring(0, 10);
     return filtered
+      .filter((r) => r.currentStage === top.stage)
       .map((r) => {
         const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), today) || 0);
         return {
@@ -189,12 +179,19 @@ function BottleneckPage() {
           tooltip: { callbacks: { label: (c) => `Score: ${c.parsed.y} (items × avg days)` } },
         },
         scales: {
-          x: { ticks: { color: '#7ba7cc', font: { size: 10 } }, grid: { color: 'rgba(26,58,92,0.3)' } },
-          y: { ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' }, title: { display: true, text: 'Bottleneck Score', color: '#7ba7cc' } },
+          x: {
+            ticks: { color: '#7ba7cc', font: { size: 10 } },
+            grid: { color: 'rgba(26,58,92,0.3)' },
+          },
+          y: {
+            ticks: { color: '#7ba7cc' },
+            grid: { color: 'rgba(26,58,92,0.3)' },
+            title: { display: true, text: 'Bottleneck Score', color: '#7ba7cc' },
+          },
         },
       },
     },
-    [stages]
+    [kpis]
   );
 
   useChart(
@@ -228,39 +225,26 @@ function BottleneckPage() {
         maintainAspectRatio: false,
         plugins: { legend: { labels: { color: '#7ba7cc' } } },
         scales: {
-          x: { ticks: { color: '#7ba7cc', font: { size: 10 } }, grid: { color: 'rgba(26,58,92,0.3)' } },
-          y: { ticks: { color: '#ffd60a' }, grid: { color: 'rgba(26,58,92,0.2)' }, title: { display: true, text: 'Queue (items)', color: '#ffd60a' } },
-          y2: { position: 'right', ticks: { color: '#b24bff' }, grid: { display: false }, title: { display: true, text: 'Avg Days', color: '#b24bff' } },
+          x: {
+            ticks: { color: '#7ba7cc', font: { size: 10 } },
+            grid: { color: 'rgba(26,58,92,0.3)' },
+          },
+          y: {
+            ticks: { color: '#ffd60a' },
+            grid: { color: 'rgba(26,58,92,0.2)' },
+            title: { display: true, text: 'Queue (items)', color: '#ffd60a' },
+          },
+          y2: {
+            position: 'right',
+            ticks: { color: '#b24bff' },
+            grid: { display: false },
+            title: { display: true, text: 'Avg Days', color: '#b24bff' },
+          },
         },
       },
     },
-    [stages]
+    [kpis]
   );
-
-  if (bottlenecksLoading) {
-    return <div style={{ padding: 40, color: '#fff' }}>Loading Bottlenecks...</div>;
-  }
-
-  const todayStr = new Date().toISOString().substring(0, 10);
-  const filteredData = filtered.filter((r) => {
-    const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), todayStr));
-    const matchesSearch = !timeSearch.trim() || days >= parseInt(timeSearch.trim(), 10);
-    return matchesSearch;
-  });
-
-  const columns = [
-    { key: 'sc', label: 'SC', width: 120, render: (v) => <span className="mono text-accent">{v || '—'}</span> },
-    { key: 'po', label: 'PO', width: 150, render: (v) => <span style={{ fontSize: 11 }}>{v}</span> },
-    { key: 'product', label: 'PRODUCT', width: 200, render: (v) => <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v || '—'}</span> },
-    { key: 'type', label: 'TYPE', width: 100, render: (v) => <span className="status-pill badge-blue">{v || '—'}</span> },
-    { key: 'status1', label: 'STATUS 1', width: 180, render: (v) => <span style={{ fontSize: 10, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span> },
-    { key: 'timestamp', label: 'DAYS', width: 100, render: (v) => {
-        const days = Math.ceil(daysBetween(v?.substring(0, 10), todayStr));
-        return <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 14, color: days > 5 ? 'var(--danger)' : days > 2 ? 'var(--warning)' : 'var(--text-secondary)' }}>{days}d</span>;
-    }},
-    { key: 'inhouse', label: 'INHOUSE', width: 100, render: (v) => <span className={`status-pill ${v === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}>{v}</span> },
-    { key: 'timestamp', label: 'TIMESTAMP', width: 100, render: (v) => <span className="mono" style={{ fontSize: 10 }}>{v?.substring(0, 10)}</span> }
-  ];
 
   return (
     <div>
@@ -284,10 +268,25 @@ function BottleneckPage() {
         >
           <div style={{ fontSize: 40 }}>🚨</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 11, color: 'var(--danger)', letterSpacing: 2, marginBottom: 4 }}>
+            <div
+              style={{
+                fontFamily: 'Share Tech Mono',
+                fontSize: 11,
+                color: 'var(--danger)',
+                letterSpacing: 2,
+                marginBottom: 4,
+              }}
+            >
               TOP BOTTLENECK STAGE DETECTED
             </div>
-            <div style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 32, color: 'var(--danger)' }}>
+            <div
+              style={{
+                fontFamily: 'Rajdhani',
+                fontWeight: 800,
+                fontSize: 32,
+                color: 'var(--danger)',
+              }}
+            >
               {top.stage}
             </div>
             <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>
@@ -296,10 +295,20 @@ function BottleneckPage() {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: 'var(--text-muted)' }}>
+            <div
+              style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: 'var(--text-muted)' }}
+            >
               BOTTLENECK SCORE
             </div>
-            <div style={{ fontFamily: 'Rajdhani', fontSize: 48, fontWeight: 800, color: 'var(--danger)', lineHeight: 1 }}>
+            <div
+              style={{
+                fontFamily: 'Rajdhani',
+                fontSize: 48,
+                fontWeight: 800,
+                color: 'var(--danger)',
+                lineHeight: 1,
+              }}
+            >
               {Math.round(top.score)}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>queue × avg-days</div>
@@ -348,7 +357,7 @@ function BottleneckPage() {
         />
         <KPICard
           label="VENDOR BOTTLENECK"
-          value={stages.filter((r) => String(r.stage).endsWith('V')).length}
+          value={filtered.filter((r) => r.inhouse === 'VENDOR').length}
           sub="items waiting at vendors"
           color1="#b24bff"
           color2="#ff6b35"
@@ -394,22 +403,62 @@ function BottleneckPage() {
             <tbody>
               {stages.map((s, i) => {
                 const pct = Math.min(100, Math.round((s.score / maxScore) * 100));
-                const severity = i === 0 ? '🔴 CRITICAL' : i < 3 ? '🟡 HIGH' : i < 6 ? '🟠 MEDIUM' : '🟢 LOW';
-                const color = i === 0 ? 'var(--danger)' : i < 3 ? 'var(--warning)' : i < 6 ? '#ff6b35' : 'var(--success)';
+                const severity =
+                  i === 0 ? '🔴 CRITICAL' : i < 3 ? '🟡 HIGH' : i < 6 ? '🟠 MEDIUM' : '🟢 LOW';
+                const color =
+                  i === 0
+                    ? 'var(--danger)'
+                    : i < 3
+                      ? 'var(--warning)'
+                      : i < 6
+                        ? '#ff6b35'
+                        : 'var(--success)';
                 return (
                   <tr key={i}>
-                    <td style={{ fontFamily: 'Rajdhani', fontWeight: 800, fontSize: 20, color: i === 0 ? 'var(--danger)' : i < 3 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                    <td
+                      style={{
+                        fontFamily: 'Rajdhani',
+                        fontWeight: 800,
+                        fontSize: 20,
+                        color:
+                          i === 0
+                            ? 'var(--danger)'
+                            : i < 3
+                              ? 'var(--warning)'
+                              : 'var(--text-muted)',
+                      }}
+                    >
                       {i + 1}
                     </td>
                     <td>
-                      <span className="status-pill" style={{ background: getStageColor(s.stage) + '22', color: getStageColor(s.stage) }}>
+                      <span
+                        className="status-pill"
+                        style={{
+                          background: getStageColor(s.stage) + '22',
+                          color: getStageColor(s.stage),
+                        }}
+                      >
                         {s.stage}
                       </span>
                     </td>
-                    <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 18, color: 'var(--warning)' }}>
+                    <td
+                      style={{
+                        fontFamily: 'Rajdhani',
+                        fontWeight: 700,
+                        fontSize: 18,
+                        color: 'var(--warning)',
+                      }}
+                    >
                       {s.count}
                     </td>
-                    <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 18, color: '#b24bff' }}>
+                    <td
+                      style={{
+                        fontFamily: 'Rajdhani',
+                        fontWeight: 700,
+                        fontSize: 18,
+                        color: '#b24bff',
+                      }}
+                    >
                       {Math.round(s.duration * 10) / 10}d
                     </td>
                     <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 18, color }}>
@@ -417,8 +466,22 @@ function BottleneckPage() {
                     </td>
                     <td style={{ fontSize: 12 }}>{severity}</td>
                     <td style={{ minWidth: 120 }}>
-                      <div style={{ height: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 5, overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 5 }} />
+                      <div
+                        style={{
+                          height: 10,
+                          background: 'rgba(255,255,255,0.05)',
+                          borderRadius: 5,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${pct}%`,
+                            height: '100%',
+                            background: color,
+                            borderRadius: 5,
+                          }}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -434,24 +497,184 @@ function BottleneckPage() {
           <div className="table-header">
             <div className="chart-title">🔴 Items Currently Stuck in {top.stage}</div>
             <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-              <button onClick={exportExcel} title="Export to Excel" style={{ background: 'rgba(0,230,118,0.1)', border: '1px solid rgba(0,230,118,0.35)', color: 'var(--success)', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 10, fontFamily: 'Share Tech Mono,monospace', fontWeight: 700 }}>⬇ XLS</button>
-              <button onClick={exportCSV} title="Export to CSV" style={{ background: 'rgba(0,201,255,0.1)', border: '1px solid rgba(0,201,255,0.35)', color: 'var(--accent1)', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 10, fontFamily: 'Share Tech Mono,monospace', fontWeight: 700 }}>⬇ CSV</button>
-              <button onClick={exportPDF} title="Export to PDF" style={{ background: 'rgba(255,61,90,0.1)', border: '1px solid rgba(255,61,90,0.35)', color: 'var(--danger)', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 10, fontFamily: 'Share Tech Mono,monospace', fontWeight: 700 }}>⬇ PDF</button>
-              <button onClick={exportJSON} title="Export to JSON" style={{ background: 'rgba(255,214,10,0.1)', border: '1px solid rgba(255,214,10,0.35)', color: 'var(--accent5)', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 10, fontFamily: 'Share Tech Mono,monospace', fontWeight: 700 }}>⬇ JSON</button>
+              <button
+                onClick={exportExcel}
+                title="Export to Excel"
+                style={{
+                  background: 'rgba(0,230,118,0.1)',
+                  border: '1px solid rgba(0,230,118,0.35)',
+                  color: 'var(--success)',
+                  borderRadius: 5,
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontFamily: 'Share Tech Mono,monospace',
+                  fontWeight: 700,
+                }}
+              >
+                ⬇ XLS
+              </button>
+              <button
+                onClick={exportCSV}
+                title="Export to CSV"
+                style={{
+                  background: 'rgba(0,201,255,0.1)',
+                  border: '1px solid rgba(0,201,255,0.35)',
+                  color: 'var(--accent1)',
+                  borderRadius: 5,
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontFamily: 'Share Tech Mono,monospace',
+                  fontWeight: 700,
+                }}
+              >
+                ⬇ CSV
+              </button>
+              <button
+                onClick={exportPDF}
+                title="Export to PDF"
+                style={{
+                  background: 'rgba(255,61,90,0.1)',
+                  border: '1px solid rgba(255,61,90,0.35)',
+                  color: 'var(--danger)',
+                  borderRadius: 5,
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontFamily: 'Share Tech Mono,monospace',
+                  fontWeight: 700,
+                }}
+              >
+                ⬇ PDF
+              </button>
+              <button
+                onClick={exportJSON}
+                title="Export to JSON"
+                style={{
+                  background: 'rgba(255,214,10,0.1)',
+                  border: '1px solid rgba(255,214,10,0.35)',
+                  color: 'var(--accent5)',
+                  borderRadius: 5,
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontFamily: 'Share Tech Mono,monospace',
+                  fontWeight: 700,
+                }}
+              >
+                ⬇ JSON
+              </button>
             </div>
           </div>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Filter by Days:</label>
+          <div
+            style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+              Filter by Days:
+            </label>
             <input
               type="text"
               placeholder="Type # of days (e.g., 2, 3)"
               value={timeSearch}
               onChange={(e) => setTimeSearch(e.target.value)}
-              style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-primary)', fontSize: 12, width: 200 }}
+              style={{
+                padding: '6px 10px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                color: 'var(--text-primary)',
+                fontSize: 12,
+                width: 200,
+              }}
             />
           </div>
-          <div style={{ height: 500, overflow: 'auto' }}>
-            <VirtualizedTable data={filteredData} columns={columns} rowHeight={45} />
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SC</th>
+                  <th>PO</th>
+                  <th>PRODUCT</th>
+                  <th>TYPE</th>
+                  <th>STATUS 1</th>
+                  <th>DAYS</th>
+                  <th>INHOUSE</th>
+                  <th>TIMESTAMP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered
+                  .filter((r) => r.currentStage === top.stage)
+                  .map((r, i) => {
+                    const today = new Date().toISOString().substring(0, 10);
+                    const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), today));
+                    const matchesSearch =
+                      !timeSearch.trim() || days >= parseInt(timeSearch.trim(), 10);
+                    return matchesSearch ? (
+                      <tr key={i}>
+                        <td className="mono text-accent">{r.sc || '—'}</td>
+                        <td style={{ fontSize: 11 }}>{r.po}</td>
+                        <td
+                          style={{
+                            maxWidth: 200,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {r.product || '—'}
+                        </td>
+                        <td>
+                          <span className="status-pill badge-blue">{r.type || '—'}</span>
+                        </td>
+                        <td
+                          style={{
+                            fontSize: 10,
+                            maxWidth: 180,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {r.status1}
+                        </td>
+                        <td
+                          style={{
+                            fontFamily: 'Rajdhani',
+                            fontWeight: 700,
+                            fontSize: 14,
+                            color:
+                              days > 5
+                                ? 'var(--danger)'
+                                : days > 2
+                                  ? 'var(--warning)'
+                                  : 'var(--text-secondary)',
+                          }}
+                        >
+                          {days}d
+                        </td>
+                        <td>
+                          <span
+                            className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}
+                          >
+                            {r.inhouse}
+                          </span>
+                        </td>
+                        <td className="mono" style={{ fontSize: 10 }}>
+                          {r.timestamp?.substring(0, 10)}
+                        </td>
+                      </tr>
+                    ) : null;
+                  })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useDashboardDataQuery } from '../hooks/queries/useDashboardQueries';
+import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,23 +7,7 @@ export default function CommandPalette({ isOpen, onClose }) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
-  
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [query]);
-
-  // Use dashboard data query to search server-side instead of client-side
-  const { data: searchRes } = useDashboardDataQuery(
-    { search: debouncedQuery }, 
-    1, 
-    5, 
-    { enabled: isOpen && debouncedQuery.length > 1 }
-  );
-
+  const { data } = useData();
   const { setActiveNav } = useUI();
   const navigate = useNavigate();
 
@@ -39,9 +23,13 @@ export default function CommandPalette({ isOpen, onClose }) {
   const filteredNav = navOptions.filter(o => o.title.toLowerCase().includes(query.toLowerCase()));
   
   // Search through POs or SCs in live data
-  const fetchedData = searchRes?.data?.rows || [];
-  const filteredData = debouncedQuery.length > 1 
-    ? fetchedData.map(d => ({
+  // Limit to top 5 results to prevent massive rendering
+  const filteredData = query.length > 1 
+    ? data.filter(d => 
+        (d.po && d.po.toLowerCase().includes(query.toLowerCase())) ||
+        (d.sc && d.sc.toLowerCase().includes(query.toLowerCase())) ||
+        (d.product && d.product.toLowerCase().includes(query.toLowerCase()))
+      ).slice(0, 5).map(d => ({
         type: 'Record',
         title: `${d.po} - ${d.sc}`,
         subtitle: `Stage: ${d.currentStage} | ${d.product}`,
@@ -57,14 +45,13 @@ export default function CommandPalette({ isOpen, onClose }) {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
       setQuery('');
-      setDebouncedQuery('');
       setSelectedIndex(0);
     }
   }, [isOpen]);
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [query, debouncedQuery]);
+  }, [query]);
 
   // Handle keyboard navigation
   useEffect(() => {

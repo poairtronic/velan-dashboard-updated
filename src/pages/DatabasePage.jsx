@@ -55,10 +55,19 @@ function DatabasePage() {
   // 2. KPI Logic
   const [selectedKPI, setSelectedKPI] = useState(null);
   
-  const kpiStats = useDatabaseKPIs(activeFilters);
+  const kpiStats = useDatabaseKPIs(
+    data,
+    filtered,
+    fromDate,
+    toDate,
+    dateType,
+    allScItemsModal,
+    filteredScGroupsModal,
+    hasNonDateFilter
+  );
 
   // 3. Export Logic
-  const { exportJSON, exportCSV, exportPDF } = useDatabaseExport(activeFilters, kpiStats);
+  const { exportJSON, exportCSV, exportPDF } = useDatabaseExport(filtered, kpiStats, fromDate, toDate);
 
   // Constants
   const uniquePOs = [...new Set(data.map((r) => r.po))].sort();
@@ -170,7 +179,7 @@ function DatabasePage() {
         </span>
       </div>
 
-      <DatabaseTable filters={filters} />
+      <DatabaseTable filtered={filtered} isDoneStage={kpiStats.isDoneStage} />
 
       {/* DETAIL MODAL - Show completed SCs details */}
       {selectedKPI === 'scCompleted' && (

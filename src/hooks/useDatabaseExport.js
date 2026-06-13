@@ -1,17 +1,8 @@
 import { fmtTs, fmtDate } from '../utils/dateUtils';
-import { apiClient } from '../services/apiClient';
-import { buildQueryString } from '../hooks/queries/useDashboardQueries';
 
-export function useDatabaseExport(activeFilters, kpiStats) {
+export function useDatabaseExport(filtered, kpiStats, fromDate, toDate) {
   
-  async function fetchExportData() {
-    const qs = buildQueryString({ ...activeFilters, limit: 10000 }); // Large limit for export
-    const res = await apiClient(`/api/data?${qs}`);
-    return res.data?.rows || [];
-  }
-
-  async function exportJSON() {
-    const filtered = await fetchExportData();
+  function exportJSON() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -21,9 +12,7 @@ export function useDatabaseExport(activeFilters, kpiStats) {
     URL.revokeObjectURL(url);
   }
 
-  async function exportCSV() {
-    const filtered = await fetchExportData();
-    if (filtered.length === 0) return;
+  function exportCSV() {
     const header = Object.keys(filtered[0] || {});
     const rows = filtered.map((r) =>
       header.map((h) => `"${(r[h] || '').toString().replace(/"/g, '""')}"`).join(',')
@@ -39,7 +28,6 @@ export function useDatabaseExport(activeFilters, kpiStats) {
   }
 
   async function exportPDF() {
-    const filtered = await fetchExportData();
     const { jsPDF } = await import('jspdf');
     await import('jspdf-autotable');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
@@ -71,10 +59,10 @@ export function useDatabaseExport(activeFilters, kpiStats) {
     doc.setFontSize(9);
     doc.setTextColor(80, 80, 80);
     const dateRange =
-      activeFilters.dateFrom || activeFilters.dateTo ? ` | Date range: ${activeFilters.dateFrom || '-'} to ${activeFilters.dateTo || '-'}` : '';
+      fromDate || toDate ? ` | Date range: ${fromDate || '-'} to ${toDate || '-'}` : '';
     doc.text(`Exported Rows: ${rows.length}  (READY / STORES / STOCK only)${dateRange}`, 40, 52);
     doc.text(
-      `Unique POs: ${kpiStats.uniquePO}   SC Sets: ${kpiStats.uniqueSC}   SC Completed: ${kpiStats.scCompleted}`,
+      `Unique POs: ${kpiStats.uniquePO}   SC Sets: ${kpiStats.uniqueSC}   SC Received: ${kpiStats.scReceived}   SC Completed: ${kpiStats.scCompleted}   SC Ready: ${kpiStats.scReady}`,
       40,
       66
     );

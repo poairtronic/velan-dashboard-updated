@@ -22,7 +22,6 @@ const reportsRouter = require('./routes/reports');
 const configRouter = require('./routes/config');
 const securityRouter = require('./routes/security');
 const healthRouter = require('./routes/health');
-const kpisRouter = require('./routes/kpis');
 
 const app = express();
 
@@ -112,7 +111,6 @@ apiRouter.use('/sheets', requireAuth(['admin', 'user']), sheetsRouter);
 apiRouter.use('/config', requireAuth(['admin', 'user']), configRouter);
 apiRouter.use('/security-status', requireAuth(['admin', 'user']), securityRouter);
 apiRouter.use('/reports', requireAuth(['admin', 'user']), reportsRouter);
-apiRouter.use('/kpis', requireAuth(['admin', 'user']), kpisRouter);
 
 app.use('/api', apiRouter);
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import * as ReactWindow from 'react-window';
-const List = ReactWindow.FixedSizeList || ReactWindow.default?.FixedSizeList || ReactWindow;
+const FixedSizeList = ReactWindow.FixedSizeList || ReactWindow.default?.FixedSizeList || ReactWindow;
 import { TableSkeleton } from './skeletons/Skeletons';
 import EmptyState from './EmptyState';
 
@@ -87,14 +87,14 @@ function VirtualizedTable({
       )}
 
       {/* Virtualized Body */}
-      <List
+      <FixedSizeList
         height={height}
         itemCount={data.length}
         itemSize={itemSize}
         width="100%"
       >
         {RowRenderer}
-      </List>
+      </FixedSizeList>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useKpisQuery, useVendorsQuery, useBottlenecksQuery, useDashboardDataQuery } from '../hooks/queries/useDashboardQueries';
-import { useFilters } from '../context/FilterContext';
+import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import {
   calculateProcessCycleTime,
@@ -22,30 +21,13 @@ import VendorItemTable from '../components/vendor/VendorItemTable';
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
-  const { filters } = useFilters();
-  const { data: kpisRes, isLoading: kpisLoading } = useKpisQuery(filters);
-  const { data: vendorsRes, isLoading: vendorsLoading } = useVendorsQuery(filters);
-  const { data: bottlenecksRes } = useBottlenecksQuery(filters);
-  const { data: itemsRes, isLoading: itemsLoading } = useDashboardDataQuery({ ...filters, inhouse: 'VENDOR' }, 1, 500);
-
+  const { kpis, filtered: data } = useData();
   const { setActiveNav, setSelectedPONum } = useUI();
   const navigate = useNavigate();
   const [selectedSC, setSelectedSC] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  const data = itemsRes?.data?.rows || [];
-  const kpisStats = kpisRes?.data || { inhouseCount: 0, vendorCount: 0 };
-  const vendors = vendorsRes?.data?.vendors || [];
-  const bottlenecks = bottlenecksRes?.data?.bottlenecks || [];
-  const topVendorBottleneck = bottlenecks.find(b => true); // Get top bottleneck overall or filter for vendor if needed
-
-  const kpis = {
-    inhouse: kpisStats.inhouseCount || 0,
-    vendor: kpisStats.vendorCount || 0,
-    vendors: vendors,
-    topVendorBottleneck: topVendorBottleneck || null
-  };
-
+  const vendors = kpis.vendors || [];
   const maxDays = vendors.length > 0 ? Math.max(...vendors.map((v) => v.avgDays || 0)) : 1;
 
   const inhPct = Math.round((kpis.inhouse / Math.max(kpis.inhouse + kpis.vendor, 1)) * 100);
@@ -66,10 +48,6 @@ function VendorPage() {
     String(now.getMonth() + 1).padStart(2, '0') +
     '-' +
     String(now.getDate()).padStart(2, '0');
-
-  if (kpisLoading || vendorsLoading) {
-    return <div style={{ padding: 40, color: '#fff' }}>Loading Vendor Stats...</div>;
-  }
 
   return (
     <div>
@@ -149,7 +127,7 @@ function VendorPage() {
                 📦 SC {selectedSC} — Vendor Products & Processing Status
               </div>
               <div className="chart-sub">
-                {data.filter((r) => r.sc === selectedSC).length} vendor
+                {data.filter((r) => r.sc === selectedSC && r.inhouse === 'VENDOR').length} vendor
                 items in this SC set
               </div>
             </div>
@@ -187,7 +165,7 @@ function VendorPage() {
               </thead>
               <tbody>
                 {data
-                  .filter((r) => r.sc === selectedSC)
+                  .filter((r) => r.sc === selectedSC && r.inhouse === 'VENDOR')
                   .map((item, idx) => {
                     const cycleTime = calculateProcessCycleTime(item.poDate, item.timestamp);
                     const pendingDays = daysBetween(item.timestamp, todayRef);
@@ -286,7 +264,7 @@ function VendorPage() {
                       </tr>
                     );
                   })}
-               </tbody>
+              </tbody>
             </table>
           </div>
 
@@ -299,7 +277,7 @@ function VendorPage() {
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
               {(() => {
-                const scItems = data.filter((r) => r.sc === selectedSC);
+                const scItems = data.filter((r) => r.sc === selectedSC && r.inhouse === 'VENDOR');
                 const totalItems = scItems.length;
                 const completedItems = scItems.filter((r) =>
                   ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(r.currentStage)
