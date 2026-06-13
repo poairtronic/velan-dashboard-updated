@@ -8,26 +8,34 @@ const { getOrSetCache, invalidatePattern, TTL } = require('../cache/cacheService
 const keys = require('../cache/cacheKeys');
 const asyncHandler = require('../utils/asyncHandler');
 
+const { getPaginatedData } = require('../db/queryBuilder');
+
 // ── GET /api/data ─────────────────────────────────────────────────────────
 router.get('/', asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page || '1', 10);
-  const limit = parseInt(req.query.limit || '500', 10);
-  const search = req.query.search || '';
-  const offset = (page - 1) * limit;
-
-  const cacheKey = keys.DASHBOARD_DATA(page, limit, search);
-  const dbRows = await getOrSetCache(cacheKey, TTL.SHORT, () => queryRowsPaginated({ limit, offset, search }));
+  const limit = parseInt(req.query.limit || '100', 10);
   
-  const liveDbRows = await getOrSetCache(keys.DASHBOARD_LIVE, TTL.SHORT, () => loadLiveDB());
-  const total = await getOrSetCache(keys.DASHBOARD_STATS, TTL.SHORT, () => getTotalCount());
+  const filters = {
+    search: req.query.search || '',
+    stage: req.query.stage || '',
+    vendor: req.query.vendor || '',
+    status: req.query.status || '',
+    dateFrom: req.query.dateFrom || '',
+    dateTo: req.query.dateTo || ''
+  };
+
+  const cacheKey = keys.DASHBOARD_DATA(page, limit, JSON.stringify(filters));
+  
+  const result = await getOrSetCache(cacheKey, TTL.SHORT, () => getPaginatedData(filters, page, limit));
   
   res.json({
-    rows: dbRows,
-    liveRows: liveDbRows.length > 0 ? liveDbRows : dbRows,
+    rows: result.rows,
+    liveRows: [], // Kept for backwards compat during migration, now we just use 'rows' where _isLive=true
     lastSync: state._lastSync,
-    total: total,
-    page,
-    limit
+    total: result.total,
+    page: result.page,
+    limit: result.limit,
+    totalPages: result.totalPages
   });
 }));
 

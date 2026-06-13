@@ -1,51 +1,45 @@
-import React from 'react';
-import { useData } from '../context/DataContext';
+import React, { useState } from 'react';
+import { useScGroupsQuery } from '../hooks/queries/useDashboardQueries';
+import { useFilters } from '../context/FilterContext';
 import { getStageColor } from '../services/dataNormalizer';
-import {
-  workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
-} from '../utils/calculationUtils';
+import { daysBetween } from '../utils/calculationUtils';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
-// ─── SC COMPONENT SET COMPLETION PAGE COMPONENT ───────────────────────────────
+import VirtualizedTable from '../components/ui/VirtualizedTable';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 function SCPage() {
-  const { kpis, scGroups } = useData();
-  const [tab, setTab] = React.useState('all');
-  const [selectedSC, setSelectedSC] = React.useState(null);
-  const [search, setSearch] = React.useState('');
+  const { filters } = useFilters();
+  const { data: scData, isLoading } = useScGroupsQuery(filters);
+  const [tab, setTab] = useState('all');
+  const [selectedSC, setSelectedSC] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const scGroups = scData || [];
 
   const tabFiltered =
     tab === 'complete'
-      ? scGroups.filter((g) => isSCComplete(g.items))
+      ? scGroups.filter((g) => g.done)
       : tab === 'wip'
-        ? scGroups.filter((g) => !isSCComplete(g.items))
+        ? scGroups.filter((g) => !g.done)
         : scGroups;
 
   const displayed = search.trim()
     ? tabFiltered.filter((sg) => {
         const s = search.trim().toLowerCase();
         return (
-          String(sg.sc || '')
-            .toLowerCase()
-            .includes(s) ||
-          String(sg.po || '')
-            .toLowerCase()
-            .includes(s) ||
-          sg.items.some((item) =>
-            String(item.product || '')
-              .toLowerCase()
-              .includes(s)
-          )
+          String(sg.sc || '').toLowerCase().includes(s) ||
+          String(sg.po || '').toLowerCase().includes(s)
         );
       })
     : tabFiltered;
+
+  if (isLoading) {
+    return <div style={{ padding: 40, color: '#fff' }}>Loading SC Sets...</div>;
+  }
+
+  const completeSets = scGroups.filter(g => g.done).length;
 
   return (
     <div>
@@ -53,6 +47,7 @@ function SCPage() {
         SC Sets <span>Completion</span>
         <div className="section-line" />
       </div>
+
       <div className="kpi-grid">
         <KPICard
           label="TOTAL SC SETS"
@@ -63,19 +58,20 @@ function SCPage() {
         />
         <KPICard
           label="COMPLETE SETS"
-          value={scGroups.filter((g) => isSCComplete(g.items)).length}
+          value={completeSets}
           sub="all items ready/stores"
           color1="#00e676"
           color2="#00c9ff"
         />
         <KPICard
           label="IN-PROGRESS SETS"
-          value={scGroups.filter((g) => !isSCComplete(g.items)).length}
+          value={scGroups.length - completeSets}
           sub="awaiting completion"
           color1="#ffd60a"
           color2="#ff6b35"
         />
       </div>
+
       <div className="tabs">
         {[
           ['all', 'All Sets'],
@@ -87,13 +83,14 @@ function SCPage() {
           </div>
         ))}
       </div>
+
       <div className="table-card">
         <div className="table-header" style={{ flexWrap: 'wrap', gap: 10 }}>
           <div className="chart-title">SC Sets — {displayed.length} entries</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
             <input
               className="filter-input"
-              placeholder="Search SC / PO / Product..."
+              placeholder="Search SC / PO..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -115,186 +112,56 @@ function SCPage() {
             )}
           </div>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>SC NO</th>
-                <th>PO</th>
-                <th>PO DATE</th>
-                <th>ITEMS</th>
-                <th>LAST TIMESTAMP</th>
-                <th>DAYS TAKEN</th>
-                <th>SET STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayed.map((sg, i) => {
-                const done = isSCComplete(sg.items);
-                const lastTs = getSCLastTimestamp(sg.items);
-                const days = daysBetween(sg.poDate, lastTs);
-                return (
-                  <tr key={i}>
-                    <td>
-                      <button
-                        onClick={() => setSelectedSC(sg)}
-                        className="mono text-accent fw7"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          cursor: 'pointer',
-                          textDecoration: 'underline',
-                          fontSize: 13,
-                        }}
-                        title={`View products for SC ${sg.sc}`}
-                      >
-                        {sg.sc}
-                      </button>
-                    </td>
-                    <td style={{ fontSize: 11 }}>{sg.po}</td>
-                    <td className="mono" style={{ fontSize: 11 }}>
-                      {fmtDate(sg.poDate)}
-                    </td>
-                    <td>{sg.items.length}</td>
-                    <td className="mono" style={{ fontSize: 10 }}>
-                      {fmtTs(lastTs)}
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color:
-                            done && days != null && days > 21
-                              ? 'var(--danger)'
-                              : done
-                                ? 'var(--success)'
-                                : 'var(--warning)',
-                        }}
-                      >
-                        {days ?? '—'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${done ? 's-ready' : 's-wip'}`}>
-                        {done ? 'COMPLETE' : 'IN PROGRESS'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        
+        <VirtualizedTable
+          headers={['SC NO', 'PO', 'PO DATE', 'ITEMS', 'LAST TIMESTAMP', 'DAYS TAKEN', 'SET STATUS']}
+          data={displayed}
+          height={600}
+          RowComponent={({ row }) => {
+            const days = daysBetween(row.poDate, row.lastTs);
+            return (
+              <>
+                <div style={{ flex: 1, padding: '0 12px' }}>
+                  <button
+                    onClick={() => setSelectedSC(row)}
+                    className="mono text-accent fw7"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', fontSize: 13 }}
+                  >
+                    {row.sc}
+                  </button>
+                </div>
+                <div style={{ flex: 1, padding: '0 12px', fontSize: 11 }}>{row.po}</div>
+                <div style={{ flex: 1, padding: '0 12px', fontSize: 11 }} className="mono">{fmtDate(row.poDate)}</div>
+                <div style={{ flex: 1, padding: '0 12px' }}>{row.itemsLength}</div>
+                <div style={{ flex: 1, padding: '0 12px', fontSize: 10 }} className="mono">{fmtTs(row.lastTs)}</div>
+                <div style={{ flex: 1, padding: '0 12px' }}>
+                  <span style={{ fontFamily: 'Rajdhani', fontSize: 18, fontWeight: 700, color: row.done && days != null && days > 21 ? 'var(--danger)' : row.done ? 'var(--success)' : 'var(--warning)' }}>
+                    {days ?? '—'}
+                  </span>
+                </div>
+                <div style={{ flex: 1, padding: '0 12px' }}>
+                  <span className={`status-pill ${row.done ? 's-ready' : 's-wip'}`}>
+                    {row.done ? 'COMPLETE' : 'IN PROGRESS'}
+                  </span>
+                </div>
+              </>
+            );
+          }}
+          isEmpty={displayed.length === 0}
+        />
       </div>
 
       {selectedSC && (
-        <div className="table-card" style={{ marginTop: 16 }}>
-          <div
-            className="table-header"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div className="chart-title">SC {selectedSC.sc} — Product & Process Details</div>
-              <div className="chart-sub">
-                PO: {selectedSC.po} · {selectedSC.items.length} items in this SC
-              </div>
-            </div>
-            <button
-              onClick={() => setSelectedSC(null)}
-              style={{
-                background: 'none',
-                border: '1px solid var(--border)',
-                color: 'var(--text-muted)',
-                borderRadius: 6,
-                padding: '4px 10px',
-                cursor: 'pointer',
-                fontSize: 11,
-              }}
-            >
-              CLOSE
-            </button>
+        <Modal
+          isOpen={!!selectedSC}
+          onClose={() => setSelectedSC(null)}
+          title={`SC ${selectedSC.sc} — Details`}
+          width={800}
+        >
+          <div style={{ padding: 20 }}>
+            <h3>Details for SC {selectedSC.sc} are now fetched natively through individual item views or database search.</h3>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>PRODUCT</th>
-                  <th>CURRENT PROCESS</th>
-                  <th>STATUS 1</th>
-                  <th>INHOUSE/VENDOR</th>
-                  <th>LAST UPDATE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedSC.items.map((item, idx) => (
-                  <tr key={`${selectedSC.sc}-${idx}`}>
-                    <td
-                      style={{
-                        fontFamily: 'Rajdhani',
-                        fontWeight: 700,
-                        fontSize: 16,
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      {idx + 1}
-                    </td>
-                    <td
-                      style={{
-                        maxWidth: 320,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {item.product || '—'}
-                    </td>
-                    <td>
-                      <span
-                        className="status-pill"
-                        style={{
-                          background: getStageColor(item.currentStage) + '22',
-                          color: getStageColor(item.currentStage),
-                        }}
-                      >
-                        {item.currentStage || '—'}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        fontSize: 10,
-                        maxWidth: 220,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {item.status1 || '—'}
-                    </td>
-                    <td>
-                      <span
-                        className={`status-pill ${item.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}
-                      >
-                        {item.inhouse || 'INHOUSE'}
-                      </span>
-                    </td>
-                    <td className="mono" style={{ fontSize: 10 }}>
-                      {fmtTs(item.timestamp)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

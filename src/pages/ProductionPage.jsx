@@ -1,5 +1,6 @@
 import React from 'react';
-import { useData } from '../context/DataContext';
+import { useProductionKpisQuery, useDashboardDataQuery } from '../hooks/queries/useDashboardQueries';
+import { useFilters } from '../context/FilterContext';
 import { getStageColor } from '../services/dataNormalizer';
 import {
   workingDaysBetween,
@@ -14,71 +15,43 @@ import {
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
+import VirtualizedTable from '../components/ui/VirtualizedTable';
 import useChart from '../utils/chartUtils';
+import { LoadingScreen } from '../components/LoadingScreen';
+
 // ─── PRODUCTION PAGE COMPONENT ────────────────────────────────────────────────
 
 function ProductionPage() {
-  const { kpis, filtered, scGroups } = useData();
+  const { filters } = useFilters();
+  const { data: res, isLoading } = useProductionKpisQuery(filters);
+  const kpis = res?.data || {
+    readySets: [],
+    storeSets: [],
+    scDailyOutput: [],
+    dateSeries: [],
+    cats: { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 },
+    ready: 0,
+    stores: 0,
+    airplugOutputCount: 0,
+    masterOutputCount: 0,
+  };
+
+  const { data: readyItemsRes, isLoading: itemsLoading } = useDashboardDataQuery({ ...filters, stage: 'READY' }, 1, 500);
+  const readyItems = readyItemsRes?.data?.rows || [];
+
   const dailyRef = React.useRef();
   const setsRef = React.useRef();
   const catRef = React.useRef();
   const [tab, setTab] = React.useState('sets'); // 'sets' | 'items'
 
-  // ── MEMOIZED: Daily items aggregation by date ─────────────────────────────
-  const dateSeries = React.useMemo(() => {
-    const byDate = {};
-    filtered.forEach((r) => {
-      if (!r.timestamp) return;
-      const d = r.timestamp.substring(0, 10);
-      if (!byDate[d]) byDate[d] = { date: d, ready: 0, stores: 0, wip: 0 };
-      if (r.currentStage === 'READY') byDate[d].ready++;
-      else if (r.currentStage === 'STORES') byDate[d].stores++;
-      else byDate[d].wip++;
-    });
-    return Object.keys(byDate)
-      .sort()
-      .map((d) => byDate[d]);
-  }, [filtered]);
-
-  // ── MEMOIZED: Product category breakdown for doughnut chart ───────────────
-  const cats = React.useMemo(() => {
-    const result = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
-    filtered.forEach((r) => {
-      result[getProductCategory(r.type)]++;
-    });
-    return result;
-  }, [filtered]);
-
-  // ── MEMOIZED: Sets and items derived data ─────────────────────────────────
+  const dateSeries = kpis.dateSeries;
+  const cats = kpis.cats;
+  
   const displaySets = React.useMemo(() => {
-    if (tab !== 'sets') return null;
+    if (tab !== 'sets') return [];
     return kpis.readySets.concat(kpis.storeSets);
   }, [kpis.readySets, kpis.storeSets, tab]);
 
-  const readyItems = React.useMemo(
-    () => filtered.filter((r) => r.currentStage === 'READY'),
-    [filtered]
-  );
-
-  // ── MEMOIZED: KPI values for AIRPLUG and MASTER output ────────────────────
-  const airplugOutputCount = React.useMemo(
-    () =>
-      filtered.filter(
-        (r) => AIRPLUG_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)
-      ).length,
-    [filtered]
-  );
-
-  const masterOutputCount = React.useMemo(
-    () =>
-      filtered.filter(
-        (r) => MASTER_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)
-      ).length,
-    [filtered]
-  );
-
-  // Daily items chart
   useChart(
     dailyRef,
     {
@@ -116,11 +89,7 @@ function ProductionPage() {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: {
-            stacked: true,
-            ticks: { color: '#7ba7cc', font: { size: 10 } },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-          },
+          x: { stacked: true, ticks: { color: '#7ba7cc', font: { size: 10 } }, grid: { color: 'rgba(26,58,92,0.3)' } },
           y: { stacked: true, ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' } },
         },
         plugins: { legend: { labels: { color: '#7ba7cc' } } },
@@ -129,7 +98,6 @@ function ProductionPage() {
     [dateSeries]
   );
 
-  // SC Sets daily output chart
   const scDaily = kpis.scDailyOutput;
   useChart(
     setsRef,
@@ -160,17 +128,8 @@ function ProductionPage() {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: {
-            stacked: true,
-            ticks: { color: '#7ba7cc', font: { size: 10 } },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-          },
-          y: {
-            stacked: true,
-            ticks: { color: '#7ba7cc' },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-            title: { display: true, text: 'SC Sets', color: '#7ba7cc' },
-          },
+          x: { stacked: true, ticks: { color: '#7ba7cc', font: { size: 10 } }, grid: { color: 'rgba(26,58,92,0.3)' } },
+          y: { stacked: true, ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' }, title: { display: true, text: 'SC Sets', color: '#7ba7cc' } },
         },
         plugins: { legend: { labels: { color: '#7ba7cc' } } },
       },
@@ -202,8 +161,9 @@ function ProductionPage() {
     [cats]
   );
 
-  const readySets = kpis.readySets;
-  const storeSets = kpis.storeSets;
+  if (isLoading) {
+    return <div style={{ padding: 40, color: '#fff' }}>Loading Production Stats...</div>;
+  }
 
   return (
     <div>
@@ -214,7 +174,7 @@ function ProductionPage() {
       <div className="kpi-grid">
         <KPICard
           label="COMPLETE SC SETS"
-          value={readySets.length}
+          value={kpis.readySets.length}
           sub="full sets ready to dispatch"
           color1="#00e676"
           color2="#00c9ff"
@@ -222,7 +182,7 @@ function ProductionPage() {
         />
         <KPICard
           label="SETS → STORES"
-          value={storeSets.length}
+          value={kpis.storeSets.length}
           sub="full sets moved to stores"
           color1="#00c9ff"
           color2="#0fa8e0"
@@ -244,14 +204,14 @@ function ProductionPage() {
         />
         <KPICard
           label="AIRPLUG OUTPUT"
-          value={airplugOutputCount}
+          value={kpis.airplugOutputCount}
           sub="APG/ARG items done"
           color1="#00c9ff"
           color2="#b24bff"
         />
         <KPICard
           label="MASTER OUTPUT"
-          value={masterOutputCount}
+          value={kpis.masterOutputCount}
           sub="SRG/SP items done"
           color1="#00ff9d"
           color2="#00c9ff"
@@ -290,94 +250,19 @@ function ProductionPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  <th
-                    style={{
-                      padding: '8px 10px',
-                      background: 'var(--bg-secondary)',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'Share Tech Mono',
-                      fontSize: 10,
-                      borderBottom: '1px solid var(--border)',
-                      position: 'sticky',
-                      top: 0,
-                    }}
-                  >
-                    DATE
-                  </th>
-                  <th
-                    style={{
-                      padding: '8px 10px',
-                      background: 'var(--bg-secondary)',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'Share Tech Mono',
-                      fontSize: 10,
-                      borderBottom: '1px solid var(--border)',
-                      position: 'sticky',
-                      top: 0,
-                    }}
-                  >
-                    READY SETS
-                  </th>
-                  <th
-                    style={{
-                      padding: '8px 10px',
-                      background: 'var(--bg-secondary)',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'Share Tech Mono',
-                      fontSize: 10,
-                      borderBottom: '1px solid var(--border)',
-                      position: 'sticky',
-                      top: 0,
-                    }}
-                  >
-                    STORE SETS
-                  </th>
-                  <th
-                    style={{
-                      padding: '8px 10px',
-                      background: 'var(--bg-secondary)',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'Share Tech Mono',
-                      fontSize: 10,
-                      borderBottom: '1px solid var(--border)',
-                      position: 'sticky',
-                      top: 0,
-                    }}
-                  >
-                    TOTAL
-                  </th>
+                  <th style={{ padding: '8px 10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono', fontSize: 10, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0 }}>DATE</th>
+                  <th style={{ padding: '8px 10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono', fontSize: 10, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0 }}>READY SETS</th>
+                  <th style={{ padding: '8px 10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono', fontSize: 10, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0 }}>STORE SETS</th>
+                  <th style={{ padding: '8px 10px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono', fontSize: 10, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0 }}>TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 {scDaily.map((d, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid rgba(26,58,92,0.4)' }}>
-                    <td
-                      style={{
-                        padding: '7px 10px',
-                        fontFamily: 'Share Tech Mono',
-                        fontSize: 11,
-                        color: 'var(--accent1)',
-                      }}
-                    >
-                      {d.date}
-                    </td>
-                    <td style={{ padding: '7px 10px', color: 'var(--success)', fontWeight: 700 }}>
-                      {d.readySets || 0}
-                    </td>
-                    <td style={{ padding: '7px 10px', color: 'var(--accent1)', fontWeight: 700 }}>
-                      {d.storeSets || 0}
-                    </td>
-                    <td
-                      style={{
-                        padding: '7px 10px',
-                        color: 'var(--text-primary)',
-                        fontWeight: 700,
-                        fontFamily: 'Rajdhani',
-                        fontSize: 16,
-                      }}
-                    >
-                      {(d.readySets || 0) + (d.storeSets || 0)}
-                    </td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'Share Tech Mono', fontSize: 11, color: 'var(--accent1)' }}>{d.date}</td>
+                    <td style={{ padding: '7px 10px', color: 'var(--success)', fontWeight: 700 }}>{d.readySets || 0}</td>
+                    <td style={{ padding: '7px 10px', color: 'var(--accent1)', fontWeight: 700 }}>{d.storeSets || 0}</td>
+                    <td style={{ padding: '7px 10px', color: 'var(--text-primary)', fontWeight: 700, fontFamily: 'Rajdhani', fontSize: 16 }}>{(d.readySets || 0) + (d.storeSets || 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -404,107 +289,60 @@ function ProductionPage() {
               ✅ Complete SC Sets ({displaySets.length}) — Ready + Stores
             </div>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>SC NO</th>
-                  <th>PO</th>
-                  <th>PRODUCTS IN SET</th>
-                  <th>LAST TIMESTAMP</th>
-                  <th>DAYS</th>
-                  <th>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displaySets.map((sg, i) => {
-                  const hasStore = sg.items.some((i) => i.currentStage === 'STORES');
-                  const lastTs = getSCLastTimestamp(sg.items);
-                  const days = daysBetween(sg.poDate, lastTs);
-                  return (
-                    <tr key={i}>
-                      <td className="mono text-accent fw7">{sg.sc}</td>
-                      <td style={{ fontSize: 11 }}>{sg.po}</td>
-                      <td
-                        style={{
-                          fontSize: 10,
-                          color: 'var(--text-muted)',
-                          maxWidth: 260,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {sg.items.map((item) => item.product).join(' · ')}
-                      </td>
-                      <td className="mono" style={{ fontSize: 10 }}>
-                        {fmtDate(lastTs)}
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontFamily: 'Rajdhani',
-                            fontWeight: 700,
-                            fontSize: 17,
-                            color: (days || 0) > 21 ? 'var(--danger)' : 'var(--success)',
-                          }}
-                        >
-                          {days ?? '—'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`status-pill ${hasStore ? 's-stores' : 's-ready'}`}>
-                          {hasStore ? 'STORES' : 'READY'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <VirtualizedTable
+            headers={['SC NO', 'PO', 'PRODUCTS IN SET', 'LAST TIMESTAMP', 'DAYS', 'STATUS']}
+            data={displaySets}
+            height={500}
+            RowComponent={({ row: sg }) => {
+              const hasStore = sg.store_items > 0;
+              const days = daysBetween(sg.poDate, sg.lastTs);
+              return (
+                <>
+                  <div style={{ flex: 1, padding: '0 12px' }} className="mono text-accent fw7">{sg.sc}</div>
+                  <div style={{ flex: 1, padding: '0 12px', fontSize: 11 }}>{sg.po}</div>
+                  <div style={{ flex: 1, padding: '0 12px', fontSize: 10, color: 'var(--text-muted)' }}>
+                    {sg.total_items} items
+                  </div>
+                  <div style={{ flex: 1, padding: '0 12px', fontSize: 10 }} className="mono">{fmtDate(sg.lastTs)}</div>
+                  <div style={{ flex: 1, padding: '0 12px', fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 17, color: (days || 0) > 21 ? 'var(--danger)' : 'var(--success)' }}>
+                    {days ?? '—'}
+                  </div>
+                  <div style={{ flex: 1, padding: '0 12px' }}>
+                    <span className={`status-pill ${hasStore ? 's-stores' : 's-ready'}`}>
+                      {hasStore ? 'STORES' : 'READY'}
+                    </span>
+                  </div>
+                </>
+              );
+            }}
+            isEmpty={displaySets.length === 0}
+          />
         </div>
       )}
 
       {tab === 'items' && (
         <div className="table-card">
           <div className="table-header">
-            <div className="chart-title">✅ Ready Items ({readyItems.length})</div>
+            <div className="chart-title">✅ Ready Items</div>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>SC</th>
-                  <th>PO</th>
-                  <th>PRODUCT</th>
-                  <th>TYPE</th>
-                  <th>CATEGORY</th>
-                  <th>INHOUSE</th>
-                  <th>TIMESTAMP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {readyItems.slice(0, 150).map((r, i) => (
-                  <tr key={i}>
-                    <td className="mono text-accent">{r.sc || '—'}</td>
-                    <td>{r.po}</td>
-                    <td>{r.product || '—'}</td>
-                    <td>
-                      <span className="status-pill badge-blue">{r.type || '—'}</span>
-                    </td>
-                    <td>
-                      <span className="status-pill badge-green">{getProductCategory(r.type)}</span>
-                    </td>
-                    <td>{r.inhouse}</td>
-                    <td className="mono" style={{ fontSize: 10 }}>
-                      {fmtTs(r.timestamp)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <VirtualizedTable
+            headers={['SC', 'PO', 'PRODUCT', 'TYPE', 'CATEGORY', 'INHOUSE', 'TIMESTAMP']}
+            data={readyItems}
+            height={500}
+            isLoading={itemsLoading}
+            RowComponent={({ row: r }) => (
+              <>
+                <div style={{ flex: 1, padding: '0 12px' }} className="mono text-accent">{r.sc || '—'}</div>
+                <div style={{ flex: 1, padding: '0 12px' }}>{r.po}</div>
+                <div style={{ flex: 1, padding: '0 12px', fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product || '—'}</div>
+                <div style={{ flex: 1, padding: '0 12px' }}><span className="status-pill badge-blue">{r.type || '—'}</span></div>
+                <div style={{ flex: 1, padding: '0 12px' }}><span className="status-pill badge-green">{getProductCategory(r.type)}</span></div>
+                <div style={{ flex: 1, padding: '0 12px' }}>{r.inhouse}</div>
+                <div style={{ flex: 1, padding: '0 12px', fontSize: 10 }} className="mono">{fmtTs(r.timestamp)}</div>
+              </>
+            )}
+            isEmpty={readyItems.length === 0}
+          />
         </div>
       )}
     </div>

@@ -1,14 +1,24 @@
 import React from 'react';
 import debounce from 'lodash/debounce';
 import { useFilters } from '../context/FilterContext';
-import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
+import { useFilterOptionsQuery, useDatabaseKpisQuery } from '../hooks/queries/useDashboardQueries';
+
 // ─── FILTERBAR UI COMPONENT ───────────────────────────────────────────────────
 
 function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters();
-  const { uniquePOs, uniqueStages, uniqueTypes, filtered, liveData, data } = useData();
   const { activeNav } = useUI();
+
+  const { data: filterOptionsRes } = useFilterOptionsQuery();
+  const { data: dbKpisRes } = useDatabaseKpisQuery(filters);
+
+  const uniquePOs = filterOptionsRes?.data?.uniquePOs || [];
+  const uniqueStages = filterOptionsRes?.data?.uniqueStages || [];
+  const uniqueTypes = filterOptionsRes?.data?.uniqueTypes || [];
+
+  const filteredCount = dbKpisRes?.data?.totalRows || 0; // The total rows from server-side filtering
+  // In the old version it showed filtered vs live vs db. We can just show total matched.
 
   // Local state tracks raw input value for instant visual feedback
   const [searchInput, setSearchInput] = React.useState(filters.search);
@@ -64,7 +74,7 @@ function FilterBar() {
         name="filter-po"
         className="filter-select"
         aria-label="Filter by PO"
-        value={filters.po}
+        value={filters.po || ''}
         onChange={(e) => setFilters((f) => ({ ...f, po: e.target.value }))}
       >
         <option value="">All POs</option>
@@ -80,7 +90,7 @@ function FilterBar() {
         name="filter-stage"
         className="filter-select"
         aria-label="Filter by Stage"
-        value={filters.stage}
+        value={filters.stage || ''}
         onChange={(e) => setFilters((f) => ({ ...f, stage: e.target.value }))}
       >
         <option value="">All Stages</option>
@@ -96,7 +106,7 @@ function FilterBar() {
         name="filter-type"
         className="filter-select"
         aria-label="Filter by Type"
-        value={filters.type}
+        value={filters.type || ''}
         onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}
       >
         <option value="">All Types</option>
@@ -112,7 +122,7 @@ function FilterBar() {
         name="filter-category"
         className="filter-select"
         aria-label="Filter by Category"
-        value={filters.category}
+        value={filters.category || ''}
         onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
       >
         <option value="">All Categories</option>
@@ -126,7 +136,7 @@ function FilterBar() {
         name="filter-inhouse"
         className="filter-select"
         aria-label="Filter by Inhouse or Vendor"
-        value={filters.inhouse}
+        value={filters.inhouse || ''}
         onChange={(e) => setFilters((f) => ({ ...f, inhouse: e.target.value }))}
       >
         <option value="">Inhouse + Vendor</option>
@@ -157,7 +167,7 @@ function FilterBar() {
           color: 'var(--text-muted)',
         }}
       >
-        {filtered.length} items · {liveData.length} live · {data.length} db
+        {filteredCount} matching items
       </span>
     </div>
   );

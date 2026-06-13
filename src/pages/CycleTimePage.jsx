@@ -1,54 +1,32 @@
 import React from 'react';
-import { useData } from '../context/DataContext';
+import { useCycleTimeQuery, useDashboardDataQuery } from '../hooks/queries/useDashboardQueries';
+import { useFilters } from '../context/FilterContext';
 import { getStageColor } from '../services/dataNormalizer';
-import {
-  workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
-  TARGET_DAYS,
-} from '../utils/calculationUtils';
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+import { TARGET_DAYS } from '../utils/calculationUtils';
+import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
+
 // ─── CYCLE TIME PAGE COMPONENT ────────────────────────────────────────────────
 
 function CycleTimePage() {
-  const { kpis, filtered } = useData();
+  const { filters } = useFilters();
+  const { data: cycleTimeRes, isLoading: cycleLoading } = useCycleTimeQuery(filters);
+  const { data: tableRes, isLoading: tableLoading } = useDashboardDataQuery(filters, 1, 500);
+
   const [selectedStage, setSelectedStage] = React.useState(null);
   const ctBarRef = React.useRef();
   const ctLineRef = React.useRef();
 
-  const cts = kpis.stageCycleTimes
+  const cycleStats = cycleTimeRes?.data?.cycleTimeStats || { stageCycleTimes: [], avgOverallCycle: 0 };
+  const filtered = tableRes?.data?.rows || [];
+
+  const cts = cycleStats.stageCycleTimes
     .filter((s) => !['STOCK', 'RM', 'STORE', 'STORES'].includes(s.stage))
     .sort((a, b) => {
       const stageOrder = [
-        'HOV',
-        'BLV',
-        'HCV',
-        'FBV',
-        'HTV',
-        'SDV',
-        'LATHE',
-        'M1',
-        'FB',
-        'HT',
-        'SZ',
-        'BLK',
-        'CG',
-        'SG',
-        'SD',
-        'HO',
-        'CA',
-        'WC',
-        'VA',
-        'QC',
-        'DCPLI',
-        'READY',
+        'HOV', 'BLV', 'HCV', 'FBV', 'HTV', 'SDV', 'LATHE', 'M1', 'FB', 'HT', 'SZ', 'BLK', 'CG', 'SG', 'SD', 'HO', 'CA', 'WC', 'VA', 'QC', 'DCPLI', 'READY',
       ];
       const aIdx = stageOrder.indexOf(a.stage);
       const bIdx = stageOrder.indexOf(b.stage);
@@ -91,19 +69,12 @@ function CycleTimePage() {
           tooltip: { callbacks: { label: (c) => `${c.parsed.y} days avg in stage` } },
         },
         scales: {
-          x: {
-            ticks: { color: '#7ba7cc', font: { size: 10 } },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-          },
-          y: {
-            ticks: { color: '#7ba7cc' },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-            title: { display: true, text: 'Days in Stage', color: '#7ba7cc' },
-          },
+          x: { ticks: { color: '#7ba7cc', font: { size: 10 } }, grid: { color: 'rgba(26,58,92,0.3)' } },
+          y: { ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' }, title: { display: true, text: 'Days in Stage', color: '#7ba7cc' } },
         },
       },
     },
-    [kpis]
+    [cts]
   );
 
   const flowStages = [...cts].sort((a, b) => a.avgToReach - b.avgToReach);
@@ -135,22 +106,15 @@ function CycleTimePage() {
           tooltip: { callbacks: { label: (c) => `${c.parsed.y} days from PO date` } },
         },
         scales: {
-          x: {
-            ticks: { color: '#7ba7cc', font: { size: 10 } },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-          },
-          y: {
-            ticks: { color: '#7ba7cc' },
-            grid: { color: 'rgba(26,58,92,0.3)' },
-            title: { display: true, text: 'Days from PO Date', color: '#7ba7cc' },
-          },
+          x: { ticks: { color: '#7ba7cc', font: { size: 10 } }, grid: { color: 'rgba(26,58,92,0.3)' } },
+          y: { ticks: { color: '#7ba7cc' }, grid: { color: 'rgba(26,58,92,0.3)' }, title: { display: true, text: 'Days from PO Date', color: '#7ba7cc' } },
         },
       },
     },
-    [kpis]
+    [flowStages]
   );
 
-  const totalAvgCycle = kpis.avgOverallCycle;
+  const totalAvgCycle = cycleStats.avgOverallCycle;
   const slowestStage =
     cts.length > 0
       ? [...cts].reduce((a, b) => (b.duration > a.duration ? b : a))
@@ -159,6 +123,10 @@ function CycleTimePage() {
     cts.filter((c) => c.duration > 0).length > 0
       ? cts.filter((c) => c.duration > 0).reduce((a, b) => (b.duration < a.duration ? b : a))
       : { stage: '—', duration: 0 };
+
+  if (cycleLoading || tableLoading) {
+    return <div style={{ padding: 40, color: '#fff' }}>Loading Cycle Time Stats...</div>;
+  }
 
   return (
     <div>
@@ -295,14 +263,7 @@ function CycleTimePage() {
                           {c.stage}
                         </span>
                       </td>
-                      <td
-                        style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 17,
-                          color: 'var(--accent1)',
-                        }}
-                      >
+                      <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 17, color: 'var(--accent1)' }}>
                         {Math.round(c.avgToReach)}d
                       </td>
                       <td style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 17, color }}>
@@ -312,22 +273,8 @@ function CycleTimePage() {
                       <td style={{ color: vsColor, fontWeight: 700, fontSize: 12 }}>{vsTarget}</td>
                       <td style={{ fontSize: 11 }}>{rating}</td>
                       <td style={{ minWidth: 100 }}>
-                        <div
-                          style={{
-                            height: 8,
-                            background: 'rgba(255,255,255,0.05)',
-                            borderRadius: 4,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${pct}%`,
-                              height: '100%',
-                              background: color,
-                              borderRadius: 4,
-                            }}
-                          />
+                        <div style={{ height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4 }} />
                         </div>
                       </td>
                       <td>
@@ -369,65 +316,39 @@ function CycleTimePage() {
               <tbody>
                 {filtered.filter((item) => item.currentStage === selectedStage).length === 0 ? (
                   <tr>
-                    <td
-                      colSpan="6"
-                      style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px' }}
-                    >
+                    <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px' }}>
                       No active items found in stage {selectedStage} for current view.
                     </td>
                   </tr>
                 ) : (
                   filtered
                     .filter((item) => item.currentStage === selectedStage)
-                    .map((item, idx) => (
+                    .map((item, idx) => {
+                      const t1 = item.poDate ? new Date(item.poDate).getTime() : 0;
+                      const t2 = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+                      const cycleTime = (t1 && t2) ? (t2 - t1) / (1000 * 60 * 60 * 24) : null;
+                      const pendingDays = item.timestamp ? (new Date().getTime() - t2) / (1000 * 60 * 60 * 24) : null;
+                      return (
                       <tr key={idx}>
-                        <td className="mono" style={{ fontSize: 11 }}>
-                          {item.po}
-                        </td>
-                        <td className="mono text-accent" style={{ fontSize: 11 }}>
-                          {item.sc || '—'}
-                        </td>
-                        <td
-                          style={{
-                            fontSize: 11,
-                            maxWidth: 280,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
+                        <td className="mono" style={{ fontSize: 11 }}>{item.po}</td>
+                        <td className="mono text-accent" style={{ fontSize: 11 }}>{item.sc || '—'}</td>
+                        <td style={{ fontSize: 11, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.product}
                         </td>
                         <td>
-                          <span
-                            style={{
-                              fontFamily: 'Rajdhani',
-                              fontWeight: 700,
-                              fontSize: 14,
-                              color:
-                                (item.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)',
-                            }}
-                          >
-                            {item.pendingDays != null ? `${Math.round(item.pendingDays)}d` : '—'}
+                          <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 14, color: (pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)' }}>
+                            {pendingDays != null ? `${Math.round(pendingDays)}d` : '—'}
                           </span>
                         </td>
                         <td>
-                          <span
-                            style={{
-                              fontFamily: 'Rajdhani',
-                              fontWeight: 700,
-                              fontSize: 14,
-                              color: 'var(--accent1)',
-                            }}
-                          >
-                            {item.cycleTime != null ? `${Math.round(item.cycleTime)}d` : '—'}
+                          <span style={{ fontFamily: 'Rajdhani', fontWeight: 700, fontSize: 14, color: 'var(--accent1)' }}>
+                            {cycleTime != null ? `${Math.round(cycleTime)}d` : '—'}
                           </span>
                         </td>
-                        <td className="mono" style={{ fontSize: 10 }}>
-                          {fmtTs(item.timestamp)}
-                        </td>
+                        <td className="mono" style={{ fontSize: 10 }}>{fmtTs(item.timestamp)}</td>
                       </tr>
-                    ))
+                      );
+                    })
                 )}
               </tbody>
             </table>
