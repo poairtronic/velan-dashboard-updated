@@ -1,6 +1,5 @@
 import React from 'react';
-import * as ReactWindow from 'react-window';
-const FixedSizeList = ReactWindow.FixedSizeList || ReactWindow.default?.FixedSizeList || ReactWindow;
+import { FixedSizeList } from 'react-window';
 import { TableSkeleton } from './skeletons/Skeletons';
 import EmptyState from './EmptyState';
 
