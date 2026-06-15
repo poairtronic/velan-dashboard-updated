@@ -300,16 +300,6 @@ async function runKeyMigration() {
   }
 }
 
-// ── Load all rows from Neon into memory (DEPRECATED - DO NOT USE FOR PROD) ─────
-async function loadDB() {
-  const res = await pool.query('SELECT data FROM velan_rows ORDER BY added_at DESC LIMIT 1000'); // Failsafe limit
-  return res.rows.map((r) => {
-    const d = r.data;
-    if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
-    if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
-    return d;
-  });
-}
 
 // ── Paginated Query ───────────────────────────────────────────────────────────
 async function queryRowsPaginated({ limit = 500, offset = 0, search = '' }) {
@@ -475,12 +465,10 @@ module.exports = {
   isMock,
   initDB,
   runKeyMigration,
-  loadDB,
   loadLiveDB,
   queryRowsPaginated,
   getTotalCount,
   logSync,
-  makeKey,
   insertRows,
   saveLiveRows,
 };
