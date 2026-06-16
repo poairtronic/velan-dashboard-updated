@@ -4,6 +4,7 @@ const { getFilteredData, getAllRawData, getMergedData } = require('../services/d
 const redisClient = require('../cache/redisClient');
 const { jsPDF } = require('jspdf');
 require('jspdf-autotable');
+const logger = require('../utils/logger');
 
 const connection = {
   url: process.env.REDIS_URL || 'redis://localhost:6379'
@@ -242,7 +243,7 @@ const workerHandler = async (job) => {
   await redisClient.set(fileKey, JSON.stringify(fileMeta), { ex: 3600 });
 
   const fileUrl = `/api/reports/download/${job.id}`;
-  console.log(`[ExportWorker] Completed job ${job.id}. Saved to Redis key: ${fileKey}`);
+  logger.info(logger.categories.EXPORT, `[ExportWorker] Completed job ${job.id}. Saved to Redis key: ${fileKey}`);
 
   return { url: fileUrl, totalExported: filtered.length };
 };
@@ -253,11 +254,19 @@ if (!isMock) {
   exportWorker = new Worker('exportQueue', workerHandler, { connection });
 
   exportWorker.on('completed', (job) => {
-    console.log(`[ExportWorker] Job ${job.id} completed!`);
+    logger.info(logger.categories.EXPORT, `[ExportWorker] Job ${job.id} completed!`);
   });
 
   exportWorker.on('failed', (job, err) => {
-    console.error(`[ExportWorker] Job ${job.id} failed: ${err.message}`);
+    logger.error(logger.categories.EXPORT, `[ExportWorker] Job ${job.id} failed: ${err.message}`, err);
+  });
+
+  exportWorker.on('error', (err) => {
+    logger.error(logger.categories.QUEUE, `[ExportWorker] Worker error: ${err.message}`, err);
+  });
+
+  exportWorker.on('stalled', (jobId) => {
+    logger.warn(logger.categories.QUEUE, `[ExportWorker] Job ${jobId} has stalled!`);
   });
 } else {
   exportWorker = new MockWorker('exportQueue', workerHandler);

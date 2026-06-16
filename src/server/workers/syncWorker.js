@@ -3,6 +3,7 @@ const { MockWorker } = require('../queues/mockQueueHelper');
 const { saveLiveRows, insertRows, getTotalCount, logSync } = require('../db/pool');
 const { invalidatePattern } = require('../cache/cacheService');
 const state = require('../state');
+const logger = require('../utils/logger');
 
 const connection = {
   url: process.env.REDIS_URL || 'redis://localhost:6379'
@@ -13,9 +14,10 @@ const isMock = !process.env.REDIS_URL || process.env.REDIS_URL === 'mock';
 let syncWorker;
 
 const workerHandler = async (job) => {
-  console.log(`[SyncWorker] Starting job ${job.id} of type ${job.name}`);
+  logger.info(logger.categories.SYNC, `[SyncWorker] Starting job ${job.id} of type ${job.name}`);
   const { incoming, syncType } = job.data;
   const incomingLength = incoming ? incoming.length : 0;
+  const startTime = Date.now();
 
   try {
     if (!incoming || !Array.isArray(incoming)) {
@@ -36,21 +38,26 @@ const workerHandler = async (job) => {
     // Invalidate caches
     await invalidatePattern('dashboard:*');
 
-    // 3. Log the successful sync
-    await logSync(syncType, incomingLength, 'success');
+    const durationMs = Date.now() - startTime;
+    const rowsSkipped = incomingLength - saved;
 
-    console.log(`[SyncWorker] Completed job ${job.id}. Live: ${incoming.length} | DB: ${currentTotal} (+${saved} upserted)`);
+    // 3. Log the successful sync
+    await logSync(syncType, incomingLength, 'success', durationMs, saved, rowsSkipped, null);
+
+    logger.info(logger.categories.SYNC, `[SyncWorker] Completed job ${job.id}. Live: ${incoming.length} | DB: ${currentTotal} (+${saved} upserted) | Duration: ${durationMs}ms`);
 
     return {
       success: true,
       liveTotal: incoming.length,
       total: currentTotal,
       newRows: saved,
-      lastSync: lastSyncStr
+      lastSync: lastSyncStr,
+      durationMs
     };
   } catch (err) {
-    console.error(`[SyncWorker] Failed job ${job.id}:`, err.message);
-    await logSync(syncType, incomingLength, 'failed');
+    const durationMs = Date.now() - startTime;
+    logger.error(logger.categories.SYNC, `[SyncWorker] Failed job ${job.id}: ${err.message}`, err);
+    await logSync(syncType, incomingLength, 'failed', durationMs, 0, incomingLength, err.message);
     throw err;
   }
 };
@@ -59,11 +66,19 @@ if (!isMock) {
   syncWorker = new Worker('syncQueue', workerHandler, { connection });
 
   syncWorker.on('completed', (job) => {
-    console.log(`[SyncWorker] Job ${job.id} completed`);
+    logger.info(logger.categories.SYNC, `[SyncWorker] Job ${job.id} completed`);
   });
 
   syncWorker.on('failed', (job, err) => {
-    console.error(`[SyncWorker] Job ${job.id} failed: ${err.message}`);
+    logger.error(logger.categories.SYNC, `[SyncWorker] Job ${job.id} failed: ${err.message}`, err);
+  });
+
+  syncWorker.on('error', (err) => {
+    logger.error(logger.categories.QUEUE, `[SyncWorker] Worker error: ${err.message}`, err);
+  });
+
+  syncWorker.on('stalled', (jobId) => {
+    logger.warn(logger.categories.QUEUE, `[SyncWorker] Job ${jobId} has stalled!`);
   });
 } else {
   syncWorker = new MockWorker('syncQueue', workerHandler);

@@ -12,6 +12,22 @@ if (!isMock) {
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
+
+  pool.on('error', (err) => {
+    try {
+      const logger = require('../utils/logger');
+      logger.error(logger.categories.DATABASE, 'Unexpected error on idle database client', err);
+    } catch (_) {
+      console.error('[DATABASE Pool Error]', err);
+    }
+  });
+
+  pool.on('connect', () => {
+    try {
+      const logger = require('../utils/logger');
+      logger.info(logger.categories.DATABASE, 'New client connected to Neon pool');
+    } catch (_) {}
+  });
 } else {
   class MockPool {
     constructor() {
@@ -47,12 +63,16 @@ if (!isMock) {
       const cleanSql = sql.trim().replace(/\s+/g, ' ').toUpperCase();
       if (
         cleanSql.includes('CREATE TABLE') ||
+        cleanSql.includes('ALTER TABLE') ||
         cleanSql.includes('CREATE INDEX') ||
         cleanSql.includes('BEGIN') ||
         cleanSql.includes('COMMIT') ||
         cleanSql.includes('DROP TABLE')
       ) {
         return { rowCount: 0, rows: [] };
+      }
+      if (cleanSql.includes('SELECT 1 AS PING') || cleanSql.includes('SELECT 1')) {
+        return { rows: [{ ping: 1 }] };
       }
       if (cleanSql.includes('SELECT COUNT(*) FROM VELAN_ROWS WHERE ROW_KEY')) {
         return { rows: [{ count: 0 }] };
@@ -107,8 +127,17 @@ if (!isMock) {
         return { rowCount: params ? params.length / 2 : 0, rows: [] };
       }
       if (cleanSql.includes('INSERT INTO SYNC_LOGS')) {
-        const [sync_type, row_count, status] = params;
-        const log = { sync_type, row_count, status, created_at: new Date().toISOString() };
+        const [sync_type, row_count, status, duration_ms, rows_updated, rows_skipped, error_message] = params;
+        const log = {
+          sync_type,
+          row_count,
+          status,
+          duration_ms: duration_ms || 0,
+          rows_updated: rows_updated || 0,
+          rows_skipped: rows_skipped || 0,
+          error_message: error_message || null,
+          created_at: new Date().toISOString()
+        };
         this.syncLogs.unshift(log);
         return { rowCount: 1, rows: [] };
       }
@@ -202,6 +231,15 @@ async function initDB() {
         status     TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
+    `);
+
+    // Ensure metadata columns exist in sync_logs table
+    await client.query(`
+      ALTER TABLE sync_logs 
+      ADD COLUMN IF NOT EXISTS duration_ms INTEGER,
+      ADD COLUMN IF NOT EXISTS rows_updated INTEGER,
+      ADD COLUMN IF NOT EXISTS rows_skipped INTEGER,
+      ADD COLUMN IF NOT EXISTS error_message TEXT
     `);
 
     // 4. Create users table (separate from production data)
@@ -342,12 +380,12 @@ async function loadLiveDB() {
 }
 
 // ── Insert Sync Log ───────────────────────────────────────────────────────────
-async function logSync(syncType, rowCount, status) {
+async function logSync(syncType, rowCount, status, durationMs = null, rowsUpdated = null, rowsSkipped = null, errorMessage = null) {
   try {
     await pool.query(
-      `INSERT INTO sync_logs (sync_type, row_count, status)
-       VALUES ($1, $2, $3)`,
-      [syncType, rowCount, status]
+      `INSERT INTO sync_logs (sync_type, row_count, status, duration_ms, rows_updated, rows_skipped, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [syncType, rowCount, status, durationMs, rowsUpdated, rowsSkipped, errorMessage]
     );
   } catch (err) {
     console.error('[logSync] Failed to log sync:', err.message);

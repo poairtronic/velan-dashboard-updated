@@ -51,6 +51,8 @@ function authenticate(req, res, next) {
   next();
 }
 
+const logger = require('../utils/logger');
+
 function requireAuth(roles = []) {
   return (req, res, next) => {
     // Allow API key fallback
@@ -61,10 +63,20 @@ function requireAuth(roles = []) {
     }
 
     if (!req.user) {
+      const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
+      logger.warn(logger.categories.AUTH, '[AUTH FAILURE] Unauthorized: Invalid or expired session', { ip, url: req.originalUrl });
       return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired session' });
     }
 
     if (roles.length > 0 && !roles.includes(req.user.role)) {
+      const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
+      logger.warn(logger.categories.AUTH, `[AUTH FAILURE] Forbidden: Insufficient permissions for user ${req.user.username}`, {
+        ip,
+        url: req.originalUrl,
+        username: req.user.username,
+        role: req.user.role,
+        requiredRoles: roles
+      });
       return res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions' });
     }
 
@@ -77,6 +89,8 @@ function requireApiKey(req, res, next) {
   const key = req.headers['x-api-key'];
   if (key === env.API_SECRET) return next();
 
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
+  logger.warn(logger.categories.AUTH, '[AUTH FAILURE] Unauthorized: Invalid API Key', { ip, url: req.originalUrl });
   return res.status(401).json({ success: false, error: 'Unauthorized: Invalid API Key' });
 }
 

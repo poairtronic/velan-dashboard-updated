@@ -7,11 +7,28 @@ const connection = {
 
 const isMock = !process.env.REDIS_URL || process.env.REDIS_URL === 'mock';
 
+const defaultJobOptions = {
+  attempts: 3,
+  backoff: {
+    type: 'exponential',
+    delay: 2000
+  },
+  removeOnComplete: {
+    count: 100
+  },
+  removeOnFail: {
+    count: 50
+  }
+};
+
 let syncQueue;
 let SyncQueueEvents;
 
 if (!isMock) {
-  syncQueue = new Queue('syncQueue', { connection });
+  syncQueue = new Queue('syncQueue', { 
+    connection,
+    defaultJobOptions
+  });
   SyncQueueEvents = QueueEvents;
 } else {
   syncQueue = new MockQueue('syncQueue');
