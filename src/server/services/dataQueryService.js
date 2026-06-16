@@ -226,5 +226,7 @@ function computeGroups(filtered) {
 
 module.exports = {
   getFilteredData,
-  computeGroups
+  computeGroups,
+  getAllRawData,
+  getMergedData
 };

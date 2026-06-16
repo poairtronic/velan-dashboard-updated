@@ -1,84 +1,89 @@
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+import { toast } from 'react-hot-toast';
 
-export function useDatabaseExport(filtered, kpiStats, fromDate, toDate) {
+export function useDatabaseExport(filtered, kpiStats, fromDate, toDate, filters = {}) {
   
+  async function triggerExport(type) {
+    const toastId = toast.loading(`Preparing ${type.toUpperCase()} export in background...`);
+    try {
+      // Combine all filters including date criteria
+      const combinedFilters = {
+        ...filters,
+        fromDate,
+        toDate,
+        dateType: filters.dateType || 'poDate'
+      };
+
+      const response = await fetch('/api/reports/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type,
+          filters: combinedFilters,
+          search: filters.search || ''
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server responded with ${response.status}`);
+      }
+
+      const { jobId } = await response.json();
+
+      // Poll status every 1 second
+      let status = 'processing';
+      let attempts = 0;
+      const maxAttempts = 60; // 1 minute timeout
+
+      while (status === 'processing' && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        attempts++;
+
+        const pollRes = await fetch(`/api/reports/status/${jobId}`);
+        if (!pollRes.ok) {
+          throw new Error(`Polling status failed with status ${pollRes.status}`);
+        }
+
+        const statusData = await pollRes.json();
+        status = statusData.status;
+
+        if (status === 'completed') {
+          toast.success(`${type.toUpperCase()} export ready! Downloading...`, { id: toastId });
+          
+          // Trigger file download
+          const downloadUrl = `/api/reports/download/${jobId}`;
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.click();
+          return;
+        }
+
+        if (status === 'failed') {
+          throw new Error(statusData.error || 'Server-side report generation failed');
+        }
+      }
+
+      if (status === 'processing') {
+        throw new Error('Report generation timed out. Please try again.');
+      }
+    } catch (err) {
+      console.error('Database export failed:', err);
+      toast.error(`Export failed: ${err.message}`, { id: toastId });
+    }
+  }
+
   function exportJSON() {
-    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'filtered_data.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerExport('json');
   }
 
   function exportCSV() {
-    const header = Object.keys(filtered[0] || {});
-    const rows = filtered.map((r) =>
-      header.map((h) => `"${(r[h] || '').toString().replace(/"/g, '""')}"`).join(',')
-    );
-    const csv = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'filtered_data.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerExport('csv');
   }
 
-  async function exportPDF() {
-    const { jsPDF } = await import('jspdf');
-    await import('jspdf-autotable');
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-
-    const exportRows = filtered.filter((r) => kpiStats.isDoneStage(r.currentStage));
-
-    const columns = [
-      { header: 'SC', dataKey: 'sc' },
-      { header: 'PO', dataKey: 'po' },
-      { header: 'PO DATE', dataKey: 'poDate' },
-      { header: 'PRODUCT', dataKey: 'product' },
-      { header: 'STAGE', dataKey: 'currentStage' },
-      { header: 'INHOUSE', dataKey: 'inhouse' },
-      { header: 'TIMESTAMP', dataKey: 'timestamp' },
-    ];
-
-    const rows = exportRows.map((r) => ({
-      sc: r.sc || '',
-      po: r.po || '',
-      poDate: r.poDate ? fmtDate(r.poDate) : '',
-      product: r.product || '',
-      currentStage: r.currentStage || '',
-      inhouse: r.inhouse || '',
-      timestamp: r.timestamp ? fmtTs(r.timestamp) : '',
-    }));
-
-    doc.setFontSize(14);
-    doc.text('Velan Metrology \u2013 Database Export', 40, 36);
-    doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
-    const dateRange =
-      fromDate || toDate ? ` | Date range: ${fromDate || '-'} to ${toDate || '-'}` : '';
-    doc.text(`Exported Rows: ${rows.length}  (READY / STORES / STOCK only)${dateRange}`, 40, 52);
-    doc.text(
-      `Unique POs: ${kpiStats.uniquePO}   SC Sets: ${kpiStats.uniqueSC}   SC Received: ${kpiStats.scReceived}   SC Completed: ${kpiStats.scCompleted}   SC Ready: ${kpiStats.scReady}`,
-      40,
-      66
-    );
-
-    doc.autoTable({
-      columns,
-      body: rows,
-      startY: 82,
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: [0, 100, 180] },
-      theme: 'grid',
-      margin: { left: 40, right: 40 },
-      tableWidth: 'auto',
-      bodyStyles: { textColor: 20 },
-    });
-    doc.save('database_export.pdf');
+  function exportPDF() {
+    triggerExport('pdf');
   }
 
   return { exportJSON, exportCSV, exportPDF };

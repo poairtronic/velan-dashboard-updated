@@ -59,6 +59,9 @@ if (!isMock) {
       this.store.clear();
       return 'OK';
     }
+    async ping() {
+      return 'PONG';
+    }
   }
   redisClient = new MockRedis();
 }

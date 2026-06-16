@@ -7,19 +7,18 @@ const connection = {
 
 const isMock = !process.env.REDIS_URL || process.env.REDIS_URL === 'mock';
 
-let exportQueue;
-let ExportQueueEvents;
+let emailQueue;
+let EmailQueueEvents;
 
 if (!isMock) {
-  exportQueue = new Queue('exportQueue', { connection });
-  ExportQueueEvents = QueueEvents;
+  emailQueue = new Queue('emailQueue', { connection });
+  EmailQueueEvents = QueueEvents;
 } else {
-  exportQueue = new MockQueue('exportQueue');
-  ExportQueueEvents = MockQueueEvents;
+  emailQueue = new MockQueue('emailQueue');
+  EmailQueueEvents = MockQueueEvents;
 }
 
 module.exports = {
-  exportQueue,
-  QueueEvents: ExportQueueEvents
+  emailQueue,
+  QueueEvents: EmailQueueEvents
 };
-

@@ -2,11 +2,16 @@ const express = require('express');
 const router = express.Router();
 const state = require('../state');
 const { fetchRemote, parseCSV } = require('../utils/helpers');
-const { insertRows, getTotalCount, logSync, pool } = require('../db/pool');
+const { getTotalCount, pool } = require('../db/pool');
 const { importUploadSchema } = require('../schemas/upload.schema');
 const { invalidatePattern } = require('../cache/cacheService');
 const asyncHandler = require('../utils/asyncHandler');
 const { env } = require('../config/env');
+const { syncQueue, QueueEvents } = require('../queues/syncQueue');
+
+const connection = {
+  url: process.env.REDIS_URL || 'redis://localhost:6379'
+};
 
 // ── POST /api/reset — wipe Neon + optionally re-import from HISTORY_URL ──
 router.post('/reset', asyncHandler(async (req, res) => {
@@ -33,19 +38,16 @@ router.post('/reset', asyncHandler(async (req, res) => {
   const raw = await fetchRemote(histUrl);
   const rows = parseCSV(raw);
 
-  const imported = await insertRows(rows);
-  const totalCount = await getTotalCount();
-  state._lastSync = new Date().toLocaleString('en-IN');
+  const syncQueueEvents = new QueueEvents('syncQueue', { connection });
+  const job = await syncQueue.add('sync-reset', { incoming: rows, syncType: 'History Import' });
+  const result = await job.waitUntilFinished(syncQueueEvents);
 
-  await invalidatePattern('dashboard:*');
-  await logSync('History Import', rows.length, 'success');
-
-  console.log(`[POST /api/reset] Re-imported ${imported} rows | DB now: ${totalCount}`);
+  console.log(`[POST /api/reset] Re-imported ${result.newRows} rows | DB now: ${result.total}`);
   return res.json({
     success: true,
-    imported,
-    total: totalCount,
-    lastSync: state._lastSync,
+    imported: result.newRows,
+    total: result.total,
+    lastSync: result.lastSync,
   });
 }));
 
@@ -83,27 +85,24 @@ router.post('/import', asyncHandler(async (req, res) => {
       console.log('[POST /api/import] replace=true → wiped existing Neon rows');
     }
 
-    const imported = await insertRows(incoming);
-    const currentTotal = await getTotalCount();
-    state._lastSync = new Date().toLocaleString('en-IN');
+    const syncQueueEvents = new QueueEvents('syncQueue', { connection });
+    const job = await syncQueue.add('sync-import', { incoming, syncType: 'History Import' });
+    const result = await job.waitUntilFinished(syncQueueEvents);
 
-    await invalidatePattern('dashboard:*');
-    await logSync('History Import', incomingLength, 'success');
-
-    console.log(`[POST /api/import] Imported/Updated: ${imported} | DB: ${currentTotal}`);
+    console.log(`[POST /api/import] Imported/Updated: ${result.newRows} | DB: ${result.total}`);
 
     return res.json({
       success: true,
-      imported,
-      skipped: incomingLength - imported,
-      total: currentTotal,
-      lastSync: state._lastSync,
+      imported: result.newRows,
+      skipped: incomingLength - result.newRows,
+      total: result.total,
+      lastSync: result.lastSync,
     });
   } catch (err) {
     console.error('[POST /api/import] failed:', err.message);
-    await logSync('History Import', incomingLength, 'failed');
     return res.status(400).json({ success: false, error: err.message });
   }
 }));
 
 module.exports = router;
+

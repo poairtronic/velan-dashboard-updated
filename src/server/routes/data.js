@@ -70,6 +70,9 @@ router.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
+const { syncQueue, QueueEvents } = require('../queues/syncQueue');
+const connection = { url: process.env.REDIS_URL || 'redis://localhost:6379' };
+
 // ── POST /api/data — replace live snapshot AND save new rows to Neon ──────
 // NOTE: validateBody expects Express (req, res, next) signature if we updated it,
 // but the old `validateBody(schema)(payload, res)` wrote head. Let's fix that.
@@ -91,37 +94,25 @@ router.post('/', asyncHandler(async (req, res) => {
     const incoming = validated.rows;
     incomingLength = incoming.length;
 
-    // 1. Replace the live snapshot table in database
-    await saveLiveRows(incoming);
-    state._liveRows = incoming;
+    const syncQueueEvents = new QueueEvents('syncQueue', { connection });
+    const job = await syncQueue.add('sync-data', { incoming, syncType });
+    const result = await job.waitUntilFinished(syncQueueEvents);
 
-    // 2. Save/Upsert new rows to velan_rows in Neon
-    const saved = await insertRows(incoming);
-
-    const currentTotal = await getTotalCount();
-    state._lastSync = new Date().toLocaleString('en-IN');
-
-    // Invalidate caches
-    await invalidatePattern('dashboard:*');
-
-    // 3. Log the successful sync
-    await logSync(syncType, incomingLength, 'success');
-
-    console.log(`[POST /api/data] Live: ${incoming.length} | DB: ${currentTotal} (+${saved} upserted to Neon)`);
+    console.log(`[POST /api/data] Live: ${incoming.length} | DB: ${result.total} (+${result.newRows} upserted to Neon)`);
 
     return res.json({
       success: true,
-      liveTotal: incoming.length,
-      total: currentTotal,
-      newRows: saved,
-      lastSync: state._lastSync,
+      liveTotal: result.liveTotal,
+      total: result.total,
+      newRows: result.newRows,
+      lastSync: result.lastSync,
     });
   } catch (err) {
     console.error('[POST /api/data] failed:', err.message);
-    await logSync(syncType, incomingLength, 'failed');
     return res.status(400).json({ success: false, error: err.message });
   }
 }));
+
 
 // ── DELETE /api/data — wipe all rows from Neon ────────────────────────────
 router.delete('/', asyncHandler(async (req, res) => {

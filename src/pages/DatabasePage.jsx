@@ -88,7 +88,8 @@ function DatabasePage() {
   );
 
   // 3. Export Logic
-  const { exportJSON, exportCSV, exportPDF } = useDatabaseExport(filtered, kpiStats, fromDate, toDate);
+  const { exportJSON, exportCSV, exportPDF } = useDatabaseExport(filtered, kpiStats, fromDate, toDate, { ...filters, dateType });
+
 
   // Constants
   const uniquePOs = [...new Set(data.map((r) => r.po))].sort();

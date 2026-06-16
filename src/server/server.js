@@ -15,6 +15,10 @@ const state = require('./state');
 
 // Initialize background workers
 require('./workers/exportWorker');
+require('./workers/syncWorker');
+require('./workers/emailWorker');
+require('./workers/reportWorker');
+
 
 const PORT = env.PORT;
 const LIVE_URL = env.LIVE_URL || '';
