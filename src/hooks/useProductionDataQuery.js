@@ -13,6 +13,7 @@ export function useProductionDataQuery(filters, page = 1, limit = 100) {
     if (f.fromDate) params.append('fromDate', f.fromDate);
     if (f.toDate) params.append('toDate', f.toDate);
     if (f.dateType) params.append('dateType', f.dateType);
+    if (f.source) params.append('source', f.source);
     params.append('page', page);
     params.append('limit', limit);
     return params.toString();

@@ -140,8 +140,7 @@ async function getFilteredData(filters, todayStr) {
   
   let data;
   if (source === 'database') {
-    const merged = await getMergedData(todayStr);
-    data = getActiveData(merged);
+    data = await getMergedData(todayStr);
   } else {
     // source === 'live'
     // Fallback to dbRows if liveRows is empty (just like old logic)

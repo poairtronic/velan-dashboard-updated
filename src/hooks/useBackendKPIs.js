@@ -14,6 +14,7 @@ export function useBackendKPIs(filters) {
     if (f.fromDate) params.append('fromDate', f.fromDate);
     if (f.toDate) params.append('toDate', f.toDate);
     if (f.dateType) params.append('dateType', f.dateType);
+    if (f.source) params.append('source', f.source);
     return params.toString();
   };
 
