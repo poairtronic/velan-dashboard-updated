@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
@@ -376,6 +376,7 @@ const s = {
 function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [role, setRole] = useState('user');
   const [tab, setTab] = useState('login');
@@ -388,6 +389,15 @@ function LoginPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const reason = params.get('reason');
+    if (reason === 'session_expired') {
+      toast.error('Session expired. Please log in again.', { id: 'auth-failure' });
+      navigate('/login', { replace: true });
+    }
+  }, [location.search, navigate]);
 
   // If session check is done and user is already logged in, send to dashboard
   if (!isLoading && isAuthenticated) {

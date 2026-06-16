@@ -428,7 +428,7 @@ function UploadPage() {
                   color: 'var(--success)',
                   fontWeight: 700,
                 }}
-                onClick={() => syncLiveDataNow(liveConfig?.url)}
+                onClick={() => syncLiveDataNow(liveConfig?.url, { isManual: true })}
               >
                 🔄 Sync from Google Sheets Now
               </button>

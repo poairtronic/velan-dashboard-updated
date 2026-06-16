@@ -920,3 +920,62 @@ tr:hover td {
   margin-bottom: 20px;
 }
 
+/* ── ALERT CARDS IN DRAWER ──────────────────────────────────────── */
+.alert-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  transition: all 0.2s ease-in-out;
+}
+
+.alert-card:hover {
+  border-color: var(--border-bright);
+  background: rgba(255, 255, 255, 0.03);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.alert-card.unread {
+  border-color: rgba(0, 201, 255, 0.2);
+  background: rgba(0, 201, 255, 0.03);
+}
+
+.alert-card.unread:hover {
+  border-color: rgba(0, 201, 255, 0.4);
+  background: rgba(0, 201, 255, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 201, 255, 0.1);
+}
+
+.alert-severity-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-family: 'Share Tech Mono', monospace;
+  text-transform: uppercase;
+}
+
+.alert-severity-badge.critical {
+  background: rgba(255, 61, 90, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(255, 61, 90, 0.3);
+}
+
+.alert-severity-badge.warning {
+  background: rgba(255, 184, 54, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(255, 184, 54, 0.3);
+}
+
+.alert-severity-badge.info {
+  background: rgba(0, 201, 255, 0.15);
+  color: var(--accent1);
+  border: 1px solid rgba(0, 201, 255, 0.3);
+}
+
+

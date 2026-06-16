@@ -23,6 +23,8 @@ function Header({ onOpenCommandPalette }) {
   const [now, setNow] = useState(new Date());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('alerts'); // 'alerts' | 'timeline' | 'rules'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'unread' | 'read'
+  const [severityFilter, setSeverityFilter] = useState('all'); // 'all' | 'info' | 'warning' | 'critical'
   
   // Rules configuration local state
   const [localRules, setLocalRules] = useState([]);
@@ -100,6 +102,12 @@ function Header({ onOpenCommandPalette }) {
   const unreadAlerts = alertsData?.alerts?.filter(a => a.status === 'unread') || [];
   const allAlerts = alertsData?.alerts || [];
   const timelineEvents = timelineData?.events || [];
+
+  const filteredAlerts = allAlerts.filter((alert) => {
+    const matchesStatus = statusFilter === 'all' || alert.status === statusFilter;
+    const matchesSeverity = severityFilter === 'all' || alert.severity.toUpperCase() === severityFilter.toUpperCase();
+    return matchesStatus && matchesSeverity;
+  });
 
   const handleRuleChange = (index, field, value) => {
     const updated = [...localRules];
@@ -328,8 +336,80 @@ function Header({ onOpenCommandPalette }) {
                 >
                   {activeTab === 'alerts' && (
                     <>
+                      {/* Premium Filter Controls */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                          padding: '8px 10px',
+                          marginBottom: '4px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'bold' }}>STATUS:</span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {['all', 'unread', 'read'].map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => setStatusFilter(s)}
+                                style={{
+                                  background: statusFilter === s ? 'var(--accent1)' : 'rgba(255, 255, 255, 0.05)',
+                                  border: 'none',
+                                  color: statusFilter === s ? '#050b14' : 'var(--text-muted)',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '9px',
+                                  fontWeight: 'bold',
+                                  textTransform: 'uppercase',
+                                  fontFamily: 'Share Tech Mono, monospace'
+                                }}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'bold' }}>SEVERITY:</span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {['all', 'info', 'warning', 'critical'].map((sev) => {
+                              const isActive = severityFilter === sev;
+                              let activeBg = 'var(--accent1)';
+                              if (sev === 'critical') activeBg = 'var(--danger)';
+                              if (sev === 'warning') activeBg = '#ffc107';
+
+                              return (
+                                <button
+                                  key={sev}
+                                  onClick={() => setSeverityFilter(sev)}
+                                  style={{
+                                    background: isActive ? activeBg : 'rgba(255, 255, 255, 0.05)',
+                                    border: 'none',
+                                    color: isActive ? '#050b14' : 'var(--text-muted)',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '9px',
+                                    fontWeight: 'bold',
+                                    textTransform: 'uppercase',
+                                    fontFamily: 'Share Tech Mono, monospace'
+                                  }}
+                                >
+                                  {sev}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
                       {unreadAlerts.length > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2px' }}>
                           <button
                             onClick={() => markReadMutation.mutate(null)}
                             style={{
@@ -338,42 +418,27 @@ function Header({ onOpenCommandPalette }) {
                               color: 'var(--accent1)',
                               cursor: 'pointer',
                               fontSize: '10px',
-                              textDecoration: 'underline'
+                              textDecoration: 'underline',
+                              fontFamily: 'Share Tech Mono, monospace'
                             }}
                           >
                             Mark all as read
                           </button>
                         </div>
                       )}
-                      {allAlerts.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
-                          No alerts triggered.
+                      {filteredAlerts.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px', fontSize: '11px' }}>
+                          No alerts match current filter.
                         </div>
                       ) : (
-                        allAlerts.slice(0, 30).map((alert) => (
+                        filteredAlerts.slice(0, 30).map((alert) => (
                           <div
                             key={alert.id}
-                            style={{
-                              border: '1px solid ' + (alert.status === 'unread' ? 'rgba(0, 201, 255, 0.2)' : 'var(--border)'),
-                              background: alert.status === 'unread' ? 'rgba(0, 201, 255, 0.03)' : 'rgba(255, 255, 255, 0.01)',
-                              borderRadius: '6px',
-                              padding: '8px 10px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '4px',
-                              position: 'relative'
-                            }}
+                            className={`alert-card ${alert.status === 'unread' ? 'unread' : ''}`}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span
-                                style={{
-                                  fontSize: '9px',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  background: alert.severity === 'CRITICAL' ? 'rgba(255, 61, 90, 0.2)' : alert.severity === 'WARNING' ? 'rgba(255, 193, 7, 0.2)' : 'rgba(0, 201, 255, 0.2)',
-                                  color: alert.severity === 'CRITICAL' ? 'var(--danger)' : alert.severity === 'WARNING' ? '#ffc107' : 'var(--accent1)'
-                                }}
+                                className={`alert-severity-badge ${alert.severity.toLowerCase()}`}
                               >
                                 {alert.severity}
                               </span>

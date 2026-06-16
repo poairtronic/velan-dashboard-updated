@@ -32,6 +32,23 @@ const errorHandler = (err, req, res, next) => {
 
   logger.error(logger.categories.API, `[API_ERROR] ${err.name || 'Error'}: ${err.message}`, logMeta);
 
+  // Broadcast critical system errors to connected clients (allowed under Popup Rules)
+  try {
+    const { broadcast } = require('../utils/websocket');
+    const msg = (err.message || '').toLowerCase();
+    if (msg.includes('database') || msg.includes('postgres') || msg.includes('pool') || msg.includes('connection to db') || msg.includes('relation "') || msg.includes('query')) {
+      broadcast('system:error', { type: 'DATABASE_FAILURE', message: 'Database connection or operation failure.' });
+    } else if (msg.includes('redis') || msg.includes('ioredis') || msg.includes('upstash')) {
+      broadcast('system:error', { type: 'REDIS_FAILURE', message: 'Cache server connection failure.' });
+    } else if (msg.includes('bull') || msg.includes('queue') || msg.includes('worker') || msg.includes('job')) {
+      broadcast('system:error', { type: 'BULLMQ_FAILURE', message: 'Background queue operation failure.' });
+    } else if (status === 500) {
+      broadcast('system:error', { type: 'CRITICAL_SYSTEM_ERROR', message: err.message || 'A critical server error occurred.' });
+    }
+  } catch (wsErr) {
+    logger.error(logger.categories.API, `Failed to broadcast system error over WS: ${wsErr.message}`, wsErr);
+  }
+
   if (err.name === 'ZodError') {
     return res.status(400).json({
       success: false,

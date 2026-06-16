@@ -20,7 +20,7 @@ export async function apiClient(url, options = {}) {
         localStorage.removeItem('vd_user');
         localStorage.removeItem('vd_id');
         if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+          window.location.href = '/login?reason=session_expired';
         }
       }
 

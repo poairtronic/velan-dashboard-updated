@@ -17,6 +17,10 @@ if (!isMock) {
     try {
       const logger = require('../utils/logger');
       logger.error(logger.categories.DATABASE, 'Unexpected error on idle database client', err);
+      
+      // Broadcast database connection failure (allowed under Popup Rules)
+      const { broadcast } = require('../utils/websocket');
+      broadcast('system:error', { type: 'DATABASE_FAILURE', message: 'Unexpected idle database connection error.' });
     } catch (_) {
       console.error('[DATABASE Pool Error]', err);
     }
@@ -34,6 +38,17 @@ if (!isMock) {
       this.rows = [];
       this.liveRows = [];
       this.syncLogs = [];
+      this.alerts = [];
+      this.alertRules = [
+        { id: 1, rule_key: 'po_delay_warning', rule_name: 'PO Delay Warning', category: 'PO_DELAY', severity: 'INFO', threshold_value: 15, enabled: true, recipients: 'admin@velanmetrology.com' },
+        { id: 2, rule_key: 'po_delay_danger', rule_name: 'PO Delay Danger', category: 'PO_DELAY', severity: 'WARNING', threshold_value: 21, enabled: true, recipients: 'admin@velanmetrology.com' },
+        { id: 3, rule_key: 'po_delay_critical', rule_name: 'PO Delay Critical', category: 'PO_DELAY', severity: 'CRITICAL', threshold_value: 30, enabled: true, recipients: 'admin@velanmetrology.com' },
+        { id: 4, rule_key: 'vendor_sla_violation', rule_name: 'Vendor SLA Violation', category: 'VENDOR_DELAY', severity: 'CRITICAL', threshold_value: 2, enabled: true, recipients: 'admin@velanmetrology.com' },
+        { id: 5, rule_key: 'vendor_delay_warning', rule_name: 'Vendor Delay Warning', category: 'VENDOR_DELAY', severity: 'WARNING', threshold_value: 5, enabled: true, recipients: 'admin@velanmetrology.com' },
+        { id: 6, rule_key: 'stage_backlog_warning', rule_name: 'Stage Queue Backlog', category: 'PRODUCTION', severity: 'WARNING', threshold_value: 20, enabled: true, recipients: 'admin@velanmetrology.com' },
+        { id: 7, rule_key: 'stage_backlog_critical', rule_name: 'Stage Queue Critical', category: 'PRODUCTION', severity: 'CRITICAL', threshold_value: 50, enabled: true, recipients: 'admin@velanmetrology.com' }
+      ];
+      this.timeline = [];
       this.users = [
         {
           id: 1,
@@ -141,6 +156,91 @@ if (!isMock) {
         this.syncLogs.unshift(log);
         return { rowCount: 1, rows: [] };
       }
+
+      // alert_rules queries
+      if (cleanSql.includes('FROM ALERT_RULES')) {
+        return { rows: this.alertRules };
+      }
+      if (cleanSql.includes('UPDATE ALERT_RULES')) {
+        const [threshold_value, enabled, recipients, rule_key] = params;
+        const rule = this.alertRules.find(r => r.rule_key === rule_key);
+        if (rule) {
+          if (threshold_value !== undefined) rule.threshold_value = threshold_value;
+          if (enabled !== undefined) rule.enabled = enabled;
+          if (recipients !== undefined) rule.recipients = recipients;
+        }
+        return { rowCount: 1, rows: [] };
+      }
+
+      // alerts queries
+      if (cleanSql.includes('INSERT INTO ALERTS')) {
+        const [rule_key, severity, category, message, item_key] = params;
+        const newAlert = {
+          id: this.alerts.length + 1,
+          rule_key,
+          severity,
+          category,
+          message,
+          item_key,
+          status: 'unread',
+          created_at: new Date().toISOString()
+        };
+        this.alerts.unshift(newAlert);
+        return { rowCount: 1, rows: [newAlert] };
+      }
+      if (cleanSql.includes('UPDATE ALERTS SET STATUS')) {
+        let updated = [];
+        if (cleanSql.includes('WHERE ID = ANY($1)')) {
+          const ids = params[0] || [];
+          this.alerts.forEach(a => {
+            if (ids.includes(a.id)) {
+              a.status = 'read';
+              a.resolved_at = new Date().toISOString();
+              updated.push(a);
+            }
+          });
+        } else {
+          this.alerts.forEach(a => {
+            if (a.status === 'unread') {
+              a.status = 'read';
+              a.resolved_at = new Date().toISOString();
+              updated.push(a);
+            }
+          });
+        }
+        return { rowCount: updated.length, rows: updated };
+      }
+      if (cleanSql.includes('FROM ALERTS')) {
+        let filtered = this.alerts;
+        if (cleanSql.includes("STATUS = 'UNREAD'") || (params && params.includes('unread'))) {
+          filtered = this.alerts.filter(a => a.status === 'unread');
+        }
+        if (params && params.length === 2) {
+          // rule_key = params[0], item_key = params[1]
+          filtered = filtered.filter(a => a.rule_key === params[0] && a.item_key === params[1]);
+        }
+        return { rows: filtered };
+      }
+
+      // operational_timeline queries
+      if (cleanSql.includes('INSERT INTO OPERATIONAL_TIMELINE')) {
+        const [event_type, title, description, item_key, meta_data] = params;
+        const newEvent = {
+          id: this.timeline.length + 1,
+          event_type,
+          title,
+          description,
+          item_key,
+          meta_data: meta_data ? JSON.parse(meta_data) : null,
+          created_at: new Date().toISOString()
+        };
+        this.timeline.unshift(newEvent);
+        return { rowCount: 1, rows: [newEvent] };
+      }
+      if (cleanSql.includes('FROM OPERATIONAL_TIMELINE')) {
+        return { rows: this.timeline };
+      }
+
       if (cleanSql.includes("SELECT COUNT(*) FROM USERS WHERE STATUS = 'PENDING'")) {
         const count = this.users.filter((u) => u.status === 'pending').length;
         return { rows: [{ count }] };

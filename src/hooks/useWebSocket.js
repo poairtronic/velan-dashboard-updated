@@ -33,17 +33,12 @@ export function useWebSocket() {
           console.log(`[WebSocket] Received event: ${event}`, data);
 
           if (event === 'sync:completed') {
-            toast.success('Live Sync Completed! Updating metrics...');
             // Invalidate React Query caches to trigger automatic reload of all UI values
             queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
             queryClient.invalidateQueries({ queryKey: ['productionData'] });
             queryClient.invalidateQueries({ queryKey: ['backendKPIs'] });
           } else if (event === 'alert:created') {
-            const toastIcon = data.severity === 'CRITICAL' ? '🚨' : data.severity === 'WARNING' ? '⚠️' : 'ℹ️';
-            toast(data.message, {
-              icon: toastIcon,
-              duration: 6000
-            });
+            // Suppress automatic popup/toast for operational business alerts
             queryClient.invalidateQueries({ queryKey: ['alerts'] });
           } else if (event === 'timeline:created') {
             queryClient.invalidateQueries({ queryKey: ['timeline'] });
@@ -51,6 +46,19 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['alerts'] });
           } else if (event === 'alert_rules:changed') {
             queryClient.invalidateQueries({ queryKey: ['alert_rules'] });
+          } else if (event === 'system:error') {
+            // Critical system error toast popup (allowed under Popup Rules)
+            const toastId = data.type ? `sys-${data.type.toLowerCase()}` : 'system-error';
+            toast.error(`[System Error] ${data.message || 'A critical error occurred'}`, {
+              id: toastId,
+              duration: 8000
+            });
+          } else if (event === 'sync:failed') {
+            // Google Sheet Sync failure toast popup (allowed under Popup Rules)
+            toast.error(`[Sync Failure] ${data.error || 'Google Sheet Sync failed'}`, {
+              id: 'sync-failed',
+              duration: 8000
+            });
           }
         } catch (err) {
           console.error('[WebSocket] Failed to parse message', err);

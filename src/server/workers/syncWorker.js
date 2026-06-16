@@ -81,6 +81,14 @@ const workerHandler = async (job) => {
     const durationMs = Date.now() - startTime;
     logger.error(logger.categories.SYNC, `[SyncWorker] Failed job ${job.id}: ${err.message}`, err);
     await logSync(syncType, incomingLength, 'failed', durationMs, 0, incomingLength, err.message);
+    
+    // Broadcast WebSocket notification for Google Sheet Sync Failure (allowed under Popup Rules)
+    try {
+      broadcast('sync:failed', { error: err.message, syncType });
+    } catch (wsErr) {
+      logger.error(logger.categories.SYNC, `Failed to broadcast sync:failed over WS: ${wsErr.message}`, wsErr);
+    }
+    
     throw err;
   }
 };

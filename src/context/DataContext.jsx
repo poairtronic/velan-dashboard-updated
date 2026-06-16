@@ -90,7 +90,7 @@ export function DataProvider({ children }) {
   const queryClient = useQueryClient();
 
   const saveRowsMutation = useMutation({
-    mutationFn: ({ rows, syncType }) => saveRows(rows, syncType),
+    mutationFn: ({ rows, syncType, options }) => saveRows(rows, syncType),
     onSuccess: (result, variables) => {
       if (result && result.success) {
         if (result.lastSync) setLastSync(result.lastSync);
@@ -100,7 +100,9 @@ export function DataProvider({ children }) {
           msg: `✅ Saved ${variables.rows.length} rows to live dashboard`,
           detail: `Live: ${result.liveTotal} rows | DB: ${result.total} rows total (+${result.newRows || 0} new entries added to Database).`,
         });
-        toast.success('Live dashboard data saved.');
+        if (variables.options?.isManual) {
+          toast.success('Live dashboard data saved.');
+        }
       }
     },
     onError: (err) => {
@@ -166,9 +168,9 @@ export function DataProvider({ children }) {
 
   // Network actions
   const saveRowsToServer = useCallback(
-    (rows, syncType = 'Manual Upload') => {
+    (rows, syncType = 'Manual Upload', options = {}) => {
       if (!rows || rows.length === 0) return;
-      saveRowsMutation.mutate({ rows, syncType });
+      saveRowsMutation.mutate({ rows, syncType, options });
     },
     [saveRowsMutation]
   );
@@ -229,7 +231,7 @@ export function DataProvider({ children }) {
   const { handleFileUpload, handleHistoryFileUpload, handleHistoryDragDrop } = uploadHandlers;
 
   const syncLiveDataNow = useCallback(
-    async (urlOverride) => {
+    async (urlOverride, options = {}) => {
       const sourceUrl = String(urlOverride || liveConfig.url || '').trim();
       if (!sourceUrl) {
         setUploadStatus({
@@ -237,7 +239,9 @@ export function DataProvider({ children }) {
           msg: 'Live source URL is empty.',
           detail: 'Paste your Google Sheets URL (share link, edit link, or CSV export link).',
         });
-        toast.error('Live source URL is empty.');
+        if (options.isManual) {
+          toast.error('Live source URL is empty.');
+        }
         return;
       }
 
@@ -259,13 +263,15 @@ export function DataProvider({ children }) {
             msg: 'No valid rows found in file.',
             detail: 'Check that the file has data and correct column names.',
           });
-          toast.error('No valid rows found in live source.');
+          if (options.isManual) {
+            toast.error('No valid rows found in live source.');
+          }
           return;
         }
         const normalizedRows = rows.map(normalizeRow).filter((r) => r && (r.sc || r.po));
         const missingStage = normalizedRows.filter((r) => !r.currentStage).length;
         setLiveRows(normalizedRows);
-        saveRowsToServer(normalizedRows, 'Google Sheets Sync');
+        saveRowsToServer(normalizedRows, 'Google Sheets Sync', options);
 
         const sourceName = isGSheets ? 'GOOGLE SHEETS (LIVE)' : 'LIVE SOURCE';
         setUploadStatus({
@@ -274,7 +280,9 @@ export function DataProvider({ children }) {
           detail: missingStage > 0 ? `⚠ ${missingStage} rows have no stage value` : null,
         });
         setLiveState({ active: true, lastSync: new Date().toLocaleString('en-IN'), lastError: '' });
-        toast.success('Live sync completed.');
+        if (options.isManual) {
+          toast.success('Live sync completed.');
+        }
       } catch (err) {
         logger.error('syncLiveDataNow failed:', err);
         setLiveState((prev) => ({ ...prev, active: false, lastError: String(err) }));
@@ -283,7 +291,7 @@ export function DataProvider({ children }) {
           msg: 'Live sync failed.',
           detail: `${String(err)}\n\n💡 For Google Sheets: File → Share → Publish to web → Entire Document → CSV → Publish\n   Copy the /pub?output=csv link and paste it above.`,
         });
-        toast.error('Live sync failed. Check URL or network.');
+        toast.error('Live sync failed. Check URL or network.', { id: 'bg-sync-failure' });
       }
     },
     [liveConfig.url, saveRowsToServer, setUploadStatus, setLiveState]
