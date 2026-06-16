@@ -22,6 +22,7 @@ const reportsRouter = require('./routes/reports');
 const configRouter = require('./routes/config');
 const securityRouter = require('./routes/security');
 const healthRouter = require('./routes/health');
+const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
 
@@ -111,6 +112,7 @@ apiRouter.use('/sheets', requireAuth(['admin', 'user']), sheetsRouter);
 apiRouter.use('/config', requireAuth(['admin', 'user']), configRouter);
 apiRouter.use('/security-status', requireAuth(['admin', 'user']), securityRouter);
 apiRouter.use('/reports', requireAuth(['admin', 'user']), reportsRouter);
+apiRouter.use('/dashboard', requireAuth(['admin', 'user']), dashboardRouter);
 
 app.use('/api', apiRouter);
 

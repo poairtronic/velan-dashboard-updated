@@ -7,7 +7,7 @@ import { fetchData, saveRows, importRows, resetDB } from '../services/dataServic
 import { fetchDataUrl } from '../services/sheetsService';
 import { normalizeRow } from '../utils/normalizeRow';
 import { workingDaysBetween, normalizeProductsInGroup } from '../utils/calculationUtils';
-import { useKPIs } from '../hooks/useKPIs';
+import { useBackendKPIs } from '../hooks/useBackendKPIs';
 import useDashboardData from '../hooks/useDashboardData';
 import useLiveSync from '../hooks/useLiveSync';
 import useUploadHandlers from '../hooks/useUploadHandlers';
@@ -377,7 +377,7 @@ export function DataProvider({ children }) {
     return Object.values(g);
   }, [liveData]);
 
-  const kpis = useKPIs(filtered, scGroups, poGroups, liveData, todayStr);
+  const kpis = useBackendKPIs(filtered, scGroups, poGroups, todayStr);
 
   const uniquePOs = useMemo(() => [...new Set(liveData.map((r) => r.po))].sort(), [liveData]);
   const uniqueStages = useMemo(
