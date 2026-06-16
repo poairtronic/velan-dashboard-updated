@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import apiClient from '../services/apiClient';
+import { apiBase, apiClient } from '../services/apiClient';
 
 export function useBackendKPIs(filtered, scGroups, poGroups, todayStr) {
   // Use React Query to fetch calculated data from the backend
@@ -9,13 +9,20 @@ export function useBackendKPIs(filtered, scGroups, poGroups, todayStr) {
       // If there's no data to process, return default structure immediately
       if (!filtered || filtered.length === 0) return getDefaultKPIs();
 
-      const response = await apiClient.post('/dashboard/calculations', {
-        filtered,
-        scGroups,
-        poGroups,
-        todayStr
+      const res = await apiClient(`${apiBase}/api/dashboard/calculations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filtered,
+          scGroups,
+          poGroups,
+          todayStr,
+        }),
       });
-      return response.data;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
     },
     // Prevent refetching on window focus to save bandwidth
     refetchOnWindowFocus: false,
