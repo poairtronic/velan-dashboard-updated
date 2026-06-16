@@ -291,108 +291,30 @@ export function DataProvider({ children }) {
 
   useLiveSync(liveConfig, syncLiveDataNow);
 
-  // Computed data
-  const processedData = useMemo(() => {
-    return data.map((row) => ({
-      ...row,
-      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
-      cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
-    }));
-  }, [data, todayStr]);
+  // We use the new backend KPIs hook which handles React Query internally
+  const kpis = useBackendKPIs(useFilters().filters);
 
-  const allDbData = useMemo(() => {
-    const seen = new Set();
-    const liveProcessed = liveRows.map((row) => ({
-      ...row,
-      currentStage: row.currentStage || row.op || row.OP || '',
-      _isLive: true,
-      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
-      cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
-    }));
-    const dbProcessed = processedData.map((row) => ({
-      ...row,
-      currentStage: row.currentStage || row.op || row.OP || '',
-      _isLive: false,
-    }));
-    return [...liveProcessed, ...dbProcessed].filter((r) => {
-      const key =
-        (r.sc || '') +
-        '||' +
-        (r.po || '') +
-        '||' +
-        (r.product || '') +
-        '||' +
-        (r.currentStage || '') +
-        '||' +
-        (r.timestamp || '');
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [processedData, liveRows, todayStr]);
+  // We no longer keep massive filtered arrays in Context. 
+  // Pages will use useProductionDataQuery to fetch paginated data when they need tables.
 
-  const liveData = useMemo(() => {
-    return liveRows.map((row) => ({
-      ...row,
-      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
-      cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
-    }));
-  }, [liveRows, todayStr]);
-
-  const filtered = useMemo(() => filterRows(liveData), [liveData, filterRows]);
-
-  const scGroups = useMemo(() => {
-    const g = {};
-    liveData.forEach((row) => {
-      if (!g[row.sc]) g[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, _all: [] };
-      g[row.sc]._all.push(row);
-    });
-    return Object.values(g).map((sg) => {
-      const latestMap = {};
-      const normalizedRows = normalizeProductsInGroup(sg._all);
-      normalizedRows.forEach((r) => {
-        const key = (r.product || '__none__').trim();
-        const ex = latestMap[key];
-        if (!ex) {
-          latestMap[key] = r;
-          return;
-        }
-        if (r._isLive && !ex._isLive) {
-          latestMap[key] = r;
-          return;
-        }
-        if (!r._isLive && ex._isLive) return;
-        if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
-      });
-      return { sc: sg.sc, po: sg.po, poDate: sg.poDate, items: Object.values(latestMap) };
-    });
-  }, [liveData]);
-
-  const poGroups = useMemo(() => {
-    const g = {};
-    liveData.forEach((row) => {
-      if (!g[row.po]) g[row.po] = { po: row.po, poDate: row.poDate, items: [] };
-      g[row.po].items.push(row);
-    });
-    return Object.values(g);
-  }, [liveData]);
-
-  const kpis = useBackendKPIs(filtered, scGroups, poGroups, todayStr);
-
-  const uniquePOs = useMemo(() => [...new Set(liveData.map((r) => r.po))].sort(), [liveData]);
+  // We still provide unique lists for dropdowns (POs, Stages, Types). 
+  // In a real 100K system we'd fetch these from a dedicated /api/options endpoint,
+  // but for now we extract them from the paginated liveRows we have (or leave them empty to fetch on demand).
+  // Ideally, filter dropdowns should be populated from a fast backend query.
+  const uniquePOs = useMemo(() => [...new Set(liveRows.map((r) => r.po))].sort(), [liveRows]);
   const uniqueStages = useMemo(
-    () => [...new Set(liveData.map((r) => r.currentStage))].filter(Boolean).sort(),
-    [liveData]
+    () => [...new Set(liveRows.map((r) => r.currentStage))].filter(Boolean).sort(),
+    [liveRows]
   );
   const uniqueTypes = useMemo(
-    () => [...new Set(liveData.map((r) => r.type))].filter(Boolean).sort(),
-    [liveData]
+    () => [...new Set(liveRows.map((r) => r.type))].filter(Boolean).sort(),
+    [liveRows]
   );
 
   const contextValue = useMemo(
     () => ({
-      data,
-      liveRows,
+      data, // Raw unpaginated data is no longer fully populated, but kept for legacy checks
+      liveRows, // Same here, mostly used for dropdowns now
       lastSync,
       liveConfig,
       setLiveConfig,
@@ -408,12 +330,6 @@ export function DataProvider({ children }) {
       handleHistoryFileUpload,
       handleHistoryDragDrop,
       syncLiveDataNow,
-      processedData,
-      allDbData,
-      liveData,
-      filtered,
-      scGroups,
-      poGroups,
       kpis,
       uniquePOs,
       uniqueStages,
@@ -434,12 +350,6 @@ export function DataProvider({ children }) {
       handleHistoryFileUpload,
       handleHistoryDragDrop,
       syncLiveDataNow,
-      processedData,
-      allDbData,
-      liveData,
-      filtered,
-      scGroups,
-      poGroups,
       kpis,
       uniquePOs,
       uniqueStages,

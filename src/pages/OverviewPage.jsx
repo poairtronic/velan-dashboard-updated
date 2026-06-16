@@ -54,7 +54,7 @@ function groupByPO(items) {
 }
 
 function OverviewPage() {
-  const { kpis, filtered, liveData, data } = useData();
+  const { kpis } = useData();
   const { setActiveNav } = useUI();
   const poRef = React.useRef();
   const [selectedCategory, setSelectedCategory] = React.useState(null);
@@ -65,80 +65,25 @@ function OverviewPage() {
   const typeChartRef = React.useRef();
 
   const todayStr = MODULE_TODAY_STR;
-
-  // ── MEMOIZED: PO grouping and daily/delayed/inProgress buckets ────────────
-  const { dailyPOs, delayedPOs, inProgressPOs, dailySetItems, delayedPOItems, inProgressItems } =
-    React.useMemo(() => {
-      const poGroupsLive = {};
-      liveData.forEach((item) => {
-        if (!item.po) return;
-        if (!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
-        poGroupsLive[item.po].push(item);
-      });
-
-      const dailySetPOs = Object.entries(poGroupsLive).filter(([po, items]) => {
-        const allDone = items.every((i) =>
-          ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)
-        );
-        const completedToday = items.some(
-          (i) => i.timestamp && i.timestamp.slice(0, 10) === todayStr
-        );
-        return allDone && completedToday;
-      });
-      const dailySetItems = dailySetPOs.flatMap(([_, items]) => items);
-
-      const delayedPOItems = liveData.filter((i) => {
-        if (['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)) return false;
-        if (!i.poDate) return false;
-        const days = workingDaysBetween(i.poDate, todayStr);
-        return days !== null && days > 21;
-      });
-
-      const inProgressItems = liveData.filter((i) => {
-        if (['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)) return false;
-        const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
-        return days === null || days <= 21;
-      });
-
-      return {
-        dailySetItems,
-        delayedPOItems,
-        inProgressItems,
-        dailyPOs: groupByPO(dailySetItems),
-        delayedPOs: groupByPO(delayedPOItems),
-        inProgressPOs: groupByPO(inProgressItems),
-      };
-    }, [liveData, todayStr]);
-
-  // ── MEMOIZED: Ready items for "View ready details" modal ──────────────────
-  const readyPOs = React.useMemo(() => {
-    const readyItems = liveData.filter((i) => i.currentStage === 'READY');
-    return groupByPO(readyItems);
-  }, [liveData]);
+  
+  const stats = kpis.overviewStats || {};
 
   // ── MEMOIZED: Inhouse/vendor counts for donut chart ───────────────────────
   const { inhouseCount, vendorCount } = React.useMemo(
     () => ({
-      inhouseCount: filtered.filter((r) => r.inhouse === 'INHOUSE').length,
-      vendorCount: filtered.filter((r) => r.inhouse === 'VENDOR').length,
+      inhouseCount: kpis.inhouse || 0,
+      vendorCount: kpis.vendor || 0,
     }),
-    [filtered]
+    [kpis.inhouse, kpis.vendor]
   );
 
   // ── MEMOIZED: Product type counts for pie chart ───────────────────────────
-  const typeCounts = React.useMemo(() => {
-    const counts = {};
-    filtered.forEach((r) => {
-      const cat = getProductCategory(r.type);
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return counts;
-  }, [filtered]);
+  const typeCounts = kpis.categoryCounts || { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
 
   // ── MEMOIZED: Stage distribution for bar chart ────────────────────────────
   const stages = React.useMemo(
     () =>
-      Object.entries(kpis.stageCounts)
+      Object.entries(kpis.stageCounts || {})
         .sort((a, b) => b[1] - a[1])
         .slice(0, 12),
     [kpis.stageCounts]
@@ -150,32 +95,32 @@ function OverviewPage() {
       {
         id: 'daily',
         label: 'DAILY SET',
-        value: dailySetItems.length,
+        value: stats.dailySetItemsCount || 0,
         sub: 'items created today',
         color1: '#00c9ff',
         color2: '#0fa8e0',
-        data: dailyPOs,
+        data: stats.dailyPOs || [],
       },
       {
         id: 'delayed',
         label: 'DELAYED SC',
-        value: delayedPOItems.length,
+        value: stats.delayedPOItemsCount || 0,
         sub: 'items in delayed POs',
         color1: '#ff3d5a',
         color2: '#ff6b35',
-        data: delayedPOs,
+        data: stats.delayedPOsModal || [],
       },
       {
         id: 'inprogress',
         label: 'INPROGRESS',
-        value: inProgressItems.length,
+        value: stats.inProgressItemsCount || 0,
         sub: 'items in production',
         color1: '#ffd60a',
         color2: '#b24bff',
-        data: inProgressPOs,
+        data: stats.inProgressPOs || [],
       },
     ],
-    [dailySetItems, delayedPOItems, inProgressItems, dailyPOs, delayedPOs, inProgressPOs]
+    [stats]
   );
 
   // ── Stable callbacks for category card interactions ───────────────────────
@@ -288,7 +233,7 @@ function OverviewPage() {
       <div className="kpi-grid">
         <KPICard
           label="TOTAL ITEMS"
-          value={filtered.length}
+          value={kpis.totalItems || 0}
           sub="in current view"
           color1="#00c9ff"
           color2="#0fa8e0"
@@ -326,7 +271,7 @@ function OverviewPage() {
         />
         <KPICard
           label="INHOUSE WORKLOAD"
-          value={`${Math.round((kpis.inhouse / Math.max(filtered.length, 1)) * 100)}%`}
+          value={`${Math.round(((kpis.inhouse || 0) / Math.max(kpis.totalItems || 1, 1)) * 100)}%`}
           sub={`${kpis.inhouse} inhouse · ${kpis.vendor} vendor`}
           color1="#00c9ff"
           color2="#b24bff"
@@ -404,10 +349,10 @@ function OverviewPage() {
             category={selectedCategory}
             data={
               selectedCategory === 'daily'
-                ? dailyPOs
+                ? stats.dailyPOs
                 : selectedCategory === 'delayed'
-                  ? delayedPOs
-                  : inProgressPOs
+                  ? stats.delayedPOsModal
+                  : stats.inProgressPOs
             }
             todayStr={todayStr}
           />
@@ -455,12 +400,12 @@ function OverviewPage() {
             </button>
           </div>
           <div style={{ padding: '16px 18px', maxHeight: '500px', overflowY: 'auto' }}>
-            {readyPOs.length === 0 ? (
+            {!(stats.readyPOs && stats.readyPOs.length > 0) ? (
               <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
                 No ready items found for dispatch.
               </div>
             ) : (
-              readyPOs.map((poGroup, poIdx) => (
+              stats.readyPOs.map((poGroup, poIdx) => (
                 <div
                   key={poIdx}
                   style={{

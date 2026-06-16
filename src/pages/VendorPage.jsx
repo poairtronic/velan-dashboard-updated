@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { useUI } from '../context/UIContext';
 import {
   calculateProcessCycleTime,
@@ -21,7 +23,9 @@ import VendorItemTable from '../components/vendor/VendorItemTable';
 // ─── VENDOR EVALUATION PAGE COMPONENT ─────────────────────────────────────────
 
 function VendorPage() {
-  const { kpis, filtered: data } = useData();
+  const { kpis } = useData();
+  const { filters } = useFilters();
+  const { rows: data } = useProductionDataQuery(filters, 1, 200);
   const { setActiveNav, setSelectedPONum } = useUI();
   const navigate = useNavigate();
   const [selectedSC, setSelectedSC] = useState(null);

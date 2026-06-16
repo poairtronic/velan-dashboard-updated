@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import {
   workingDaysBetween,
@@ -19,64 +21,31 @@ import useChart from '../utils/chartUtils';
 // ─── PRODUCTION PAGE COMPONENT ────────────────────────────────────────────────
 
 function ProductionPage() {
-  const { kpis, filtered, scGroups } = useData();
+  const { kpis, scGroups } = useData();
+  const { filters } = useFilters();
   const dailyRef = React.useRef();
   const setsRef = React.useRef();
   const catRef = React.useRef();
   const [tab, setTab] = React.useState('sets'); // 'sets' | 'items'
 
-  // ── MEMOIZED: Daily items aggregation by date ─────────────────────────────
-  const dateSeries = React.useMemo(() => {
-    const byDate = {};
-    filtered.forEach((r) => {
-      if (!r.timestamp) return;
-      const d = r.timestamp.substring(0, 10);
-      if (!byDate[d]) byDate[d] = { date: d, ready: 0, stores: 0, wip: 0 };
-      if (r.currentStage === 'READY') byDate[d].ready++;
-      else if (r.currentStage === 'STORES') byDate[d].stores++;
-      else byDate[d].wip++;
-    });
-    return Object.keys(byDate)
-      .sort()
-      .map((d) => byDate[d]);
-  }, [filtered]);
+  // Fetch ready items directly from backend only when needed
+  const { rows: readyItems } = useProductionDataQuery(
+    { ...filters, stage: 'READY' },
+    1,
+    150
+  );
 
-  // ── MEMOIZED: Product category breakdown for doughnut chart ───────────────
-  const cats = React.useMemo(() => {
-    const result = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
-    filtered.forEach((r) => {
-      result[getProductCategory(r.type)]++;
-    });
-    return result;
-  }, [filtered]);
+  // ── Backend-provided derived data ─────────────────────────────
+  const dateSeries = kpis.dailyOutputArray || [];
+  const cats = kpis.categoryCounts || { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
+  const airplugOutputCount = kpis.airplugOutputCount || 0;
+  const masterOutputCount = kpis.masterOutputCount || 0;
 
-  // ── MEMOIZED: Sets and items derived data ─────────────────────────────────
+  // ── MEMOIZED: Sets derived data ─────────────────────────────────
   const displaySets = React.useMemo(() => {
     if (tab !== 'sets') return null;
-    return kpis.readySets.concat(kpis.storeSets);
+    return (kpis.readySets || []).concat(kpis.storeSets || []);
   }, [kpis.readySets, kpis.storeSets, tab]);
-
-  const readyItems = React.useMemo(
-    () => filtered.filter((r) => r.currentStage === 'READY'),
-    [filtered]
-  );
-
-  // ── MEMOIZED: KPI values for AIRPLUG and MASTER output ────────────────────
-  const airplugOutputCount = React.useMemo(
-    () =>
-      filtered.filter(
-        (r) => AIRPLUG_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)
-      ).length,
-    [filtered]
-  );
-
-  const masterOutputCount = React.useMemo(
-    () =>
-      filtered.filter(
-        (r) => MASTER_TYPES.includes(r.type) && ['READY', 'STORES'].includes(r.currentStage)
-      ).length,
-    [filtered]
-  );
 
   // Daily items chart
   useChart(

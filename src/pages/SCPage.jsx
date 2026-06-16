@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import {
   workingDaysBetween,
@@ -16,10 +18,23 @@ import DataTable from '../components/DataTable';
 // ─── SC COMPONENT SET COMPLETION PAGE COMPONENT ───────────────────────────────
 
 function SCPage() {
-  const { kpis, scGroups } = useData();
+  const { kpis } = useData();
+  const { filters } = useFilters();
   const [tab, setTab] = React.useState('all');
   const [selectedSC, setSelectedSC] = React.useState(null);
   const [search, setSearch] = React.useState('');
+
+  const { rows: filtered } = useProductionDataQuery(filters, 1, 10000);
+
+  const scGroups = React.useMemo(() => {
+    const map = {};
+    filtered.forEach((r) => {
+      if (!r.sc) return;
+      if (!map[r.sc]) map[r.sc] = { sc: r.sc, po: r.po, poDate: r.poDate, items: [] };
+      map[r.sc].items.push(r);
+    });
+    return Object.values(map);
+  }, [filtered]);
 
   const tabFiltered =
     tab === 'complete'

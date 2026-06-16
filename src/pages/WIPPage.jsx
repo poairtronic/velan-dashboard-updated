@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import {
   workingDaysBetween,
@@ -17,7 +19,9 @@ import useChart from '../utils/chartUtils';
 // ─── WORK IN PROGRESS (WIP) PAGE COMPONENT ────────────────────────────────────
 
 function WIPPage() {
-  const { kpis, filtered } = useData();
+  const { kpis } = useData();
+  const { filters } = useFilters();
+  const { rows: filtered, isLoading } = useProductionDataQuery(filters, 1, 200);
   const [selectedStage, setSelectedStage] = React.useState(null);
   const [expandedItem, setExpandedItem] = React.useState(null);
   const wipRef = React.useRef();

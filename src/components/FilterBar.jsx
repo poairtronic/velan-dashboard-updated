@@ -7,7 +7,7 @@ import { useUI } from '../context/UIContext';
 
 function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters();
-  const { uniquePOs, uniqueStages, uniqueTypes, filtered, liveData, data } = useData();
+  const { uniquePOs, uniqueStages, uniqueTypes, kpis } = useData();
   const { activeNav } = useUI();
 
   // Local state tracks raw input value for instant visual feedback
@@ -157,7 +157,7 @@ function FilterBar() {
           color: 'var(--text-muted)',
         }}
       >
-        {filtered.length} items · {liveData.length} live · {data.length} db
+        {kpis?.totalItems || 0} items matching filters
       </span>
     </div>
   );

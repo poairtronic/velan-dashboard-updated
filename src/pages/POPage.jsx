@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { useUI } from '../context/UIContext';
 import {
   workingDaysBetween,
@@ -30,8 +32,29 @@ function isPOComplete(scGroupsForPO) {
 }
 
 function POPage() {
-  const { kpis, poGroups, scGroups } = useData();
+  const { kpis } = useData();
+  const { filters } = useFilters();
   const { selectedPONum, setSelectedPONum } = useUI();
+
+  const { rows: filtered } = useProductionDataQuery(filters, 1, 20000);
+
+  const { poGroups, scGroups } = React.useMemo(() => {
+    const scMap = {};
+    const poMap = {};
+    filtered.forEach((r) => {
+      if (!r.sc) return;
+      if (!scMap[r.sc]) scMap[r.sc] = { sc: r.sc, po: r.po, poDate: r.poDate, items: [] };
+      scMap[r.sc].items.push(r);
+      
+      if (!r.po) return;
+      if (!poMap[r.po]) poMap[r.po] = { po: r.po, poDate: r.poDate, items: [] };
+      poMap[r.po].items.push(r);
+    });
+    return {
+      scGroups: Object.values(scMap),
+      poGroups: Object.values(poMap),
+    };
+  }, [filtered]);
 
   const handleSearch = (e) => setSelectedPONum(e.target.value.trim().toUpperCase());
   const leadsRef = React.useRef();

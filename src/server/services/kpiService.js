@@ -62,13 +62,31 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   const totalPOs = poGroups.length;
   const onTimePct = completedPOCount > 0 ? Math.round((onTime / completedPOCount) * 100) : 0;
 
+  const { getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } = require('../utils/calculationUtils');
+
   const dailyOutput = {};
+  const categoryCounts = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
+  let airplugOutputCount = 0;
+  let masterOutputCount = 0;
+
   filtered.forEach((row) => {
+    // Categories
+    const cat = getProductCategory(row.type);
+    categoryCounts[cat]++;
+
+    // Airplug / Master output
+    if (['READY', 'STORES'].includes(row.currentStage)) {
+      if (AIRPLUG_TYPES.includes(row.type)) airplugOutputCount++;
+      if (MASTER_TYPES.includes(row.type)) masterOutputCount++;
+    }
+
+    // Daily output
     if (!row.timestamp) return;
     const date = row.timestamp.substring(0, 10);
-    if (!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0 };
+    if (!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0, wip: 0 };
     if (row.currentStage === 'READY') dailyOutput[date].ready++;
-    if (row.currentStage === 'STORES') dailyOutput[date].stores++;
+    else if (row.currentStage === 'STORES') dailyOutput[date].stores++;
+    else dailyOutput[date].wip++;
   });
   const dailyOutputArray = Object.values(dailyOutput).sort((a, b) => (a.date > b.date ? 1 : -1));
 
@@ -91,6 +109,64 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     sg.items.every((i) => ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage))
   );
 
+  // Overview Stats Calculations
+  const poGroupsLive = {};
+  filtered.forEach((item) => {
+    if (!item.po) return;
+    if (!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
+    poGroupsLive[item.po].push(item);
+  });
+
+  function groupByPO(items) {
+    const grouped = {};
+    items.forEach((item) => {
+      if (!grouped[item.po]) grouped[item.po] = [];
+      grouped[item.po].push(item);
+    });
+    return Object.entries(grouped).map(([po, poItems]) => ({
+      po,
+      scs: [...new Set(poItems.map((i) => i.sc))],
+      items: poItems,
+      count: poItems.length,
+    }));
+  }
+
+  const dailySetPOsRaw = Object.entries(poGroupsLive).filter(([po, items]) => {
+    const allDone = items.every((i) =>
+      ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)
+    );
+    const completedToday = items.some(
+      (i) => i.timestamp && i.timestamp.slice(0, 10) === todayStr
+    );
+    return allDone && completedToday;
+  });
+  const dailySetItems = dailySetPOsRaw.flatMap(([_, items]) => items);
+
+  const delayedPOItems = filtered.filter((i) => {
+    if (['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)) return false;
+    if (!i.poDate) return false;
+    const days = require('../utils/calculationUtils').workingDaysBetween(i.poDate, todayStr);
+    return days !== null && days > 21;
+  });
+
+  const inProgressItems = filtered.filter((i) => {
+    if (['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)) return false;
+    const days = i.poDate ? require('../utils/calculationUtils').workingDaysBetween(i.poDate, todayStr) : null;
+    return days === null || days <= 21;
+  });
+
+  const readyItemsRaw = filtered.filter((i) => i.currentStage === 'READY');
+
+  const overviewStats = {
+    dailySetItemsCount: dailySetItems.length,
+    delayedPOItemsCount: delayedPOItems.length,
+    inProgressItemsCount: inProgressItems.length,
+    dailyPOs: groupByPO(dailySetItems),
+    delayedPOsModal: groupByPO(delayedPOItems),
+    inProgressPOs: groupByPO(inProgressItems),
+    readyPOs: groupByPO(readyItemsRaw),
+  };
+
   return {
     totalItems,
     ready,
@@ -104,12 +180,16 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     totalPOs,
     dailyOutput,
     dailyOutputArray,
+    categoryCounts,
+    airplugOutputCount,
+    masterOutputCount,
     scDailyOutput,
     completeSets,
     storeSets,
     readySets,
     delayedPOs,
     onTimePOs,
+    overviewStats,
   };
 }
 

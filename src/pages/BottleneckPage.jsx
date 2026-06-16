@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import {
   workingDaysBetween,
@@ -17,7 +19,8 @@ import useChart from '../utils/chartUtils';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {
-  const { kpis, filtered } = useData();
+  const { kpis } = useData();
+  const { filters } = useFilters();
   const scoreRef = React.useRef();
   const queueRef = React.useRef();
   const [timeSearch, setTimeSearch] = React.useState('');
@@ -26,13 +29,19 @@ function BottleneckPage() {
   const maxScore = stages.length > 0 ? stages[0].score : 1;
   const top = kpis.topBottleneck;
 
+  // Use a query specifically for the top bottleneck stage to display its stuck items
+  const queryFilters = React.useMemo(() => {
+    if (!top) return filters;
+    return { ...filters, stage: top.stage };
+  }, [filters, top]);
+  
+  const { rows: stuckRows } = useProductionDataQuery(queryFilters, 1, 5000);
+
   // Export helpers - export "Items Currently Stuck" table
   function getStuckRows() {
     if (!top) return [];
     const today = new Date().toISOString().substring(0, 10);
-    return filtered
-      .filter((r) => r.currentStage === top.stage)
-      .map((r) => {
+    return stuckRows.map((r) => {
         const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), today) || 0);
         return {
           SC: r.sc || '—',
@@ -357,7 +366,7 @@ function BottleneckPage() {
         />
         <KPICard
           label="VENDOR BOTTLENECK"
-          value={filtered.filter((r) => r.inhouse === 'VENDOR').length}
+          value={kpis.vendor || 0}
           sub="items waiting at vendors"
           color1="#b24bff"
           color2="#ff6b35"
@@ -610,9 +619,7 @@ function BottleneckPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered
-                  .filter((r) => r.currentStage === top.stage)
-                  .map((r, i) => {
+                {stuckRows.map((r, i) => {
                     const today = new Date().toISOString().substring(0, 10);
                     const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), today));
                     const matchesSearch =

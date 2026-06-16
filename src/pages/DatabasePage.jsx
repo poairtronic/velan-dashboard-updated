@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { useAuth } from '../hooks/useAuth';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 
 // Hooks
 import { useDatabaseFilters } from '../hooks/useDatabaseFilters';
@@ -22,7 +23,6 @@ import { normalizeProductsInGroup } from '../utils/calculationUtils';
 function DatabasePage() {
   const { isAdmin } = useAuth();
   const {
-    allDbData: rawData,
     data: historyRows,
     historyConfig,
     setHistoryConfig,
@@ -33,10 +33,8 @@ function DatabasePage() {
   } = useData();
   const { importState } = useUI();
 
-  // 1. Filtering Logic
+  // 1. Filtering Logic (UI state only)
   const {
-    data,
-    filtered,
     dateType,
     setDateType,
     fromDate,
@@ -45,12 +43,35 @@ function DatabasePage() {
     setToDate,
     filters,
     setFilters,
-    allScItemsModal,
-    filteredScGroupsModal,
     hasNonDateFilter,
     setQuickDays,
     dateInRange,
-  } = useDatabaseFilters(rawData);
+  } = useDatabaseFilters();
+
+  // Fetch the massive filtered array locally to DatabasePage (to avoid global memory pressure)
+  const { rows: filtered, isLoading } = useProductionDataQuery(filters, 1, 200000);
+  const data = filtered || []; // For Archive, data and filtered are effectively the same
+
+  // Extract complex derivations required by KPI
+  const allScItemsModal = React.useMemo(() => {
+    const scGroups = {};
+    data.forEach((r) => {
+      if (!r.sc) return;
+      if (!scGroups[r.sc]) scGroups[r.sc] = [];
+      scGroups[r.sc].push(r);
+    });
+    return scGroups;
+  }, [data]);
+
+  const filteredScGroupsModal = React.useMemo(() => {
+    const scGroups = {};
+    filtered.forEach((r) => {
+      if (!r.sc) return;
+      if (!scGroups[r.sc]) scGroups[r.sc] = [];
+      scGroups[r.sc].push(r);
+    });
+    return scGroups;
+  }, [filtered]);
 
   // 2. KPI Logic
   const [selectedKPI, setSelectedKPI] = useState(null);

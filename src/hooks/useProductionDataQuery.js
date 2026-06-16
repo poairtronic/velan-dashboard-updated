@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiBase, apiClient } from '../services/apiClient';
 
-export function useBackendKPIs(filters) {
-  // Construct query string from filters
+export function useProductionDataQuery(filters, page = 1, limit = 100) {
   const buildQueryString = (f) => {
     const params = new URLSearchParams();
     if (f.po) params.append('po', f.po);
@@ -14,15 +13,17 @@ export function useBackendKPIs(filters) {
     if (f.fromDate) params.append('fromDate', f.fromDate);
     if (f.toDate) params.append('toDate', f.toDate);
     if (f.dateType) params.append('dateType', f.dateType);
+    params.append('page', page);
+    params.append('limit', limit);
     return params.toString();
   };
 
   const queryString = buildQueryString(filters);
 
-  const { data: kpis, isLoading, isError } = useQuery({
-    queryKey: ['backendKPIs', filters],
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ['productionData', filters, page, limit],
     queryFn: async () => {
-      const res = await apiClient(`${apiBase}/api/dashboard/calculations?${queryString}`, {
+      const res = await apiClient(`${apiBase}/api/data/production?${queryString}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -36,41 +37,14 @@ export function useBackendKPIs(filters) {
     keepPreviousData: true,
   });
 
-  return kpis || getDefaultKPIs();
-}
-
-function getDefaultKPIs() {
   return {
-    totalItems: 0,
-    ready: 0,
-    stores: 0,
-    wip: 0,
-    inhouse: 0,
-    vendor: 0,
-    onTime: 0,
-    delayed: 0,
-    onTimePct: 0,
-    totalPOs: 0,
-    stageCounts: {},
-    stageWIP: {},
-    bottleneck: [],
-    bottleneckStages: [],
-    topBottleneck: null,
-    vendors: [],
-    vendorTotal: 0,
-    vendorStats: {},
-    topVendorBottleneck: null,
-    stageCycleTimes: [],
-    stageAvgToReach: {},
-    avgOverallCycle: null,
-    scCompletion: [],
-    scDailyOutput: [],
-    completeSets: [],
-    storeSets: [],
-    readySets: [],
-    delayedPOs: [],
-    onTimePOs: [],
-    dailyOutput: {},
-    dailyOutputArray: [],
+    rows: data?.rows || [],
+    total: data?.total || 0,
+    totalPages: data?.totalPages || 0,
+    page: data?.page || 1,
+    limit: data?.limit || 100,
+    isLoading,
+    isFetching,
+    isError
   };
 }

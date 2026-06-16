@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import {
   workingDaysBetween,
@@ -18,10 +20,19 @@ import useChart from '../utils/chartUtils';
 // ─── CYCLE TIME PAGE COMPONENT ────────────────────────────────────────────────
 
 function CycleTimePage() {
-  const { kpis, filtered } = useData();
+  const { kpis } = useData();
+  const { filters } = useFilters();
   const [selectedStage, setSelectedStage] = React.useState(null);
   const ctBarRef = React.useRef();
   const ctLineRef = React.useRef();
+
+  // Fetch items for the specific stage when modal is open
+  const queryFilters = React.useMemo(
+    () => ({ ...filters, stage: selectedStage }),
+    [filters, selectedStage]
+  );
+  
+  const { rows: stageRows } = useProductionDataQuery(queryFilters, 1, 1000);
 
   const cts = kpis.stageCycleTimes
     .filter((s) => !['STOCK', 'RM', 'STORE', 'STORES'].includes(s.stage))
@@ -223,8 +234,8 @@ function CycleTimePage() {
         />
         <KPICard
           label="ITEMS WITH DATA"
-          value={filtered.filter((r) => r.timestamp && r.poDate).length}
-          sub="items with both dates"
+          value={kpis.totalItems || 0}
+          sub="items tracked in this view"
           color1="#b24bff"
           color2="#00c9ff"
         />
@@ -367,7 +378,7 @@ function CycleTimePage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.filter((item) => item.currentStage === selectedStage).length === 0 ? (
+                {stageRows.length === 0 ? (
                   <tr>
                     <td
                       colSpan="6"
@@ -377,9 +388,7 @@ function CycleTimePage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered
-                    .filter((item) => item.currentStage === selectedStage)
-                    .map((item, idx) => (
+                  stageRows.map((item, idx) => (
                       <tr key={idx}>
                         <td className="mono" style={{ fontSize: 11 }}>
                           {item.po}
