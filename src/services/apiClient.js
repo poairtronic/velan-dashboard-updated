@@ -6,20 +6,19 @@ export const apiBase = import.meta.env.VITE_API_BASE || '';
 export async function apiClient(url, options = {}) {
   options.headers = options.headers || {};
 
-  // Always include credentials (cookies) for backend API calls
+  // Always include credentials (cookies) for all API calls
+  options.credentials = 'include';
   const isBackend = url.startsWith('/api/') || (apiBase && url.startsWith(`${apiBase}/api/`));
-  if (isBackend) {
-    options.credentials = 'include';
-  }
 
   try {
     const res = await fetch(url, options);
 
     if (!res.ok) {
-      if (res.status === 401 && isBackend) {
+      if (res.status === 401) {
         // Automatically redirect to /login and clear local role/user cache
         localStorage.removeItem('vd_role');
         localStorage.removeItem('vd_user');
+        localStorage.removeItem('vd_id');
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
