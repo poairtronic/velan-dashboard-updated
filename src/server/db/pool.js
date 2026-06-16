@@ -259,11 +259,71 @@ async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(15) NOT NULL DEFAULT 'approved'
     `);
 
+    // 4.1 Create alert_rules table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alert_rules (
+        id              SERIAL PRIMARY KEY,
+        rule_key        VARCHAR(50) UNIQUE NOT NULL,
+        rule_name       VARCHAR(100) NOT NULL,
+        category        VARCHAR(50) NOT NULL,
+        severity        VARCHAR(20) NOT NULL,
+        threshold_value INTEGER NOT NULL,
+        enabled         BOOLEAN DEFAULT TRUE NOT NULL,
+        recipients      TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Seed default alert rules
+    await client.query(`
+      INSERT INTO alert_rules (rule_key, rule_name, category, severity, threshold_value, enabled, recipients)
+      VALUES 
+        ('po_delay_warning', 'PO Delay Warning', 'PO_DELAY', 'INFO', 15, true, 'admin@velanmetrology.com'),
+        ('po_delay_danger', 'PO Delay Danger', 'PO_DELAY', 'WARNING', 21, true, 'admin@velanmetrology.com'),
+        ('po_delay_critical', 'PO Delay Critical', 'PO_DELAY', 'CRITICAL', 30, true, 'admin@velanmetrology.com'),
+        ('vendor_sla_violation', 'Vendor SLA Violation', 'VENDOR_DELAY', 'CRITICAL', 2, true, 'admin@velanmetrology.com'),
+        ('vendor_delay_warning', 'Vendor Delay Warning', 'VENDOR_DELAY', 'WARNING', 5, true, 'admin@velanmetrology.com'),
+        ('stage_backlog_warning', 'Stage Queue Backlog', 'PRODUCTION', 'WARNING', 20, true, 'admin@velanmetrology.com'),
+        ('stage_backlog_critical', 'Stage Queue Critical', 'PRODUCTION', 'CRITICAL', 50, true, 'admin@velanmetrology.com')
+      ON CONFLICT (rule_key) DO NOTHING
+    `);
+
+    // 4.2 Create alerts table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alerts (
+        id          SERIAL PRIMARY KEY,
+        rule_key    VARCHAR(50) NOT NULL,
+        severity    VARCHAR(20) NOT NULL,
+        category    VARCHAR(50) NOT NULL,
+        message     TEXT NOT NULL,
+        item_key    VARCHAR(100),
+        status      VARCHAR(20) DEFAULT 'unread' NOT NULL,
+        resolved_at TIMESTAMPTZ,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // 4.3 Create operational_timeline table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS operational_timeline (
+        id          SERIAL PRIMARY KEY,
+        event_type  VARCHAR(50) NOT NULL,
+        title       VARCHAR(100) NOT NULL,
+        description TEXT NOT NULL,
+        item_key    VARCHAR(100),
+        meta_data   JSONB,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
     await client.query(
       'CREATE INDEX IF NOT EXISTS idx_velan_live_rows_key ON velan_live_rows (row_key)'
     );
+    await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts (created_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_timeline_created_at ON operational_timeline (created_at DESC)');
 
     // Scalability Indices for fast searching, filtering, and sorting
     await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_stage ON velan_rows ((data->>'currentStage'))");

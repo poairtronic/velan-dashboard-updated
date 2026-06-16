@@ -26,6 +26,8 @@ const HISTORY_URL = env.HISTORY_URL || '';
 
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 const server = http.createServer(app);
+const { initWebSocket } = require('./utils/websocket');
+initWebSocket(server);
 
 // ── Startup: init Neon table → load rows → start listening ───────────────────
 async function startup() {

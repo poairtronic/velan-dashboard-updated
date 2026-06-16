@@ -24,6 +24,8 @@ const securityRouter = require('./routes/security');
 const healthRouter = require('./routes/health');
 const dashboardRouter = require('./routes/dashboard');
 const adminRouter = require('./routes/admin');
+const alertsRouter = require('./routes/alerts');
+const timelineRouter = require('./routes/timeline');
 
 const app = express();
 
@@ -117,6 +119,8 @@ apiRouter.use('/security-status', requireAuth(['admin', 'user']), securityRouter
 apiRouter.use('/reports', requireAuth(['admin', 'user']), reportsRouter);
 apiRouter.use('/dashboard', apiLimiter, requireAuth(['admin', 'user']), dashboardRouter);
 apiRouter.use('/admin', requireAuth(['admin']), adminRouter);
+apiRouter.use('/alerts', requireAuth(['admin', 'user']), alertsRouter);
+apiRouter.use('/timeline', requireAuth(['admin', 'user']), timelineRouter);
 
 app.use('/api', apiRouter);
 

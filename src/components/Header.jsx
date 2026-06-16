@@ -1,27 +1,114 @@
-import React from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUI } from '../context/UIContext';
-import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
-// ─── HEADER UI COMPONENT ──────────────────────────────────────────────────────
+import { toast } from 'react-hot-toast';
+import {
+  fetchAlerts,
+  markAlertsRead,
+  fetchTimeline,
+  fetchAlertRules,
+  updateAlertRules
+} from '../services/alertService';
 
 function Header({ onOpenCommandPalette }) {
   const navigate = useNavigate();
-  const location = useLocation();
+  const queryClient = useQueryClient();
   const { liveState, setActiveNav } = useUI();
   const { theme, toggleTheme } = useTheme();
-  const [now, setNow] = React.useState(new Date());
+  const { user, logout, isAdmin } = useAuth();
+  
+  const [now, setNow] = useState(new Date());
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('alerts'); // 'alerts' | 'timeline' | 'rules'
+  
+  // Rules configuration local state
+  const [localRules, setLocalRules] = useState([]);
 
-  React.useEffect(() => {
+  const drawerRef = useRef(null);
+
+  useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
-  const { user, logout, isAdmin } = useAuth();
+
+  // Close drawer on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (drawerRef.current && !drawerRef.current.contains(event.target)) {
+        setIsDrawerOpen(false);
+      }
+    }
+    if (isDrawerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isDrawerOpen]);
 
   const handleSignOut = () => {
     logout();
     navigate('/login');
+  };
+
+  // ─── React Query Hooks ───────────────────────────────────────────────────
+  const { data: alertsData } = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => fetchAlerts(),
+    enabled: !!user
+  });
+
+  const { data: timelineData } = useQuery({
+    queryKey: ['timeline'],
+    queryFn: fetchTimeline,
+    enabled: !!user
+  });
+
+  const { data: rulesData } = useQuery({
+    queryKey: ['alert_rules'],
+    queryFn: fetchAlertRules,
+    enabled: !!user && isAdmin
+  });
+
+  // Sync server rules to local form state when fetched
+  useEffect(() => {
+    if (rulesData?.rules) {
+      setLocalRules(rulesData.rules);
+    }
+  }, [rulesData]);
+
+  const markReadMutation = useMutation({
+    mutationFn: (ids) => markAlertsRead(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      toast.success('Alerts marked as read');
+    }
+  });
+
+  const updateRulesMutation = useMutation({
+    mutationFn: (rules) => updateAlertRules(rules),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alert_rules'] });
+      toast.success('Alert rules updated');
+    },
+    onError: (err) => {
+      toast.error('Failed to update rules: ' + err.message);
+    }
+  });
+
+  const unreadAlerts = alertsData?.alerts?.filter(a => a.status === 'unread') || [];
+  const allAlerts = alertsData?.alerts || [];
+  const timelineEvents = timelineData?.events || [];
+
+  const handleRuleChange = (index, field, value) => {
+    const updated = [...localRules];
+    updated[index] = { ...updated[index], [field]: value };
+    setLocalRules(updated);
+  };
+
+  const saveRules = () => {
+    updateRulesMutation.mutate(localRules);
   };
 
   return (
@@ -105,6 +192,353 @@ function Header({ onOpenCommandPalette }) {
           &nbsp;
           {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
         </div>
+        
+        {/* Notification Bell Icon */}
+        {user && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '5px 10px',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative'
+              }}
+              title="Notifications & Timeline"
+            >
+              <span style={{ fontSize: '14px' }}>🔔</span>
+              {unreadAlerts.length > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '-6px',
+                    background: 'var(--danger)',
+                    color: 'white',
+                    borderRadius: '50%',
+                    padding: '2px 6px',
+                    fontSize: '9px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 0 8px rgba(255, 61, 90, 0.5)'
+                  }}
+                >
+                  {unreadAlerts.length}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Drawer Popover */}
+            {isDrawerOpen && (
+              <div
+                ref={drawerRef}
+                style={{
+                  position: 'absolute',
+                  top: '35px',
+                  right: '0px',
+                  width: '380px',
+                  maxHeight: '480px',
+                  background: 'rgba(10, 18, 30, 0.95)',
+                  border: '1px solid var(--border-bright)',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                  backdropFilter: 'blur(8px)',
+                  zIndex: 9999,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  fontFamily: 'Share Tech Mono, monospace'
+                }}
+              >
+                {/* Header Tabs */}
+                <div
+                  style={{
+                    display: 'flex',
+                    borderBottom: '1px solid var(--border)',
+                    background: 'rgba(255, 255, 255, 0.02)'
+                  }}
+                >
+                  <button
+                    onClick={() => setActiveTab('alerts')}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: activeTab === 'alerts' ? 'rgba(0, 201, 255, 0.08)' : 'transparent',
+                      border: 'none',
+                      borderBottom: activeTab === 'alerts' ? '2px solid var(--accent1)' : 'none',
+                      color: activeTab === 'alerts' ? 'var(--accent1)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ALERTS ({unreadAlerts.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('timeline')}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: activeTab === 'timeline' ? 'rgba(0, 201, 255, 0.08)' : 'transparent',
+                      border: 'none',
+                      borderBottom: activeTab === 'timeline' ? '2px solid var(--accent1)' : 'none',
+                      color: activeTab === 'timeline' ? 'var(--accent1)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    TIMELINE
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setActiveTab('rules')}
+                      style={{
+                        flex: 1,
+                        padding: '10px',
+                        background: activeTab === 'rules' ? 'rgba(0, 201, 255, 0.08)' : 'transparent',
+                        border: 'none',
+                        borderBottom: activeTab === 'rules' ? '2px solid var(--accent1)' : 'none',
+                        color: activeTab === 'rules' ? 'var(--accent1)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      RULES ⚙️
+                    </button>
+                  )}
+                </div>
+
+                {/* Content Area */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px'
+                  }}
+                >
+                  {activeTab === 'alerts' && (
+                    <>
+                      {unreadAlerts.length > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => markReadMutation.mutate(null)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--accent1)',
+                              cursor: 'pointer',
+                              fontSize: '10px',
+                              textDecoration: 'underline'
+                            }}
+                          >
+                            Mark all as read
+                          </button>
+                        </div>
+                      )}
+                      {allAlerts.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                          No alerts triggered.
+                        </div>
+                      ) : (
+                        allAlerts.slice(0, 30).map((alert) => (
+                          <div
+                            key={alert.id}
+                            style={{
+                              border: '1px solid ' + (alert.status === 'unread' ? 'rgba(0, 201, 255, 0.2)' : 'var(--border)'),
+                              background: alert.status === 'unread' ? 'rgba(0, 201, 255, 0.03)' : 'rgba(255, 255, 255, 0.01)',
+                              borderRadius: '6px',
+                              padding: '8px 10px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px',
+                              position: 'relative'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span
+                                style={{
+                                  fontSize: '9px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  background: alert.severity === 'CRITICAL' ? 'rgba(255, 61, 90, 0.2)' : alert.severity === 'WARNING' ? 'rgba(255, 193, 7, 0.2)' : 'rgba(0, 201, 255, 0.2)',
+                                  color: alert.severity === 'CRITICAL' ? 'var(--danger)' : alert.severity === 'WARNING' ? '#ffc107' : 'var(--accent1)'
+                                }}
+                              >
+                                {alert.severity}
+                              </span>
+                              <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
+                                {new Date(alert.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-primary)' }}>{alert.message}</div>
+                            
+                            {alert.status === 'unread' && (
+                              <button
+                                onClick={() => markReadMutation.mutate([alert.id])}
+                                style={{
+                                  position: 'absolute',
+                                  right: '10px',
+                                  bottom: '8px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'var(--text-muted)',
+                                  cursor: 'pointer',
+                                  fontSize: '9px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent1)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                              >
+                                ✓ Read
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </>
+                  )}
+
+                  {activeTab === 'timeline' && (
+                    <>
+                      {timelineEvents.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                          No operational events logged.
+                        </div>
+                      ) : (
+                        timelineEvents.slice(0, 30).map((event) => (
+                          <div
+                            key={event.id}
+                            style={{
+                              borderLeft: '2px solid var(--accent1)',
+                              paddingLeft: '10px',
+                              marginLeft: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px',
+                              paddingBottom: '8px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                                {event.title}
+                              </span>
+                              <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>
+                                {new Date(event.created_at).toLocaleDateString('en-IN')} {new Date(event.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{event.description}</div>
+                          </div>
+                        ))
+                      )}
+                    </>
+                  )}
+
+                  {activeTab === 'rules' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: '4px' }}>
+                        Configure Notification Rules & Thresholds:
+                      </div>
+                      
+                      {localRules.map((rule, idx) => (
+                        <div
+                          key={rule.rule_key}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            background: 'rgba(255,255,255,0.01)',
+                            border: '1px solid var(--border)',
+                            padding: '8px',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{rule.rule_name}</span>
+                            <input
+                              type="checkbox"
+                              checked={rule.enabled}
+                              onChange={(e) => handleRuleChange(idx, 'enabled', e.target.checked)}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px' }}>
+                            <span>Threshold:</span>
+                            <input
+                              type="number"
+                              value={rule.threshold_value}
+                              onChange={(e) => handleRuleChange(idx, 'threshold_value', parseInt(e.target.value, 10) || 0)}
+                              style={{
+                                width: '60px',
+                                background: 'rgba(0,0,0,0.4)',
+                                border: '1px solid var(--border)',
+                                color: 'white',
+                                padding: '2px 4px',
+                                borderRadius: '4px',
+                                fontFamily: 'Share Tech Mono'
+                              }}
+                            />
+                            <span>{rule.category === 'PRODUCTION' ? 'units' : 'days'}</span>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px' }}>
+                            <span>Email Recipients:</span>
+                            <input
+                              type="text"
+                              value={rule.recipients || ''}
+                              onChange={(e) => handleRuleChange(idx, 'recipients', e.target.value)}
+                              placeholder="comma-separated emails"
+                              style={{
+                                background: 'rgba(0,0,0,0.4)',
+                                border: '1px solid var(--border)',
+                                color: 'white',
+                                padding: '2px 4px',
+                                borderRadius: '4px',
+                                fontFamily: 'Share Tech Mono',
+                                width: '100%'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={saveRules}
+                        disabled={updateRulesMutation.isPending}
+                        style={{
+                          background: 'rgba(0, 201, 255, 0.15)',
+                          border: '1px solid rgba(0, 201, 255, 0.4)',
+                          color: 'var(--accent1)',
+                          borderRadius: '6px',
+                          padding: '6px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '11px',
+                          transition: 'all 0.2s',
+                          marginTop: '4px'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 201, 255, 0.25)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 201, 255, 0.15)'}
+                      >
+                        {updateRulesMutation.isPending ? 'SAVING...' : 'SAVE RULES CONFIG'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           onClick={toggleTheme}
           style={{

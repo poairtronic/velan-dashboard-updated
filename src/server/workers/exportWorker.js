@@ -245,6 +245,14 @@ const workerHandler = async (job) => {
   const fileUrl = `/api/reports/download/${job.id}`;
   logger.info(logger.categories.EXPORT, `[ExportWorker] Completed job ${job.id}. Saved to Redis key: ${fileKey}`);
 
+  // Log to operational timeline
+  try {
+    const { logTimelineEvent } = require('../services/alertEngine');
+    await logTimelineEvent('EXPORT_GENERATED', 'Report Export Generated', `Exported ${type.toUpperCase()} report with ${filtered.length} rows.`, null, { jobId: job.id, type, filename, count: filtered.length });
+  } catch (timelineErr) {
+    logger.error(logger.categories.QUEUE, `Timeline logging failed: ${timelineErr.message}`, timelineErr);
+  }
+
   return { url: fileUrl, totalExported: filtered.length };
 };
 

@@ -14,6 +14,7 @@ import LoadingScreen from './components/LoadingScreen';
 import CommandPalette from './components/CommandPalette';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useWebSocket } from './hooks/useWebSocket';
 
 // Lazy-loaded page components
 const OverviewPage = React.lazy(() => import('./pages/OverviewPage'));
@@ -66,6 +67,9 @@ const RouteWrapper = ({ children }) => (
 function DashboardLayout() {
   const { isLoading } = useUI();
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Initialize live WebSocket subscription
+  useWebSocket();
 
   useEffect(() => {
     const handleKeyDown = (e) => {
