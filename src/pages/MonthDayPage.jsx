@@ -1,5 +1,7 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { useFilters } from '../context/FilterContext';
+import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import {
   workingDaysBetween,
   daysBetween,
@@ -17,7 +19,8 @@ import DataTable from '../components/DataTable';
 // ─── MONTH / DAY TIMELINE VIEW PAGE COMPONENT ──────────────────────────────────
 
 function MonthDayPage() {
-  const { liveData } = useData();
+  const { filters } = useFilters();
+  const { rows: liveData } = useProductionDataQuery(filters, 1, 50000);
   const barRef = React.useRef();
   const todayDate = new Date();
   const [viewMode, setViewMode] = React.useState('month');
