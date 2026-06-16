@@ -14,7 +14,7 @@ const redisClient = require('../cache/redisClient');
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 2000, // limit each IP to 2000 requests per windowMs
   message: {
     success: false,
     error: 'Too many requests, please try again later.'
