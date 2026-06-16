@@ -978,4 +978,39 @@ tr:hover td {
   border: 1px solid rgba(0, 201, 255, 0.3);
 }
 
+/* Light theme overrides */
+[data-theme='light'] .alert-card {
+  background: rgba(0, 0, 0, 0.01);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='light'] .alert-card:hover {
+  background: rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 12px rgba(18, 36, 61, 0.08);
+}
+
+[data-theme='light'] .alert-card.unread {
+  background: rgba(0, 136, 204, 0.04);
+}
+
+[data-theme='light'] .alert-card.unread:hover {
+  background: rgba(0, 136, 204, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 136, 204, 0.12);
+}
+
+[data-theme='light'] .alert-severity-badge.critical {
+  background: rgba(211, 26, 56, 0.1);
+  border-color: rgba(211, 26, 56, 0.2);
+}
+
+[data-theme='light'] .alert-severity-badge.warning {
+  background: rgba(204, 132, 0, 0.1);
+  border-color: rgba(204, 132, 0, 0.2);
+}
+
+[data-theme='light'] .alert-severity-badge.info {
+  background: rgba(0, 136, 204, 0.1);
+  border-color: rgba(0, 136, 204, 0.2);
+}
+
 

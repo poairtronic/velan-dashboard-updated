@@ -251,10 +251,10 @@ function Header({ onOpenCommandPalette }) {
                   right: '0px',
                   width: '380px',
                   maxHeight: '480px',
-                  background: 'rgba(10, 18, 30, 0.95)',
+                  background: theme === 'dark' ? 'rgba(10, 18, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
                   border: '1px solid var(--border-bright)',
                   borderRadius: '12px',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                  boxShadow: theme === 'dark' ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(18, 36, 61, 0.15)',
                   backdropFilter: 'blur(8px)',
                   zIndex: 9999,
                   display: 'flex',
@@ -342,7 +342,7 @@ function Header({ onOpenCommandPalette }) {
                           display: 'flex',
                           flexDirection: 'column',
                           gap: '8px',
-                          background: 'rgba(255, 255, 255, 0.02)',
+                          background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
                           border: '1px solid var(--border)',
                           borderRadius: '8px',
                           padding: '8px 10px',
@@ -357,9 +357,9 @@ function Header({ onOpenCommandPalette }) {
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
                                 style={{
-                                  background: statusFilter === s ? 'var(--accent1)' : 'rgba(255, 255, 255, 0.05)',
+                                  background: statusFilter === s ? 'var(--accent1)' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'),
                                   border: 'none',
-                                  color: statusFilter === s ? '#050b14' : 'var(--text-muted)',
+                                  color: statusFilter === s ? (theme === 'dark' ? '#050b14' : '#ffffff') : 'var(--text-muted)',
                                   padding: '2px 8px',
                                   borderRadius: '4px',
                                   cursor: 'pointer',
@@ -388,9 +388,9 @@ function Header({ onOpenCommandPalette }) {
                                   key={sev}
                                   onClick={() => setSeverityFilter(sev)}
                                   style={{
-                                    background: isActive ? activeBg : 'rgba(255, 255, 255, 0.05)',
+                                    background: isActive ? activeBg : (theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'),
                                     border: 'none',
-                                    color: isActive ? '#050b14' : 'var(--text-muted)',
+                                    color: isActive ? (theme === 'dark' ? '#050b14' : '#ffffff') : 'var(--text-muted)',
                                     padding: '2px 6px',
                                     borderRadius: '4px',
                                     cursor: 'pointer',
