@@ -5,6 +5,8 @@ const { calculateCycleTimes } = require('../services/cycleTimeService');
 const { calculateVendors } = require('../services/vendorService');
 const { calculateBottlenecks } = require('../services/bottleneckService');
 const { getFilteredData, computeGroups } = require('../services/dataQueryService');
+const cacheKeys = require('../cache/cacheKeys');
+const { getOrSetCache, TTL } = require('../cache/cacheService');
 
 const router = express.Router();
 
@@ -15,40 +17,43 @@ function getTodayStr() {
 
 router.get('/calculations', async (req, res) => {
   try {
-    const todayStr = getTodayStr();
     const filters = req.query;
+    const cacheKey = cacheKeys.DASHBOARD_OVERVIEW(filters);
+    
+    const combinedResult = await getOrSetCache(cacheKey, 300, async () => {
+      const todayStr = getTodayStr();
+      const filtered = await getFilteredData(filters, todayStr);
+      const { scGroups, poGroups } = computeGroups(filtered);
 
-    const filtered = await getFilteredData(filters, todayStr);
-    const { scGroups, poGroups } = computeGroups(filtered);
+      // 1. Stages
+      const stages = calculateStages({ filtered, poGroups, todayStr });
+      
+      // 2. KPIs
+      const kpis = calculateKPIs({ filtered, scGroups, poGroups, todayStr });
+      
+      // 3. Cycle Times
+      const cycleTimes = calculateCycleTimes({ filtered, scGroups });
+      
+      // 4. Vendors
+      const vendors = calculateVendors({ filtered, todayStr });
+      
+      // 5. Bottlenecks (depends on others)
+      const bottlenecks = calculateBottlenecks({
+        poGroups,
+        todayStr,
+        stageCounts: stages.stageCounts,
+        stageCycleTimes: cycleTimes.stageCycleTimes,
+        vendorStats: vendors.vendorStats,
+      });
 
-    // 1. Stages
-    const stages = calculateStages({ filtered, poGroups, todayStr });
-    
-    // 2. KPIs
-    const kpis = calculateKPIs({ filtered, scGroups, poGroups, todayStr });
-    
-    // 3. Cycle Times
-    const cycleTimes = calculateCycleTimes({ filtered, scGroups });
-    
-    // 4. Vendors
-    const vendors = calculateVendors({ filtered, todayStr });
-    
-    // 5. Bottlenecks (depends on others)
-    const bottlenecks = calculateBottlenecks({
-      poGroups,
-      todayStr,
-      stageCounts: stages.stageCounts,
-      stageCycleTimes: cycleTimes.stageCycleTimes,
-      vendorStats: vendors.vendorStats,
+      return {
+        ...kpis,
+        ...stages,
+        ...bottlenecks,
+        ...vendors,
+        ...cycleTimes,
+      };
     });
-
-    const combinedResult = {
-      ...kpis,
-      ...stages,
-      ...bottlenecks,
-      ...vendors,
-      ...cycleTimes,
-    };
 
     res.json(combinedResult);
   } catch (error) {
@@ -60,10 +65,15 @@ router.get('/calculations', async (req, res) => {
 // Specific endpoints
 router.get('/kpis', async (req, res) => {
   try {
-    const todayStr = getTodayStr();
-    const filtered = await getFilteredData(req.query, todayStr);
-    const { scGroups, poGroups } = computeGroups(filtered);
-    res.json(calculateKPIs({ filtered, scGroups, poGroups, todayStr }));
+    const filters = req.query;
+    const cacheKey = cacheKeys.DASHBOARD_KPIS(filters);
+    const result = await getOrSetCache(cacheKey, 300, async () => {
+      const todayStr = getTodayStr();
+      const filtered = await getFilteredData(filters, todayStr);
+      const { scGroups, poGroups } = computeGroups(filtered);
+      return calculateKPIs({ filtered, scGroups, poGroups, todayStr });
+    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -71,10 +81,17 @@ router.get('/kpis', async (req, res) => {
 
 router.get('/stages', async (req, res) => {
   try {
-    const todayStr = getTodayStr();
-    const filtered = await getFilteredData(req.query, todayStr);
-    const { poGroups } = computeGroups(filtered);
-    res.json(calculateStages({ filtered, poGroups, todayStr }));
+    const filters = req.query;
+    // We didn't explicitly define DASHBOARD_STAGES in plan, but we can reuse overview or define a new one. 
+    // The user didn't ask for a separate stages cache step, but we will just use a generic hash.
+    const cacheKey = `dashboard:stages:${cacheKeys.DASHBOARD_KPIS(filters).split(':').pop()}`;
+    const result = await getOrSetCache(cacheKey, 300, async () => {
+      const todayStr = getTodayStr();
+      const filtered = await getFilteredData(filters, todayStr);
+      const { poGroups } = computeGroups(filtered);
+      return calculateStages({ filtered, poGroups, todayStr });
+    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -82,10 +99,15 @@ router.get('/stages', async (req, res) => {
 
 router.get('/cycle-times', async (req, res) => {
   try {
-    const todayStr = getTodayStr();
-    const filtered = await getFilteredData(req.query, todayStr);
-    const { scGroups } = computeGroups(filtered);
-    res.json(calculateCycleTimes({ filtered, scGroups }));
+    const filters = req.query;
+    const cacheKey = cacheKeys.DASHBOARD_CYCLE_TIME(filters);
+    const result = await getOrSetCache(cacheKey, 300, async () => {
+      const todayStr = getTodayStr();
+      const filtered = await getFilteredData(filters, todayStr);
+      const { scGroups } = computeGroups(filtered);
+      return calculateCycleTimes({ filtered, scGroups });
+    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -93,9 +115,42 @@ router.get('/cycle-times', async (req, res) => {
 
 router.get('/vendors', async (req, res) => {
   try {
-    const todayStr = getTodayStr();
-    const filtered = await getFilteredData(req.query, todayStr);
-    res.json(calculateVendors({ filtered, todayStr }));
+    const filters = req.query;
+    const cacheKey = cacheKeys.DASHBOARD_VENDORS(filters);
+    const result = await getOrSetCache(cacheKey, 300, async () => {
+      const todayStr = getTodayStr();
+      const filtered = await getFilteredData(filters, todayStr);
+      return calculateVendors({ filtered, todayStr });
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Calculation failed', details: error.message });
+  }
+});
+
+// For Bottlenecks (user requested /api/bottlenecks which doesn't exist yet, but I'll add it)
+router.get('/bottlenecks', async (req, res) => {
+  try {
+    const filters = req.query;
+    const cacheKey = cacheKeys.DASHBOARD_BOTTLENECKS(filters);
+    const result = await getOrSetCache(cacheKey, 300, async () => {
+      const todayStr = getTodayStr();
+      const filtered = await getFilteredData(filters, todayStr);
+      const { poGroups, scGroups } = computeGroups(filtered);
+      
+      const stages = calculateStages({ filtered, poGroups, todayStr });
+      const cycleTimes = calculateCycleTimes({ filtered, scGroups });
+      const vendors = calculateVendors({ filtered, todayStr });
+      
+      return calculateBottlenecks({
+        poGroups,
+        todayStr,
+        stageCounts: stages.stageCounts,
+        stageCycleTimes: cycleTimes.stageCycleTimes,
+        vendorStats: vendors.vendorStats,
+      });
+    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }

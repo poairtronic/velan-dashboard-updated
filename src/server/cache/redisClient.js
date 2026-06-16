@@ -1,27 +1,16 @@
-const Redis = require('ioredis');
+const { Redis } = require('@upstash/redis');
+const { env } = require('../config/env');
 
-// Connect to Redis instance or fallback to mock
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const isMock = !process.env.REDIS_URL || process.env.REDIS_URL === 'mock';
+const isMock = !process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL === 'mock';
 
 let redisClient;
 
 if (!isMock) {
-  redisClient = new Redis(redisUrl, {
-    maxRetriesPerRequest: 3,
-    retryStrategy(times) {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    },
+  redisClient = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN,
   });
-
-  redisClient.on('error', (err) => {
-    console.error('[Redis] Connection Error:', err.message);
-  });
-
-  redisClient.on('connect', () => {
-    console.log('[Redis] Connected successfully');
-  });
+  console.log('[Redis] Initialized Upstash Redis Client');
 } else {
   // Mock Redis Client for local/testing without a Redis server
   class MockRedis {
@@ -38,8 +27,16 @@ if (!isMock) {
       }
       return item.value;
     }
-    async set(key, value, mode, duration) {
-      const expiresAt = mode === 'EX' && duration ? Date.now() + duration * 1000 : null;
+    async set(key, value, options) {
+      // @upstash/redis options can be passed as third argument e.g. { ex: 300 }
+      let duration = null;
+      if (options && options.ex) {
+        duration = options.ex;
+      } else if (arguments.length > 3 && arguments[2] === 'EX') {
+        duration = arguments[3];
+      }
+
+      const expiresAt = duration ? Date.now() + duration * 1000 : null;
       this.store.set(key, { value, expiresAt });
       return 'OK';
     }

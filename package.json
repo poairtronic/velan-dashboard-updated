@@ -24,6 +24,7 @@
   "dependencies": {
     "@sentry/react": "^10.57.0",
     "@tanstack/react-query": "^5.101.0",
+    "@upstash/redis": "^1.38.0",
     "@vitejs/plugin-react": "^4.2.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.78.0",
@@ -32,6 +33,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^2.5.1",
@@ -40,6 +42,7 @@
     "logrocket": "^12.1.1",
     "morgan": "^1.11.0",
     "pg": "^8.11.3",
+    "rate-limit-redis": "^5.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-error-boundary": "^6.1.2",

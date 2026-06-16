@@ -23,6 +23,7 @@ const configRouter = require('./routes/config');
 const securityRouter = require('./routes/security');
 const healthRouter = require('./routes/health');
 const dashboardRouter = require('./routes/dashboard');
+const adminRouter = require('./routes/admin');
 
 const app = express();
 
@@ -72,6 +73,8 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(authenticate); // Set req.user for all routes
 
+const { apiLimiter } = require('./middleware/rateLimiter');
+
 // ── API Routing with Route Protection ─────────────────────────────────────
 const apiRouter = express.Router();
 
@@ -94,7 +97,7 @@ apiRouter.use('/import', requireAuth(['admin']), uploadLimiter, (req, res, next)
 });
 
 // Mixed protection routes
-apiRouter.use('/data', (req, res, next) => {
+apiRouter.use('/data', apiLimiter, (req, res, next) => {
   if (req.method === 'POST') {
     return requireAuth(['admin'])(req, res, (err) => {
       if (err) return next(err);
@@ -112,7 +115,8 @@ apiRouter.use('/sheets', requireAuth(['admin', 'user']), sheetsRouter);
 apiRouter.use('/config', requireAuth(['admin', 'user']), configRouter);
 apiRouter.use('/security-status', requireAuth(['admin', 'user']), securityRouter);
 apiRouter.use('/reports', requireAuth(['admin', 'user']), reportsRouter);
-apiRouter.use('/dashboard', requireAuth(['admin', 'user']), dashboardRouter);
+apiRouter.use('/dashboard', apiLimiter, requireAuth(['admin', 'user']), dashboardRouter);
+apiRouter.use('/admin', requireAuth(['admin']), adminRouter);
 
 app.use('/api', apiRouter);
 
