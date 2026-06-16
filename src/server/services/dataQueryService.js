@@ -135,8 +135,25 @@ function dateInRange(val, fromDate, toDate) {
 }
 
 async function getFilteredData(filters, todayStr) {
-  const merged = await getMergedData(todayStr);
-  const data = getActiveData(merged);
+  const { source = 'live' } = filters;
+  const { liveRows, dbRows } = await getAllRawData();
+  
+  let data;
+  if (source === 'database') {
+    const merged = await getMergedData(todayStr);
+    data = getActiveData(merged);
+  } else {
+    // source === 'live'
+    // Fallback to dbRows if liveRows is empty (just like old logic)
+    const rawTarget = liveRows.length > 0 ? liveRows : dbRows;
+    const processed = rawTarget.map((row) => ({
+      ...row,
+      currentStage: row.currentStage || row.op || row.OP || '',
+      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
+      cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
+    }));
+    data = processed; // For live, we don't use the complex merged getActiveData logic
+  }
 
   const { po, stage, type, inhouse, category, search, fromDate, toDate, dateType = 'poDate' } = filters;
 
