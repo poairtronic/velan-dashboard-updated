@@ -10,8 +10,18 @@ export function useWebSocket() {
 
   useEffect(() => {
     function connect() {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}`;
+      const apiBase = import.meta.env.VITE_API_BASE;
+      let wsUrl = '';
+      
+      if (apiBase) {
+        // Convert HTTP/HTTPS to WS/WSS
+        const url = new URL(apiBase, window.location.href);
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${url.host}`;
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}`;
+      }
       
       console.log(`[WebSocket] Connecting to ${wsUrl}...`);
       const socket = new WebSocket(wsUrl);
