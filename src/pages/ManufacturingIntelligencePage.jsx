@@ -45,7 +45,7 @@ function PlantHealthSection({ data }) {
 
   return (
     <div className="chart-card" style={{ gridColumn: '1 / -1' }}>
-      <div className="chart-title">Plant Health Score V2</div>
+      <div className="chart-title">Plant Health Score</div>
       <div className="chart-sub">WEIGHTED AGGREGATE OF PRODUCTION CAPABILITIES</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '15px' }}>
         {renderCard('Overall Health', data.overall, getHealthColor(data.overall.current), 'Composite Score', <Activity size={16} color={getHealthColor(data.overall.current)} />)}
@@ -462,9 +462,6 @@ export default function ManufacturingIntelligencePage() {
         <div>
           Manufacturing <span>Intelligence Center</span>
           <div className="section-line" />
-        </div>
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>
-          Phase 9.2 Decision Engine
         </div>
       </div>
 
