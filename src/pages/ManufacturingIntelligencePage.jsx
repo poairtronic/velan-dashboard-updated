@@ -142,12 +142,12 @@ function QueueClearanceSection({ data }) {
                 <td style={{ padding: '12px 8px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{q.stage}</td>
                 <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono' }}>{q.queueSize}</td>
                 <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--accent2)' }}>{q.avgDailyThroughput}</td>
-                <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: q.daysToClear > 10 ? 'var(--danger)' : 'var(--text-primary)' }}>{q.daysToClear}d</td>
+                <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: q.daysToClear > 21 ? 'var(--danger)' : 'var(--text-primary)' }}>{q.daysToClear}d</td>
                 <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                   <span style={{ 
                     padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold',
-                    background: q.risk === 'High' ? 'rgba(239, 68, 68, 0.1)' : (q.risk === 'Medium' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
-                    color: q.risk === 'High' ? '#ef4444' : (q.risk === 'Medium' ? '#f59e0b' : '#10b981')
+                    background: q.risk === 'Critical' ? 'rgba(239, 68, 68, 0.2)' : (q.risk === 'High' ? 'rgba(239, 68, 68, 0.1)' : (q.risk === 'Medium' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)')),
+                    color: q.risk === 'Critical' ? '#dc2626' : (q.risk === 'High' ? '#ef4444' : (q.risk === 'Medium' ? '#f59e0b' : '#10b981'))
                   }}>{q.risk}</span>
                 </td>
               </tr>
@@ -176,7 +176,7 @@ function PredictiveDelayEngine({ data, onDrillDown }) {
               <th style={{ padding: '12px 8px', textAlign: 'left', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>PO</th>
               <th style={{ padding: '12px 8px', textAlign: 'left', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Age</th>
               <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Exp Delay</th>
-              <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Probability</th>
+              <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Risk</th>
               <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Confidence</th>
             </tr>
           </thead>
@@ -189,7 +189,13 @@ function PredictiveDelayEngine({ data, onDrillDown }) {
                   <td style={{ padding: '12px 8px', color: 'var(--accent1)', fontWeight: 'bold', fontFamily: 'Share Tech Mono' }}>{p.po}</td>
                   <td style={{ padding: '12px 8px', fontFamily: 'Share Tech Mono', color: 'var(--text-primary)' }}>{p.currentAge}d</td>
                   <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--danger)' }}>+{p.expectedDelay}d</td>
-                  <td style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--danger)', fontWeight: 'bold' }}>{p.probability}%</td>
+                  <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                    <span style={{ 
+                      padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold',
+                      background: p.risk === 'Critical' ? 'rgba(239, 68, 68, 0.2)' : (p.risk === 'High' ? 'rgba(239, 68, 68, 0.1)' : (p.risk === 'Medium' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)')),
+                      color: p.risk === 'Critical' ? '#dc2626' : (p.risk === 'High' ? '#ef4444' : (p.risk === 'Medium' ? '#f59e0b' : '#10b981'))
+                    }}>{p.risk}</span>
+                  </td>
                   <td style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>{p.confidence}%</td>
                 </tr>
               ))
@@ -245,6 +251,24 @@ function VendorIntelligenceSection({ data, onDrillDown }) {
     <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="chart-title">Vendor Intelligence V2</div>
       <div className="chart-sub">THROUGHPUT & SLA PERFORMANCE</div>
+      
+      <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+        <div style={{ flex: 1, background: 'var(--bg-secondary)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '5px' }}>BEST VENDOR</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--success)', fontFamily: 'Share Tech Mono' }}>{data.bestVendor}</div>
+        </div>
+        <div style={{ flex: 1, background: 'var(--bg-secondary)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '5px' }}>WORST VENDOR</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--danger)', fontFamily: 'Share Tech Mono' }}>{data.worstVendor}</div>
+        </div>
+        <div style={{ flex: 1, background: 'var(--bg-secondary)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '5px' }}>DISTRIBUTION (E/A/P)</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono' }}>
+            <span style={{ color: 'var(--success)' }}>{data.distribution.excellent}</span> / <span style={{ color: 'var(--warning)' }}>{data.distribution.average}</span> / <span style={{ color: 'var(--danger)' }}>{data.distribution.poor}</span>
+          </div>
+        </div>
+      </div>
+
       <div style={{ marginTop: '15px', overflowY: 'auto', flex: 1, padding: '0 10px' }}>
         <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
           <thead>
@@ -252,17 +276,17 @@ function VendorIntelligenceSection({ data, onDrillDown }) {
               <th style={{ padding: '12px 8px', textAlign: 'left', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Vendor</th>
               <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Output/m</th>
               <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Avg Cycle</th>
-              <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>SLA Perf</th>
+              <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Effic Score</th>
               <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Risk Score</th>
             </tr>
           </thead>
           <tbody>
-            {data.map((v, i) => (
+            {data.vendors.map((v, i) => (
               <tr key={i} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => onDrillDown('Vendor', v.vendor)} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                 <td style={{ padding: '12px 8px', color: 'var(--accent1)', fontWeight: 'bold' }}>{v.vendor}</td>
                 <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono' }}>{v.throughput}</td>
                 <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: v.avgCycleTime > 21 ? 'var(--danger)' : 'var(--text-primary)' }}>{v.avgCycleTime}d</td>
-                <td style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold', color: v.slaPerformance < 80 ? 'var(--warning)' : 'var(--success)' }}>{v.slaPerformance}%</td>
+                <td style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold', color: v.efficiencyScore < 50 ? 'var(--danger)' : (v.efficiencyScore < 80 ? 'var(--warning)' : 'var(--success)') }}>{v.efficiencyScore}</td>
                 <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--accent2)' }}>{v.riskScore}</td>
               </tr>
             ))}
@@ -464,7 +488,7 @@ export default function ManufacturingIntelligencePage() {
 
       {/* SECTION 6 & 8: VENDOR RISK & BOTTLENECK IMPACT */}
       <div className="chart-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', marginBottom: '20px' }}>
-        <VendorIntelligenceSection data={micData.vendorRisk} onDrillDown={handleDrillDown} />
+        <VendorIntelligenceSection data={micData.vendorIntelligence} onDrillDown={handleDrillDown} />
         <BottleneckImpactSection data={micData.bottleneckImpact} />
       </div>
 

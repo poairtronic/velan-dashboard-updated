@@ -77,18 +77,41 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const tpCurrentMonth = getThroughput(currentMonthItems);
   const tpLastMonth = getThroughput(lastMonthItems);
 
-  // Calculate Average Stage Throughput Per Day (over 30 days)
-  const avgStageThroughput = {};
-  Object.keys(stageThroughput).forEach(stage => {
-    avgStageThroughput[stage] = Math.max(1, Math.round((stageThroughput[stage] || 0) / 30));
-  });
+  // --- Vendor Intelligence V2 ---
+  let totalVendorScore = 0;
+  let validVendorsCount = 0;
 
-  const throughputIntelligence = {
-    weekly: { current: tpCurrentWeek, past: tpLastWeek, trend: getTrend(tpCurrentWeek, tpLastWeek), variance: getVariance(tpCurrentWeek, tpLastWeek) },
-    monthly: { current: tpCurrentMonth, past: tpLastMonth, trend: getTrend(tpCurrentMonth, tpLastMonth), variance: getVariance(tpCurrentMonth, tpLastMonth) },
-    dailyTrend: Object.keys(dailyThroughput).sort().slice(-14).map(k => ({ date: k, count: dailyThroughput[k] })),
-    bestStages: Object.entries(stageThroughput).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(x=>({ stage: x[0], count: x[1] })),
-    worstStages: Object.entries(stageThroughput).sort((a,b)=>a[1]-b[1]).slice(0, 5).map(x=>({ stage: x[0], count: x[1] }))
+  const vendorRisk = (vendors.vendors || []).map(v => {
+    const throughput = stageThroughput[v.code] || stageThroughput[`${v.code}V`] || Math.max(1, v.count / 2);
+    const delayFreq = v.avgDays > 14 ? Math.min(100, Math.round((v.avgDays / 21) * 100)) : 10;
+    
+    // Vendor Score V2 Calculation
+    const vendorScore = 100 - Math.min(100, (v.avgDays / 2) * 100);
+    totalVendorScore += vendorScore;
+    validVendorsCount++;
+
+    return {
+      vendor: v.code || v.vendor,
+      count: v.count,
+      throughput: Math.round(throughput),
+      avgCycleTime: v.avgDays,
+      delayFrequency: delayFreq,
+      slaPerformance: Math.max(0, 100 - delayFreq),
+      trend: v.avgDays > 18 ? 'Declining' : (v.avgDays < 10 ? 'Improving' : 'Stable'),
+      riskScore: Math.round((v.avgDays * delayFreq) / 100),
+      efficiencyScore: Math.round(vendorScore)
+    };
+  }).sort((a,b) => b.riskScore - a.riskScore);
+
+  const vendorIntelligence = {
+    vendors: vendorRisk.slice(0, 10),
+    bestVendor: validVendorsCount > 0 ? [...vendorRisk].sort((a,b) => b.efficiencyScore - a.efficiencyScore)[0].vendor : 'N/A',
+    worstVendor: validVendorsCount > 0 ? [...vendorRisk].sort((a,b) => a.efficiencyScore - b.efficiencyScore)[0].vendor : 'N/A',
+    distribution: {
+      excellent: vendorRisk.filter(v => v.efficiencyScore >= 80).length,
+      average: vendorRisk.filter(v => v.efficiencyScore >= 50 && v.efficiencyScore < 80).length,
+      poor: vendorRisk.filter(v => v.efficiencyScore < 50).length
+    }
   };
 
   // --- 1. Plant Health Score V2 ---
@@ -100,8 +123,8 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const delScoreCurrent = Math.min(kpis.onTimePct || 0, 100);
   const delScorePast = Math.max(0, delScoreCurrent - 2); // Approximation for past as KPIs are snapshot
 
-  // Vendor Score
-  const vScoreCurrent = (vendors.vendors || []).filter(v => v.avgDays <= 14).length / Math.max(1, (vendors.vendors || []).length) * 100;
+  // Vendor Score (Aggregated)
+  const vScoreCurrent = validVendorsCount > 0 ? totalVendorScore / validVendorsCount : 100;
   const vScorePast = Math.max(0, vScoreCurrent - 5);
 
   // Inventory Score
@@ -109,9 +132,9 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const invScoreCurrent = Math.min(100, invVelocity * 500); // arbitrarily scaled to 100
   const invScorePast = Math.max(0, invScoreCurrent - 5);
 
-  // Flow Score (Bottlenecks)
+  // Flow Score (Bottlenecks) V2
   const topBN = bottlenecks.bottleneckStages?.[0]?.score || 0;
-  const flowScoreCurrent = Math.max(0, 100 - topBN);
+  const flowScoreCurrent = 100 / (1 + (topBN / 100));
   const flowScorePast = Math.max(0, flowScoreCurrent - 5);
 
   const getHealthMetric = (curr, past) => ({
@@ -133,20 +156,40 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
     flow: getHealthMetric(flowScoreCurrent, flowScorePast)
   };
 
-  // --- 3. Queue Clearance Forecast ---
+  const throughputIntelligence = {
+    weekly: { current: tpCurrentWeek, past: tpLastWeek, trend: getTrend(tpCurrentWeek, tpLastWeek), variance: getVariance(tpCurrentWeek, tpLastWeek) },
+    monthly: { current: tpCurrentMonth, past: tpLastMonth, trend: getTrend(tpCurrentMonth, tpLastMonth), variance: getVariance(tpCurrentMonth, tpLastMonth) },
+    dailyTrend: Object.keys(dailyThroughput).sort().slice(-14).map(k => ({ date: k, count: dailyThroughput[k] })),
+    bestStages: Object.entries(stageThroughput).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(x=>({ stage: x[0], count: x[1] })),
+    worstStages: Object.entries(stageThroughput).sort((a,b)=>a[1]-b[1]).slice(0, 5).map(x=>({ stage: x[0], count: x[1] }))
+  };
+
+  // --- 3. Queue Clearance Forecast V2 ---
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  const exactWorkingDays = Math.max(1, workingDaysBetween(thirtyDaysAgoStr, todayStr) || 22);
+
   const queueClearance = Object.entries(stages.stageCounts).map(([stage, count]) => {
-    const avgDaily = avgStageThroughput[stage] || 1;
-    const daysToClear = Math.round(count / avgDaily);
+    const exitedCount = stageThroughput[stage] || 0;
+    const avgDaily = exitedCount / exactWorkingDays;
+    
+    const daysToClear = avgDaily > 0 ? Math.round(count / avgDaily) : count; // fallback if 0
     let expectedDate = new Date();
     expectedDate.setDate(expectedDate.getDate() + daysToClear);
     
+    let risk = 'Low';
+    if (daysToClear > 21) risk = 'Critical';
+    else if (daysToClear > 14) risk = 'High';
+    else if (daysToClear > 7) risk = 'Medium';
+
     return {
       stage,
       queueSize: count,
-      avgDailyThroughput: avgDaily,
+      avgDailyThroughput: avgDaily.toFixed(2),
       daysToClear,
       expectedCompletion: expectedDate.toISOString().split('T')[0],
-      risk: daysToClear > 10 ? 'High' : (daysToClear > 5 ? 'Medium' : 'Low')
+      risk
     };
   }).sort((a,b) => b.daysToClear - a.daysToClear);
 
@@ -160,7 +203,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
       const activeStage = pg.items.find(i => !isCompletedStage(i.currentStage))?.currentStage || 'Unknown';
       const histCycle = cycleTimes.stageCycleTimes[activeStage] || 15; 
       
-      const expectedTotalCycle = histCycle + 10; // Simple heuristic: Stage avg + 10 days for rest
+      const expectedTotalCycle = histCycle + 10; 
       
       if (elapsed > expectedTotalCycle * 0.8) {
         const expectedDelay = elapsed - 21 > 0 ? elapsed - 21 + 5 : 5; 
@@ -169,6 +212,11 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
         let expectedDate = new Date();
         expectedDate.setDate(expectedDate.getDate() + expectedDelay);
 
+        let risk = 'Low';
+        if (elapsed > 21) risk = 'Critical';
+        else if (elapsed > 14) risk = 'High';
+        else if (elapsed > 7) risk = 'Medium';
+
         predictions.push({
           po: pg.po,
           stage: activeStage,
@@ -176,7 +224,8 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
           expectedDelay,
           expectedCompletion: expectedDate.toISOString().split('T')[0],
           probability: prob,
-          confidence: Math.min(95, Math.max(50, prob - 5))
+          confidence: Math.min(95, Math.max(50, prob - 5)),
+          risk
         });
       }
     }
@@ -213,23 +262,6 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
     riskRating: r.delayDays > 500 ? 'Critical' : (r.delayDays > 200 ? 'High' : 'Medium')
   })).sort((a,b) => b.impactScore - a.impactScore);
 
-  // --- 6. Vendor Performance Intelligence V2 ---
-  const vendorRisk = (vendors.vendors || []).map(v => {
-    const throughput = stageThroughput[v.code] || stageThroughput[`${v.code}V`] || Math.max(1, v.count / 2);
-    const delayFreq = v.avgDays > 14 ? Math.min(100, Math.round((v.avgDays / 21) * 100)) : 10;
-    
-    return {
-      vendor: v.code || v.vendor,
-      count: v.count,
-      throughput: Math.round(throughput),
-      avgCycleTime: v.avgDays,
-      delayFrequency: delayFreq,
-      slaPerformance: Math.max(0, 100 - delayFreq),
-      trend: v.avgDays > 18 ? 'Declining' : (v.avgDays < 10 ? 'Improving' : 'Stable'),
-      riskScore: Math.round((v.avgDays * delayFreq) / 100)
-    };
-  }).sort((a,b) => b.riskScore - a.riskScore);
-
   // --- 7. Inventory Intelligence V2 ---
   const inventoryCounts = { Ready: 0, Stores: 0, Stock: 0 };
   const inventoryAges = { Ready: 0, Stores: 0, Stock: 0 };
@@ -247,7 +279,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   });
 
   const totalInv = inventoryCounts.Ready + inventoryCounts.Stores + inventoryCounts.Stock;
-  const inventoryIntelligence = {
+  const inventoryInfo = {
     healthScore: Math.max(0, 100 - (deadCount / Math.max(1, totalInv)) * 100),
     velocity: Math.round(tpCurrentMonth / 30),
     deadInventory: deadCount,
@@ -324,15 +356,15 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
     });
   }
 
-  if (inventoryIntelligence.deadInventory > 20) {
+  if (inventoryInfo.deadInventory > 20) {
     recommendedActions.push({
       priority: 'Medium',
       action: 'Execute Dead Inventory Clearance',
-      reason: `${inventoryIntelligence.deadInventory} items have aged >30 days in warehouse stages.`,
+      reason: `${inventoryInfo.deadInventory} items have aged >30 days in warehouse stages.`,
       benefit: 'Free up working capital and physical space',
       area: 'Inventory',
-      affectedPOs: inventoryIntelligence.deadInventory,
-      affectedSCs: inventoryIntelligence.deadInventory,
+      affectedPOs: inventoryInfo.deadInventory,
+      affectedSCs: inventoryInfo.deadInventory,
       kpiImprovement: '+15% Inv Velocity',
       delayReduction: 'N/A'
     });
@@ -358,8 +390,8 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
     queueClearance: queueClearance.slice(0, 10),
     predictions: predictions.slice(0, 10),
     rootCauseImpact: rootCauseImpact.slice(0, 10),
-    vendorRisk: vendorRisk.slice(0, 10),
-    inventory: inventoryIntelligence,
+    vendorIntelligence, // Updated Payload
+    inventory: inventoryInfo,
     bottleneckImpact: bottleneckImpact.slice(0, 10),
     actions: recommendedActions.slice(0, 10)
   };
