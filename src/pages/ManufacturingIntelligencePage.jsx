@@ -12,6 +12,8 @@ import {
   Activity, TrendingUp, TrendingDown, Target, Zap, 
   ArrowUpRight, ArrowDownRight, Minus, AlertTriangle, Info, CheckCircle2
 } from 'lucide-react';
+import DrilldownCard from '../components/DrilldownCard';
+import TrendSelector from '../components/TrendSelector';
 
 // --- Shared Components ---
 
@@ -24,21 +26,24 @@ const TrendBadge = ({ trend, variance, suffix = '%' }) => {
 // --- Modules ---
 
 function PlantHealthSection({ data }) {
-  const renderCard = (title, metric, color, sub, icon) => (
-    <div style={{ background: 'var(--bg-secondary)', border: `1px solid var(--border)`, padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', fontFamily: 'Share Tech Mono' }}>{title}</div>
-        {icon}
+  const renderCard = (title, metric, color, sub, icon, kpiType = null) => (
+    <DrilldownCard kpiType={kpiType} title={title} style={{ height: '100%' }}>
+      <div style={{ background: 'var(--bg-secondary)', border: `1px solid var(--border)`, padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', fontFamily: 'Share Tech Mono' }}>{title}</div>
+          {icon}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+          <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'Rajdhani', color, lineHeight: 1 }}>{metric.current}</div>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>/ 100</div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sub}</span>
+          <TrendBadge trend={metric.trend} variance={metric.variance} />
+        </div>
+        {kpiType && <TrendSelector metric={kpiType} />}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-        <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'Rajdhani', color, lineHeight: 1 }}>{metric.current}</div>
-        <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>/ 100</div>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sub}</span>
-        <TrendBadge trend={metric.trend} variance={metric.variance} />
-      </div>
-    </div>
+    </DrilldownCard>
   );
 
   const getHealthColor = (score) => score >= 80 ? 'var(--success)' : (score >= 60 ? 'var(--warning)' : 'var(--danger)');
@@ -49,11 +54,11 @@ function PlantHealthSection({ data }) {
       <div className="chart-sub">WEIGHTED AGGREGATE OF PRODUCTION CAPABILITIES</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '15px' }}>
         {renderCard('Overall Health', data.overall, getHealthColor(data.overall.current), 'Composite Score', <Activity size={16} color={getHealthColor(data.overall.current)} />)}
-        {renderCard('Production', data.production, 'var(--accent1)', 'Throughput Stability', <Zap size={16} color="var(--accent1)" />)}
-        {renderCard('Delivery', data.delivery, 'var(--success)', 'SLA Compliance', <CheckCircle2 size={16} color="var(--success)" />)}
-        {renderCard('Vendor', data.vendor, 'var(--accent2)', 'External Performance', <Target size={16} color="var(--accent2)" />)}
-        {renderCard('Inventory', data.inventory, '#b24bff', 'Stock Velocity', <ArrowUpRight size={16} color="#b24bff" />)}
-        {renderCard('Flow', data.flow, 'var(--warning)', 'Bottleneck Severity', <AlertTriangle size={16} color="var(--warning)" />)}
+        {renderCard('Production', data.production, 'var(--accent1)', 'Throughput Stability', <Zap size={16} color="var(--accent1)" />, 'production')}
+        {renderCard('Delivery', data.delivery, 'var(--success)', 'SLA Compliance', <CheckCircle2 size={16} color="var(--success)" />, 'otd')}
+        {renderCard('Vendor', data.vendor, 'var(--accent2)', 'External Performance', <Target size={16} color="var(--accent2)" />, 'vendor')}
+        {renderCard('Inventory', data.inventory, '#b24bff', 'Stock Velocity', <ArrowUpRight size={16} color="#b24bff" />, 'inventory')}
+        {renderCard('Flow', data.flow, 'var(--warning)', 'Bottleneck Severity', <AlertTriangle size={16} color="var(--warning)" />, 'bottleneck')}
       </div>
     </div>
   );

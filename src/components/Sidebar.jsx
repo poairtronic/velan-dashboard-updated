@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { id: 'executive', label: 'Executive Intel', icon: '📊' },
   { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
+  { id: 'executive-war-room', label: 'Executive War Room', icon: '⚔' },
   { id: 'monthday', label: 'Month / Day View', icon: '📅' },
   { id: 'database', label: 'Database', icon: '🗄' },
   { id: 'production', label: 'Production', icon: '⚙' },
@@ -29,7 +30,7 @@ function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(
-    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health') || isAdmin
+    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health' && n.id !== 'executive-war-room') || isAdmin
   );
 
   const fetchPendingCount = useCallback(async () => {

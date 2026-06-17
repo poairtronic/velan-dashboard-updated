@@ -26,6 +26,10 @@ const dashboardRouter = require('./routes/dashboard');
 const adminRouter = require('./routes/admin');
 const alertsRouter = require('./routes/alerts');
 const timelineRouter = require('./routes/timeline');
+const notificationsRouter = require('./routes/notifications');
+const drilldownRouter = require('./routes/drilldown');
+const executiveRouter = require('./routes/executive');
+const kpiRouter = require('./routes/kpi');
 const intelligenceRouter = require('./routes/intelligence');
 const micRouter = require('./routes/mic');
 
@@ -129,6 +133,11 @@ apiRouter.use('/intelligence', dashboardLimiter, requireAuth(['admin', 'user']),
 apiRouter.use('/mic', dashboardLimiter, requireAuth(['admin', 'user']), micRouter);
 
 app.use('/api', apiRouter);
+
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/drilldown', drilldownRouter);
+app.use('/api/executive', executiveRouter);
+app.use('/api/kpi', kpiRouter);
 
 // ── Static files ──────────────────────────────────────────────────────────
 const projectRoot = path.resolve(__dirname, '..', '..');
