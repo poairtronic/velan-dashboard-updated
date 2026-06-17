@@ -318,25 +318,25 @@ export default function EnterpriseHealthPage() {
             <p style={{ color: 'var(--text-muted)' }}>Real-time metrics for the <strong>{drillDown.title.replace('Queue', '')}</strong> background worker queue.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
               <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                <div style={{ color: '#64748b', fontSize: '12px' }}>WAITING</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>WAITING</div>
                 <div style={{ color: '#f59e0b', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.waiting || 0}</div>
               </div>
               <div style={{ background: 'rgba(0, 201, 255, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(0, 201, 255, 0.3)' }}>
-                <div style={{ color: '#64748b', fontSize: '12px' }}>ACTIVE</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>ACTIVE</div>
                 <div style={{ color: '#0ea5e9', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.active || 0}</div>
               </div>
-              <div style={{ background: 'rgba(15, 23, 42, 0.05)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(15, 23, 42, 0.1)' }}>
-                <div style={{ color: '#64748b', fontSize: '12px' }}>COMPLETED</div>
-                <div style={{ color: '#0f172a', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.completed || 0}</div>
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>COMPLETED</div>
+                <div style={{ color: '#10b981', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.completed || 0}</div>
               </div>
               <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                <div style={{ color: '#64748b', fontSize: '12px' }}>FAILED</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>FAILED</div>
                 <div style={{ color: '#ef4444', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.failed || 0}</div>
               </div>
             </div>
-            <div style={{ marginTop: '20px', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Info size={18} color="#0ea5e9" />
-              <span style={{ fontSize: '13px', color: '#475569' }}>Queue is currently online and processing jobs automatically.</span>
+            <div style={{ marginTop: '20px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', padding: '15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Info size={18} color="var(--accent1)" />
+              <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Queue is currently online and processing jobs automatically.</span>
             </div>
           </div>
         </Modal>
