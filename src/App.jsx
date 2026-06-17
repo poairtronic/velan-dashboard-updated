@@ -119,9 +119,11 @@ function DashboardLayout() {
               <Route
                 path="/health"
                 element={
-                  <RouteWrapper>
-                    <EnterpriseHealthPage />
-                  </RouteWrapper>
+                  <ProtectedRoute adminOnly={true}>
+                    <RouteWrapper>
+                      <EnterpriseHealthPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route

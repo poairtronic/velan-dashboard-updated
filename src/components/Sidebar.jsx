@@ -29,7 +29,7 @@ function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(
-    (n) => (n.id !== 'upload' && n.id !== 'users') || isAdmin
+    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health') || isAdmin
   );
 
   const fetchPendingCount = useCallback(async () => {
