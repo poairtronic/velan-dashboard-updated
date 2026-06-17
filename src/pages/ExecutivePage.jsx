@@ -156,24 +156,19 @@ export default function ExecutivePage() {
   };
 
   return (
-    <div className="page-container p-6 animate-fade-in" style={{ paddingBottom: '100px' }}>
-      <div className="flex justify-between items-end mb-6">
+    <div style={{ paddingBottom: '100px' }}>
+      <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
-          <h1 className="text-3xl font-bold text-gray-100 flex items-center gap-3">
-            <Activity className="w-8 h-8 text-accent-blue" />
-            Executive Intelligence
-          </h1>
-          <p className="text-gray-400 mt-2">
-            AI-driven insights, trend analysis, and production risk assessment.
-          </p>
+          Executive <span>Intelligence</span>
+          <div className="section-line" />
         </div>
-        <div className="text-sm font-mono text-gray-500">
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>
           Last Computed: {data.timestamp}
         </div>
       </div>
 
       {/* 1. Executive Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="kpi-grid">
         <KPICard 
           label="On-Time Delivery" 
           value={`${data.kpiTrends.onTimePct.value.toFixed(1)}%`}
@@ -217,46 +212,43 @@ export default function ExecutivePage() {
       </div>
 
       {/* 2. Operational Insights & Risks */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
-          <InsightCard 
-            title="Management Summary"
-            content={data.managementSummary}
-            icon={InfoIcon}
-            type="info"
-          />
+      <div className="chart-grid" style={{ gridTemplateColumns: '2fr 1fr', marginBottom: 20 }}>
+        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div className="chart-title">Management Summary</div>
+          <div className="chart-sub">AI-GENERATED INSIGHTS</div>
+          <div style={{ padding: '20px', color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.6' }}>
+            {data.managementSummary}
+          </div>
         </div>
-        <div className="card p-5 border border-gray-700 bg-gray-800/30">
-          <h3 className="text-lg font-bold text-gray-200 mb-4 border-b border-gray-700 pb-2">Production Risks</h3>
-          <div className="space-y-4 font-mono text-sm">
-            <div className="flex justify-between items-center p-2 bg-gray-900/50 rounded">
-              <span className="text-gray-400">Delay Risk</span>
-              <span className={`font-bold ${getRiskColor(data.productionRisks.delayRisk)}`}>{data.productionRisks.delayRisk}</span>
+        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div className="chart-title">Production Risks</div>
+          <div className="chart-sub">CURRENT SYSTEM VULNERABILITIES</div>
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Delay Risk</span>
+              <span className={`font-bold ${getRiskColor(data.productionRisks.delayRisk)}`} style={{ fontSize: '14px' }}>{data.productionRisks.delayRisk}</span>
             </div>
-            <div className="flex justify-between items-center p-2 bg-gray-900/50 rounded">
-              <span className="text-gray-400">Backlog Risk</span>
-              <span className={`font-bold ${getRiskColor(data.productionRisks.backlogRisk)}`}>{data.productionRisks.backlogRisk}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Backlog Risk</span>
+              <span className={`font-bold ${getRiskColor(data.productionRisks.backlogRisk)}`} style={{ fontSize: '14px' }}>{data.productionRisks.backlogRisk}</span>
             </div>
-            <div className="flex justify-between items-center p-2 bg-gray-900/50 rounded">
-              <span className="text-gray-400">Vendor SLA Risk</span>
-              <span className={`font-bold ${getRiskColor(data.productionRisks.vendorRisk)}`}>{data.productionRisks.vendorRisk}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Vendor SLA Risk</span>
+              <span className={`font-bold ${getRiskColor(data.productionRisks.vendorRisk)}`} style={{ fontSize: '14px' }}>{data.productionRisks.vendorRisk}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className="chart-grid">
         {/* 3. Bottleneck Intelligence */}
-        <div className="card p-6 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4 border-b border-gray-700 pb-2">
-            <h2 className="text-xl font-semibold text-accent-blue flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" /> Top Bottlenecks
-            </h2>
-          </div>
-          <div className="flex-1 min-h-[250px] mb-4">
+        <div className="chart-card">
+          <div className="chart-title">Top Bottlenecks</div>
+          <div className="chart-sub">BY RISK SCORE</div>
+          <div className="chart-wrap" style={{ minHeight: '250px' }}>
             <canvas ref={bottleneckChartRef} />
           </div>
-          <div className="space-y-2 mt-auto">
+          <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {data.bottleneckTrends.map((b, i) => (
               <div key={i} className="flex justify-between items-center bg-gray-800/50 p-2 rounded border border-gray-700 cursor-pointer hover:bg-gray-800 transition" onClick={() => handleDrillDown('bottleneck', b.stage)}>
                 <span className="font-semibold text-gray-200">{b.stage}</span>
@@ -272,32 +264,29 @@ export default function ExecutivePage() {
         </div>
 
         {/* 4. Vendor Intelligence */}
-        <div className="card p-6 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4 border-b border-gray-700 pb-2">
-            <h2 className="text-xl font-semibold text-accent-teal flex items-center gap-2">
-              <Activity className="w-5 h-5" /> Vendor SLA Risks
-            </h2>
-          </div>
-          <div className="flex-1 min-h-[250px] mb-4">
+        <div className="chart-card">
+          <div className="chart-title">Vendor SLA Risks</div>
+          <div className="chart-sub">AVERAGE CYCLE TIME PER VENDOR</div>
+          <div className="chart-wrap" style={{ minHeight: '250px' }}>
             <canvas ref={vendorChartRef} />
           </div>
-          <div className="overflow-x-auto mt-auto">
-            <table className="w-full text-sm">
+          <div style={{ marginTop: '15px', overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-gray-700 text-gray-400 font-mono">
-                  <th className="p-2 text-left">Vendor</th>
-                  <th className="p-2 text-center">Avg Days</th>
-                  <th className="p-2 text-center">Active</th>
-                  <th className="p-2 text-center">Risk</th>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', color: 'var(--text-muted)' }}>Vendor</th>
+                  <th style={{ padding: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>Avg Days</th>
+                  <th style={{ padding: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>Active</th>
+                  <th style={{ padding: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>Risk</th>
                 </tr>
               </thead>
               <tbody>
                 {data.vendorTrends.map((v, i) => (
-                  <tr key={i} className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer transition" onClick={() => handleDrillDown('vendor', v.vendor)}>
-                    <td className="p-2 font-bold text-gray-200">{v.vendor}</td>
-                    <td className="p-2 text-center font-mono">{v.avgCycleTime.toFixed(1)}</td>
-                    <td className="p-2 text-center font-mono">{v.inProgress}</td>
-                    <td className="p-2 text-center">
+                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }} onClick={() => handleDrillDown('vendor', v.vendor)} className="hover:bg-gray-800/50">
+                    <td style={{ padding: '8px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{v.vendor}</td>
+                    <td style={{ padding: '8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--accent1)' }}>{v.avgCycleTime.toFixed(1)}</td>
+                    <td style={{ padding: '8px', textAlign: 'center', fontFamily: 'Share Tech Mono' }}>{v.inProgress}</td>
+                    <td style={{ padding: '8px', textAlign: 'center' }}>
                       <span className={`px-2 py-0.5 rounded text-xs font-bold ${v.slaRisk === 'High' ? 'bg-red-500/20 text-red-400' : (v.slaRisk === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400')}`}>
                         {v.slaRisk}
                       </span>

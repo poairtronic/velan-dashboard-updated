@@ -175,24 +175,19 @@ export default function EnterpriseHealthPage() {
   })) || [];
 
   return (
-    <div className="page-container p-6 animate-fade-in" style={{ paddingBottom: '100px' }}>
-      <div className="flex justify-between items-end mb-6">
+    <div style={{ paddingBottom: '100px' }}>
+      <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
-          <h1 className="text-3xl font-bold text-gray-100 flex items-center gap-3">
-            <Shield className="w-8 h-8 text-accent-teal" />
-            Enterprise Health Dashboard
-          </h1>
-          <p className="text-gray-400 mt-2">
-            Real-time operational monitoring and system reliability metrics.
-          </p>
+          Enterprise <span>Health Dashboard</span>
+          <div className="section-line" />
         </div>
-        <button className="btn btn-secondary" onClick={fetchHealth}>
+        <button className="btn btn-secondary" onClick={fetchHealth} style={{ fontSize: '11px', padding: '6px 12px' }}>
           Refresh Status
         </button>
       </div>
 
       {/* 1. Health Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="kpi-grid">
         <KPICard 
           label="Database Status" 
           value={healthData.database === 'connected' ? 'ONLINE' : 'DEGRADED'}
@@ -221,33 +216,32 @@ export default function EnterpriseHealthPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <div className="chart-grid" style={{ gridTemplateColumns: '1fr 2fr' }}>
         {/* Memory Chart */}
-        <div className="card p-6 flex flex-col h-full border border-gray-700 bg-gray-800/30">
-          <h2 className="text-xl font-semibold text-accent-blue mb-4 flex items-center gap-2">
-            <HardDrive className="w-5 h-5" /> Memory Allocation
-          </h2>
-          <div className="flex-1 min-h-[200px] relative">
+        <div className="chart-card">
+          <div className="chart-title">Memory Allocation</div>
+          <div className="chart-sub">NODE.js HEAP VS AVAILABLE</div>
+          <div className="chart-wrap" style={{ minHeight: '200px' }}>
             <canvas ref={memoryChartRef} />
           </div>
         </div>
 
         {/* Queue Throughput Chart */}
-        <div className="card p-6 lg:col-span-2 flex flex-col h-full border border-gray-700 bg-gray-800/30">
-          <h2 className="text-xl font-semibold text-accent-teal mb-4 flex items-center gap-2">
-            <Activity className="w-5 h-5" /> Queue Throughput Metrics
-          </h2>
-          <div className="flex-1 min-h-[200px]">
+        <div className="chart-card">
+          <div className="chart-title">Queue Throughput Metrics</div>
+          <div className="chart-sub">ACTIVE VS COMPLETED VS FAILED TASKS</div>
+          <div className="chart-wrap" style={{ minHeight: '200px' }}>
             <canvas ref={queueChartRef} />
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className="chart-grid">
         {/* 3. Service Health Table */}
-        <div className="card p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-200 mb-4 border-b border-gray-700 pb-2">Background Worker Queues</h2>
-          <div className="overflow-x-auto">
+        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="chart-title">Background Worker Queues</div>
+          <div className="chart-sub">REDIS BULLMQ SYSTEM TASKS</div>
+          <div style={{ marginTop: '15px', overflowX: 'auto', flex: 1 }}>
             <DataTable
               headers={['Queue', 'Waiting', 'Active', 'Completed', 'Failed', 'Status']}
               isEmpty={!healthData.queueMetrics || healthData.queueMetrics.error}
@@ -288,9 +282,16 @@ export default function EnterpriseHealthPage() {
         </div>
 
         {/* 4. Health Timeline */}
-        <div className="card p-6 border border-gray-700 max-h-[600px] overflow-y-auto">
-          <h2 className="text-xl font-semibold text-gray-200 mb-4 sticky top-0 bg-[var(--bg-card)] z-20 pb-2 border-b border-gray-700">Sync & Event Timeline</h2>
-          <Timeline events={timelineEvents} />
+        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', maxHeight: '600px' }}>
+          <div className="chart-title" style={{ position: 'sticky', top: 0, background: 'var(--bg-secondary)', zIndex: 20 }}>
+            Sync & Event Timeline
+          </div>
+          <div className="chart-sub" style={{ position: 'sticky', top: 24, background: 'var(--bg-secondary)', zIndex: 20, paddingBottom: 10 }}>
+            DATABASE GOOGLE SHEET SYNC EVENTS
+          </div>
+          <div style={{ overflowY: 'auto', paddingRight: '10px' }}>
+            <Timeline events={timelineEvents} />
+          </div>
         </div>
       </div>
     </div>
