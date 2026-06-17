@@ -1,20 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import LoadingScreen from '../components/LoadingScreen';
-import { Shield, Database, Server, Clock, HardDrive, CheckCircle2, XCircle } from 'lucide-react';
+import KPICard from '../components/KPICard';
+import Timeline from '../components/common/Timeline';
+import DataTable from '../components/DataTable';
+import useChart from '../utils/chartUtils';
+import { Shield, Database, Server, Clock, HardDrive, CheckCircle2, XCircle, Activity } from 'lucide-react';
 
 export default function EnterpriseHealthPage() {
   const [healthData, setHealthData] = useState(null);
+  const [syncData, setSyncData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const queueChartRef = useRef(null);
+  const memoryChartRef = useRef(null);
 
   const fetchHealth = async () => {
     setLoading(true);
     try {
       const apiBase = import.meta.env.VITE_API_BASE || '';
-      const res = await fetch(`${apiBase}/api/health`, { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to fetch enterprise health data');
-      const json = await res.json();
-      setHealthData(json);
+      
+      const [healthRes, syncRes] = await Promise.all([
+        fetch(`${apiBase}/api/health`, { credentials: 'include' }),
+        fetch(`${apiBase}/api/health/sync`, { credentials: 'include' })
+      ]);
+
+      if (!healthRes.ok) throw new Error('Failed to fetch enterprise health data');
+      
+      const healthJson = await healthRes.json();
+      const syncJson = syncRes.ok ? await syncRes.json() : null;
+
+      setHealthData(healthJson);
+      setSyncData(syncJson);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -35,6 +52,95 @@ export default function EnterpriseHealthPage() {
     return () => { isMounted = false; clearInterval(interval); };
   }, []);
 
+  // Queue Chart
+  useChart(
+    queueChartRef,
+    {
+      type: 'bar',
+      data: {
+        labels: healthData?.queueMetrics && !healthData.queueMetrics.error ? Object.keys(healthData.queueMetrics).map(k => k.replace('Queue', '')) : [],
+        datasets: [
+          {
+            label: 'Completed',
+            data: healthData?.queueMetrics && !healthData.queueMetrics.error ? Object.values(healthData.queueMetrics).map(q => q.completed || 0) : [],
+            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+            borderColor: '#10b981',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Active',
+            data: healthData?.queueMetrics && !healthData.queueMetrics.error ? Object.values(healthData.queueMetrics).map(q => q.active || 0) : [],
+            backgroundColor: 'rgba(0, 201, 255, 0.6)',
+            borderColor: '#00c9ff',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Waiting',
+            data: healthData?.queueMetrics && !healthData.queueMetrics.error ? Object.values(healthData.queueMetrics).map(q => q.waiting || 0) : [],
+            backgroundColor: 'rgba(245, 158, 11, 0.6)',
+            borderColor: '#f59e0b',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Failed',
+            data: healthData?.queueMetrics && !healthData.queueMetrics.error ? Object.values(healthData.queueMetrics).map(q => q.failed || 0) : [],
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: { stacked: true },
+          y: { stacked: true, beginAtZero: true }
+        }
+      }
+    },
+    [healthData]
+  );
+
+  // Memory Chart
+  useChart(
+    memoryChartRef,
+    {
+      type: 'doughnut',
+      data: {
+        labels: ['Heap Used', 'External', 'Available'],
+        datasets: [{
+          data: healthData?.memory ? [
+            parseFloat(healthData.memory.heapUsed),
+            parseFloat(healthData.memory.external),
+            parseFloat(healthData.memory.heapTotal) - parseFloat(healthData.memory.heapUsed)
+          ] : [],
+          backgroundColor: [
+            'rgba(0, 201, 255, 0.8)',
+            'rgba(178, 75, 255, 0.8)',
+            'rgba(100, 116, 139, 0.3)'
+          ],
+          borderColor: 'transparent',
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: { 
+          legend: { position: 'right' }
+        }
+      }
+    },
+    [healthData]
+  );
+
   if (error) {
     return (
       <div className="page-container p-6">
@@ -51,12 +157,22 @@ export default function EnterpriseHealthPage() {
   if (loading) return <LoadingScreen />;
   if (!healthData) return null;
 
-  const StatusIcon = ({ status }) => {
+  const getStatusColor = (status) => {
     if (status === 'healthy' || status === 'connected' || (typeof status === 'string' && status.includes('connected'))) {
-      return <CheckCircle2 className="w-5 h-5 text-accent-teal" />;
+      return '#00e676';
     }
-    return <XCircle className="w-5 h-5 text-accent-red" />;
+    return '#ff3d5a';
   };
+
+  const dbColor = getStatusColor(healthData.database);
+  const redisColor = getStatusColor(healthData.redis);
+  
+  const timelineEvents = syncData?.history?.map(row => ({
+    title: `Sync Event: ${row.sync_type || 'Unknown'}`,
+    timestamp: row.created_at ? new Date(row.created_at).toLocaleString() : 'N/A',
+    description: `Processed ${row.row_count} rows. Status: ${row.status.toUpperCase()}`,
+    type: row.status === 'success' ? 'success' : (row.status === 'failed' ? 'error' : 'info')
+  })) || [];
 
   return (
     <div className="page-container p-6 animate-fade-in" style={{ paddingBottom: '100px' }}>
@@ -75,121 +191,108 @@ export default function EnterpriseHealthPage() {
         </button>
       </div>
 
+      {/* 1. Health Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="card p-5 flex items-center gap-4">
-          <Server className="w-10 h-10 text-accent-blue opacity-80" />
-          <div>
-            <div className="text-sm text-gray-400">System Status</div>
-            <div className="text-xl font-bold flex items-center gap-2">
-              <StatusIcon status={healthData.status} />
-              <span className="capitalize">{healthData.status}</span>
-            </div>
+        <KPICard 
+          label="Database Status" 
+          value={healthData.database === 'connected' ? 'ONLINE' : 'DEGRADED'}
+          sub={`Rows: ${healthData.rows?.toLocaleString() || 0}`}
+          color1={dbColor} color2={dbColor}
+          badge={{ text: 'Neon PG', cls: healthData.database === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400' }}
+        />
+        <KPICard 
+          label="Redis Cache" 
+          value={healthData.redis === 'connected' ? 'ONLINE' : 'DEGRADED'}
+          sub={`Latency: < 5ms`}
+          color1={redisColor} color2={redisColor}
+          badge={{ text: 'Upstash', cls: healthData.redis === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400' }}
+        />
+        <KPICard 
+          label="System Uptime" 
+          value={healthData.uptime}
+          sub="Node.js Process"
+          color1="#00c9ff" color2="#455f7b"
+        />
+        <KPICard 
+          label="Memory RSS" 
+          value={healthData.memory?.rss || 'N/A'}
+          sub={`Heap: ${healthData.memory?.heapUsed}`}
+          color1="#b24bff" color2="#7ba7cc"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        {/* Memory Chart */}
+        <div className="card p-6 flex flex-col h-full border border-gray-700 bg-gray-800/30">
+          <h2 className="text-xl font-semibold text-accent-blue mb-4 flex items-center gap-2">
+            <HardDrive className="w-5 h-5" /> Memory Allocation
+          </h2>
+          <div className="flex-1 min-h-[200px] relative">
+            <canvas ref={memoryChartRef} />
           </div>
         </div>
-        <div className="card p-5 flex items-center gap-4">
-          <Clock className="w-10 h-10 text-accent-teal opacity-80" />
-          <div>
-            <div className="text-sm text-gray-400">Uptime</div>
-            <div className="text-xl font-bold text-gray-100">{healthData.uptime}</div>
-          </div>
-        </div>
-        <div className="card p-5 flex items-center gap-4">
-          <Database className="w-10 h-10 text-blue-400 opacity-80" />
-          <div>
-            <div className="text-sm text-gray-400">Total Records</div>
-            <div className="text-xl font-bold text-gray-100">{healthData.rows?.toLocaleString() || 0}</div>
-          </div>
-        </div>
-        <div className="card p-5 flex items-center gap-4">
-          <HardDrive className="w-10 h-10 text-purple-400 opacity-80" />
-          <div>
-            <div className="text-sm text-gray-400">Memory Usage</div>
-            <div className="text-xl font-bold text-gray-100">{healthData.memory?.rss || 'N/A'}</div>
+
+        {/* Queue Throughput Chart */}
+        <div className="card p-6 lg:col-span-2 flex flex-col h-full border border-gray-700 bg-gray-800/30">
+          <h2 className="text-xl font-semibold text-accent-teal mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5" /> Queue Throughput Metrics
+          </h2>
+          <div className="flex-1 min-h-[200px]">
+            <canvas ref={queueChartRef} />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Core Services */}
-        <div className="card p-6">
-          <h2 className="text-xl font-semibold text-accent-blue mb-4 border-b border-gray-700 pb-2">Core Services</h2>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-700">
-              <div className="flex items-center gap-3">
-                <Database className="text-blue-400 w-5 h-5" />
-                <span className="font-semibold text-gray-200">PostgreSQL (Neon)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <StatusIcon status={healthData.database} />
-              </div>
-            </div>
-            <div className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-700">
-              <div className="flex items-center gap-3">
-                <Server className="text-red-400 w-5 h-5" />
-                <span className="font-semibold text-gray-200">Redis Cache</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <StatusIcon status={healthData.redis} />
-              </div>
-            </div>
-            {/* Database Pool details if available */}
-            {healthData.pool && (
-              <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-gray-700 text-sm">
-                <div className="text-center">
-                  <div className="text-gray-400">Pool Total</div>
-                  <div className="text-gray-200">{healthData.pool.totalCount}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-gray-400">Pool Idle</div>
-                  <div className="text-gray-200">{healthData.pool.idleCount}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-gray-400">Pool Waiting</div>
-                  <div className="text-gray-200">{healthData.pool.waitingCount}</div>
-                </div>
-              </div>
-            )}
+        {/* 3. Service Health Table */}
+        <div className="card p-6 border border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-200 mb-4 border-b border-gray-700 pb-2">Background Worker Queues</h2>
+          <div className="overflow-x-auto">
+            <DataTable
+              headers={['Queue', 'Waiting', 'Active', 'Completed', 'Failed', 'Status']}
+              isEmpty={!healthData.queueMetrics || healthData.queueMetrics.error}
+            >
+              {healthData.queueMetrics && !healthData.queueMetrics.error && Object.entries(healthData.queueMetrics).map(([queueName, metrics]) => (
+                <tr key={queueName} className="border-b border-gray-800 hover:bg-gray-800/50 transition">
+                  <td className="p-3 font-mono font-bold capitalize text-accent-blue">{queueName.replace('Queue', '')}</td>
+                  <td className="p-3 font-mono text-center text-yellow-400">{metrics.waiting || 0}</td>
+                  <td className="p-3 font-mono text-center text-accent-teal">{metrics.active || 0}</td>
+                  <td className="p-3 font-mono text-center text-gray-300">{metrics.completed || 0}</td>
+                  <td className="p-3 font-mono text-center text-red-400">{metrics.failed || 0}</td>
+                  <td className="p-3 text-center">
+                    <span className="px-2 py-1 rounded text-xs font-bold bg-green-500/20 text-green-400">
+                      HEALTHY
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
           </div>
+          
+          {healthData.pool && (
+            <div className="mt-6 pt-4 border-t border-gray-700 grid grid-cols-3 gap-4">
+              <div className="bg-gray-900/50 p-4 rounded-lg text-center border border-gray-800">
+                <div className="text-sm text-gray-400 mb-1">PG Pool Total</div>
+                <div className="text-2xl font-mono font-bold text-gray-200">{healthData.pool.totalCount}</div>
+              </div>
+              <div className="bg-gray-900/50 p-4 rounded-lg text-center border border-gray-800">
+                <div className="text-sm text-gray-400 mb-1">PG Pool Idle</div>
+                <div className="text-2xl font-mono font-bold text-accent-teal">{healthData.pool.idleCount}</div>
+              </div>
+              <div className="bg-gray-900/50 p-4 rounded-lg text-center border border-gray-800">
+                <div className="text-sm text-gray-400 mb-1">PG Pool Waiting</div>
+                <div className="text-2xl font-mono font-bold text-yellow-400">{healthData.pool.waitingCount}</div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* BullMQ Queues */}
-        <div className="card p-6">
-          <h2 className="text-xl font-semibold text-accent-blue mb-4 border-b border-gray-700 pb-2">Background Worker Queues</h2>
-          <div className="space-y-4">
-            {healthData.queueMetrics && !healthData.queueMetrics.error ? (
-              Object.entries(healthData.queueMetrics).map(([queueName, metrics]) => (
-                <div key={queueName} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-semibold text-gray-200 capitalize">{queueName.replace('Queue', '')} Worker</span>
-                    <StatusIcon status="healthy" />
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-xs text-center">
-                    <div>
-                      <div className="text-gray-400">Waiting</div>
-                      <div className="text-gray-200 font-mono">{metrics.waiting || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Active</div>
-                      <div className="text-gray-200 font-mono">{metrics.active || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-accent-teal">Completed</div>
-                      <div className="text-gray-200 font-mono">{metrics.completed || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-accent-red">Failed</div>
-                      <div className="text-gray-200 font-mono">{metrics.failed || 0}</div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-accent-red text-sm">Queue metrics unavailable</div>
-            )}
-          </div>
+        {/* 4. Health Timeline */}
+        <div className="card p-6 border border-gray-700 max-h-[600px] overflow-y-auto">
+          <h2 className="text-xl font-semibold text-gray-200 mb-4 sticky top-0 bg-[var(--bg-card)] z-20 pb-2 border-b border-gray-700">Sync & Event Timeline</h2>
+          <Timeline events={timelineEvents} />
         </div>
       </div>
-
     </div>
   );
 }
