@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useFilters } from '../context/FilterContext';
+import { useTheme } from '../context/ThemeContext';
 import KPICard from '../components/KPICard';
 import LoadingScreen from '../components/LoadingScreen';
 import Modal from '../components/Modal';
@@ -19,6 +20,7 @@ import {
 
 export default function ExecutivePage() {
   const { filters } = useFilters();
+  const { theme } = useTheme();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -316,7 +318,7 @@ export default function ExecutivePage() {
 
       {/* Drill Down Modal */}
       {drillDown && (
-        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Drill Down: ${drillDown.title}`} maxWidth="90%" lightMode={true}>
+        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Drill Down: ${drillDown.title}`} maxWidth="90%" lightMode={theme === 'light'}>
           <div style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: '5px' }}>
             {rowsLoading ? (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading records...</div>
@@ -324,7 +326,7 @@ export default function ExecutivePage() {
               <DataTable
                 headers={['PO', 'SC', 'Product', 'Stage', 'Vendor', 'Timestamp']}
                 isEmpty={!drillDown.rows || drillDown.rows.length === 0}
-                lightMode={true}
+                lightMode={theme === 'light'}
               >
                 {drillDown.rows && drillDown.rows.slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>

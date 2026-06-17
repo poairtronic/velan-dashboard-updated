@@ -6,9 +6,11 @@ import DataTable from '../components/DataTable';
 import Modal from '../components/Modal';
 import useChart from '../utils/chartUtils';
 import { Shield, Database, Server, Clock, HardDrive, CheckCircle2, XCircle, Activity, Info } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function EnterpriseHealthPage() {
   const [healthData, setHealthData] = useState(null);
+  const { theme } = useTheme();
   const [syncData, setSyncData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -311,7 +313,7 @@ export default function EnterpriseHealthPage() {
       </div>
 
       {drillDown && (
-        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Queue Details: ${drillDown.title}`} maxWidth="600px" lightMode={true}>
+        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Queue Details: ${drillDown.title}`} maxWidth="600px" lightMode={theme === 'light'}>
           <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <p style={{ color: 'var(--text-muted)' }}>Real-time metrics for the <strong>{drillDown.title.replace('Queue', '')}</strong> background worker queue.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
