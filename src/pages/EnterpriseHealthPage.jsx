@@ -3,14 +3,16 @@ import LoadingScreen from '../components/LoadingScreen';
 import KPICard from '../components/KPICard';
 import Timeline from '../components/common/Timeline';
 import DataTable from '../components/DataTable';
+import Modal from '../components/Modal';
 import useChart from '../utils/chartUtils';
-import { Shield, Database, Server, Clock, HardDrive, CheckCircle2, XCircle, Activity } from 'lucide-react';
+import { Shield, Database, Server, Clock, HardDrive, CheckCircle2, XCircle, Activity, Info } from 'lucide-react';
 
 export default function EnterpriseHealthPage() {
   const [healthData, setHealthData] = useState(null);
   const [syncData, setSyncData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [drillDown, setDrillDown] = useState(null);
 
   const queueChartRef = useRef(null);
   const memoryChartRef = useRef(null);
@@ -174,6 +176,10 @@ export default function EnterpriseHealthPage() {
     type: row.status === 'success' ? 'success' : (row.status === 'failed' ? 'error' : 'info')
   })) || [];
 
+  const handleDrillDown = (type, value, data) => {
+    setDrillDown({ type, title: value, data });
+  };
+
   return (
     <div style={{ paddingBottom: '100px' }}>
       <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -241,41 +247,50 @@ export default function EnterpriseHealthPage() {
         <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="chart-title">Background Worker Queues</div>
           <div className="chart-sub">REDIS BULLMQ SYSTEM TASKS</div>
-          <div style={{ marginTop: '15px', overflowX: 'auto', flex: 1 }}>
-            <DataTable
-              headers={['Queue', 'Waiting', 'Active', 'Completed', 'Failed', 'Status']}
-              isEmpty={!healthData.queueMetrics || healthData.queueMetrics.error}
-            >
-              {healthData.queueMetrics && !healthData.queueMetrics.error && Object.entries(healthData.queueMetrics).map(([queueName, metrics]) => (
-                <tr key={queueName} className="border-b border-gray-800 hover:bg-gray-800/50 transition">
-                  <td className="p-3 font-mono font-bold capitalize text-accent-blue">{queueName.replace('Queue', '')}</td>
-                  <td className="p-3 font-mono text-center text-yellow-400">{metrics.waiting || 0}</td>
-                  <td className="p-3 font-mono text-center text-accent-teal">{metrics.active || 0}</td>
-                  <td className="p-3 font-mono text-center text-gray-300">{metrics.completed || 0}</td>
-                  <td className="p-3 font-mono text-center text-red-400">{metrics.failed || 0}</td>
-                  <td className="p-3 text-center">
-                    <span className="px-2 py-1 rounded text-xs font-bold bg-green-500/20 text-green-400">
-                      HEALTHY
-                    </span>
-                  </td>
+          <div style={{ marginTop: '15px', overflowX: 'auto', flex: 1, padding: '0 10px' }}>
+            <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Queue</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Waiting</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Active</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Completed</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Failed</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Status</th>
                 </tr>
-              ))}
-            </DataTable>
+              </thead>
+              <tbody>
+                {healthData.queueMetrics && !healthData.queueMetrics.error && Object.entries(healthData.queueMetrics).map(([queueName, metrics]) => (
+                  <tr key={queueName} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => handleDrillDown('queue', queueName, metrics)} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '12px 8px', fontWeight: 'bold', textTransform: 'capitalize', color: 'var(--accent1)' }}>{queueName.replace('Queue', '')}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--warning)' }}>{metrics.waiting || 0}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--accent2)' }}>{metrics.active || 0}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--text-primary)' }}>{metrics.completed || 0}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--danger)' }}>{metrics.failed || 0}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                      <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', color: 'var(--success)', backgroundColor: 'rgba(0,230,118,0.1)' }}>
+                        HEALTHY
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           
           {healthData.pool && (
-            <div className="mt-6 pt-4 border-t border-gray-700 grid grid-cols-3 gap-4">
-              <div className="bg-gray-900/50 p-4 rounded-lg text-center border border-gray-800">
-                <div className="text-sm text-gray-400 mb-1">PG Pool Total</div>
-                <div className="text-2xl font-mono font-bold text-gray-200">{healthData.pool.totalCount}</div>
+            <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--border)', display: 'flex', gap: '15px', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1, background: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px' }}>PG Pool Total</div>
+                <div style={{ fontSize: '24px', fontFamily: 'Share Tech Mono', fontWeight: 'bold', color: 'var(--text-primary)' }}>{healthData.pool.totalCount}</div>
               </div>
-              <div className="bg-gray-900/50 p-4 rounded-lg text-center border border-gray-800">
-                <div className="text-sm text-gray-400 mb-1">PG Pool Idle</div>
-                <div className="text-2xl font-mono font-bold text-accent-teal">{healthData.pool.idleCount}</div>
+              <div style={{ flex: 1, background: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px' }}>PG Pool Idle</div>
+                <div style={{ fontSize: '24px', fontFamily: 'Share Tech Mono', fontWeight: 'bold', color: 'var(--accent2)' }}>{healthData.pool.idleCount}</div>
               </div>
-              <div className="bg-gray-900/50 p-4 rounded-lg text-center border border-gray-800">
-                <div className="text-sm text-gray-400 mb-1">PG Pool Waiting</div>
-                <div className="text-2xl font-mono font-bold text-yellow-400">{healthData.pool.waitingCount}</div>
+              <div style={{ flex: 1, background: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px' }}>PG Pool Waiting</div>
+                <div style={{ fontSize: '24px', fontFamily: 'Share Tech Mono', fontWeight: 'bold', color: 'var(--warning)' }}>{healthData.pool.waitingCount}</div>
               </div>
             </div>
           )}
@@ -294,6 +309,36 @@ export default function EnterpriseHealthPage() {
           </div>
         </div>
       </div>
+
+      {drillDown && (
+        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Queue Details: ${drillDown.title}`} maxWidth="600px">
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <p style={{ color: 'var(--text-muted)' }}>Real-time metrics for the <strong>{drillDown.title.replace('Queue', '')}</strong> background worker queue.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+              <div style={{ background: 'rgba(255, 214, 10, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(255, 214, 10, 0.3)' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>WAITING</div>
+                <div style={{ color: 'var(--warning)', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.waiting || 0}</div>
+              </div>
+              <div style={{ background: 'rgba(0, 230, 118, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(0, 230, 118, 0.3)' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>ACTIVE</div>
+                <div style={{ color: 'var(--accent2)', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.active || 0}</div>
+              </div>
+              <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>COMPLETED</div>
+                <div style={{ color: 'var(--text-primary)', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.completed || 0}</div>
+              </div>
+              <div style={{ background: 'rgba(255, 61, 90, 0.1)', padding: '20px', borderRadius: '8px', border: '1px solid rgba(255, 61, 90, 0.3)' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>FAILED</div>
+                <div style={{ color: 'var(--danger)', fontSize: '28px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}>{drillDown.data.failed || 0}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: '20px', background: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Info size={18} color="var(--accent1)" />
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Queue is currently online and processing jobs automatically.</span>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
