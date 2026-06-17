@@ -14,16 +14,29 @@ function TrendSelector({ metric }) {
     fetch(`/api/kpi/history?metric=${metric}&range=${range.replace('d', '')}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) {
+          throw new Error(`HTTP error! status: ${r.status}`);
+        }
+        return r.json();
+      })
       .then(json => {
         if (isMounted) {
-          setData(json);
+          if (Array.isArray(json)) {
+            setData(json);
+          } else {
+            console.error('Expected array for trend data, got:', json);
+            setData([]);
+          }
           setLoading(false);
         }
       })
       .catch(err => {
         console.error('Trend fetch error:', err);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setData([]);
+          setLoading(false);
+        }
       });
 
     return () => { isMounted = false; };

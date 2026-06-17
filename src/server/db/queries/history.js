@@ -7,7 +7,7 @@ const HISTORICAL_OUTPUT_QUERY = `
   FROM velan_rows
   WHERE data->>'currentStage' IN ('READY', 'STORES', 'STOCK', 'EXSTOCK')
     AND data->>'timestamp' IS NOT NULL
-    AND CAST(data->>'timestamp' AS TIMESTAMP) >= CURRENT_DATE - INTERVAL '$1 days'
+    AND CAST(data->>'timestamp' AS TIMESTAMP) >= CURRENT_DATE - ($1 * INTERVAL '1 day')
   GROUP BY DATE(data->>'timestamp')
   ORDER BY date ASC
 `;
@@ -17,7 +17,7 @@ const HISTORICAL_OUTPUT_QUERY = `
 const RAW_HISTORICAL_ROWS_QUERY = `
   SELECT data 
   FROM velan_rows
-  WHERE added_at >= CURRENT_DATE - INTERVAL '$1 days'
+  WHERE added_at >= CURRENT_DATE - ($1 * INTERVAL '1 day')
 `;
 
 module.exports = {
