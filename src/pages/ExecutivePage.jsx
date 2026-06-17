@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useFilter } from '../context/FilterContext';
+import { useFilters } from '../context/FilterContext';
 import KPICard from '../components/KPICard';
 import { useUI } from '../context/UIContext';
 import {
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export default function ExecutivePage() {
-  const { filters } = useFilter();
+  const { filters } = useFilters();
   const { setIsLoading } = useUI();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
