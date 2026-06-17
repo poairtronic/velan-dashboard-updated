@@ -7,6 +7,8 @@ import { useAuth } from '../hooks/useAuth';
 // Static — defined outside component so the array reference is always stable
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: '⬡' },
+  { id: 'executive', label: 'Executive Intel', icon: '📊' },
+  { id: 'health', label: 'Enterprise Health', icon: '🛡' },
   { id: 'monthday', label: 'Month / Day View', icon: '📅' },
   { id: 'database', label: 'Database', icon: '🗄' },
   { id: 'production', label: 'Production', icon: '⚙' },

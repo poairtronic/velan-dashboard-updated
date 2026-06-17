@@ -18,6 +18,8 @@ import { useWebSocket } from './hooks/useWebSocket';
 
 // Lazy-loaded page components
 const OverviewPage = React.lazy(() => import('./pages/OverviewPage'));
+const ExecutivePage = React.lazy(() => import('./pages/ExecutivePage'));
+const EnterpriseHealthPage = React.lazy(() => import('./pages/EnterpriseHealthPage'));
 const MonthDayPage = React.lazy(() => import('./pages/MonthDayPage'));
 const DatabasePage = React.lazy(() => import('./pages/DatabasePage'));
 const ProductionPage = React.lazy(() => import('./pages/ProductionPage'));
@@ -106,6 +108,22 @@ function DashboardLayout() {
                 }
               />
               <Route path="/overview" element={<Navigate to="/" replace />} />
+              <Route
+                path="/executive"
+                element={
+                  <RouteWrapper>
+                    <ExecutivePage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/health"
+                element={
+                  <RouteWrapper>
+                    <EnterpriseHealthPage />
+                  </RouteWrapper>
+                }
+              />
               <Route
                 path="/monthday"
                 element={

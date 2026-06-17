@@ -26,6 +26,7 @@ const dashboardRouter = require('./routes/dashboard');
 const adminRouter = require('./routes/admin');
 const alertsRouter = require('./routes/alerts');
 const timelineRouter = require('./routes/timeline');
+const intelligenceRouter = require('./routes/intelligence');
 
 const app = express();
 
@@ -121,6 +122,7 @@ apiRouter.use('/dashboard', apiLimiter, requireAuth(['admin', 'user']), dashboar
 apiRouter.use('/admin', requireAuth(['admin']), adminRouter);
 apiRouter.use('/alerts', requireAuth(['admin', 'user']), alertsRouter);
 apiRouter.use('/timeline', requireAuth(['admin', 'user']), timelineRouter);
+apiRouter.use('/intelligence', apiLimiter, requireAuth(['admin', 'user']), intelligenceRouter);
 
 app.use('/api', apiRouter);
 
