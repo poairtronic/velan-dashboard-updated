@@ -7,6 +7,7 @@ import DataTable from '../components/DataTable';
 import InsightCard from '../components/common/InsightCard';
 import useChart from '../utils/chartUtils';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
+import { workingDaysBetween } from '../utils/calculationUtils';
 import {
   TrendingUp,
   TrendingDown,
@@ -143,7 +144,8 @@ export default function ExecutivePage() {
 
     if (type === 'delayed') {
       title = 'Delayed POs';
-      filtered = allRows.filter(r => r.po && r.targetDate && new Date(r.targetDate) < new Date());
+      const todayStr = new Date().toISOString().substring(0, 10);
+      filtered = allRows.filter(r => r.po && r.poDate && workingDaysBetween(r.poDate, todayStr) > 21);
     } else if (type === 'bottleneck') {
       title = `Items in Stage: ${value}`;
       filtered = allRows.filter(r => r.currentStage === value);
@@ -152,8 +154,9 @@ export default function ExecutivePage() {
       filtered = allRows.filter(r => r.vendor === value);
     } else if (type === 'risk') {
       title = `High Risk Items (${value})`;
+      const todayStr = new Date().toISOString().substring(0, 10);
       if (value === 'Delay Risk') {
-        filtered = allRows.filter(r => r.po && r.targetDate && new Date(r.targetDate) < new Date());
+        filtered = allRows.filter(r => r.po && r.poDate && workingDaysBetween(r.poDate, todayStr) > 21);
       } else if (value === 'Vendor SLA Risk') {
         filtered = allRows.filter(r => r.vendor && r.vendor !== 'INHOUSE'); // Simplified for demo
       } else {
@@ -295,31 +298,18 @@ export default function ExecutivePage() {
           <div className="chart-wrap" style={{ minHeight: '250px' }}>
             <canvas ref={vendorChartRef} />
           </div>
-          <div style={{ marginTop: '15px', overflowX: 'auto', padding: '0 10px' }}>
-            <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Vendor</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Avg Days</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Active</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>Risk</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.vendorTrends.map((v, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => handleDrillDown('vendor', v.vendor)} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                    <td style={{ padding: '12px 8px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{v.vendor}</td>
-                    <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono', color: 'var(--accent1)' }}>{v.avgCycleTime.toFixed(1)}</td>
-                    <td style={{ padding: '12px 8px', textAlign: 'center', fontFamily: 'Share Tech Mono' }}>{v.inProgress}</td>
-                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                      <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', color: v.slaRisk === 'High' ? 'var(--danger)' : (v.slaRisk === 'Medium' ? 'var(--warning)' : 'var(--success)'), backgroundColor: v.slaRisk === 'High' ? 'rgba(255,61,90,0.1)' : (v.slaRisk === 'Medium' ? 'rgba(255,214,10,0.1)' : 'rgba(0,230,118,0.1)') }}>
-                        {v.slaRisk}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 10px' }}>
+            {data.vendorTrends.map((v, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 15px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }} onClick={() => handleDrillDown('vendor', v.vendor)}>
+                <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '14px' }}>{v.vendor}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', fontFamily: 'Share Tech Mono' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Avg Days: {v.avgCycleTime.toFixed(1)}</span>
+                  <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', color: v.slaRisk === 'High' ? 'var(--danger)' : (v.slaRisk === 'Medium' ? 'var(--warning)' : 'var(--success)'), backgroundColor: v.slaRisk === 'High' ? 'rgba(255,61,90,0.1)' : (v.slaRisk === 'Medium' ? 'rgba(255,214,10,0.1)' : 'rgba(0,230,118,0.1)') }}>
+                    {v.slaRisk}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
