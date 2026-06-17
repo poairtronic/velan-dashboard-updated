@@ -17,7 +17,6 @@ const logger = require('./utils/logger');
 // Initialize background workers
 require('./workers/exportWorker');
 require('./workers/syncWorker');
-require('./workers/emailWorker');
 require('./workers/reportWorker');
 
 const PORT = env.PORT;

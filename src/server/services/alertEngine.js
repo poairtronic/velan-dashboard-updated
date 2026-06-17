@@ -1,6 +1,5 @@
 const { pool } = require('../db/pool');
 const { broadcast } = require('../utils/websocket');
-const { emailQueue } = require('../queues/emailQueue');
 const { workingDaysBetween, calculateVendorAging } = require('../utils/calculationUtils');
 const logger = require('../utils/logger');
 
@@ -193,17 +192,6 @@ async function createAlertIfNew(params) {
     });
 
     // Send Email Alert (Queue Job)
-    if (emailQueue && typeof emailQueue.add === 'function') {
-      try {
-        await emailQueue.add('send-alert-email', {
-          to: recipients || 'admin@velanmetrology.com',
-          subject: `[Velan Alert] [${severity}] ${ruleName}`,
-          body: message
-        });
-      } catch (emailErr) {
-        logger.error(logger.categories.QUEUE, `Failed to queue alert email for ${recipients}`, emailErr);
-      }
-    }
   } catch (err) {
     logger.error(logger.categories.DATABASE, `Failed to handle alert creation: ${err.message}`, err);
   }

@@ -2,7 +2,6 @@ const express = require('express');
 const { getCacheStats } = require('../cache/cacheService');
 const { exportQueue } = require('../queues/exportQueue');
 const { syncQueue } = require('../queues/syncQueue');
-const { emailQueue } = require('../queues/emailQueue');
 const { reportQueue } = require('../queues/reportQueue');
 const { pool } = require('../db/pool');
 const redisClient = require('../cache/redisClient');
@@ -23,7 +22,6 @@ router.get('/jobs', async (req, res) => {
   try {
     const exportCounts = await exportQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     const syncCounts = await syncQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
-    const emailCounts = await emailQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     const reportCounts = await reportQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     
     res.json({
@@ -31,7 +29,6 @@ router.get('/jobs', async (req, res) => {
       queues: {
         exportQueue: exportCounts,
         syncQueue: syncCounts,
-        emailQueue: emailCounts,
         reportQueue: reportCounts
       }
     });
@@ -61,7 +58,6 @@ router.get('/ops', async (req, res) => {
     // 3. Queue job counts
     const exportCounts = await exportQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     const syncCounts = await syncQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
-    const emailCounts = await emailQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     const reportCounts = await reportQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
 
     // 4. Last sync info
@@ -103,7 +99,6 @@ router.get('/ops', async (req, res) => {
         queues: {
           exportQueue: exportCounts,
           syncQueue: syncCounts,
-          emailQueue: emailCounts,
           reportQueue: reportCounts
         },
         lastSync: lastSyncLog || {

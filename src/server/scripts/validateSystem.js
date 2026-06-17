@@ -3,7 +3,6 @@ const { pool, isMock } = require('../db/pool');
 const redisClient = require('../cache/redisClient');
 const { exportQueue } = require('../queues/exportQueue');
 const { syncQueue } = require('../queues/syncQueue');
-const { emailQueue } = require('../queues/emailQueue');
 const { reportQueue } = require('../queues/reportQueue');
 
 async function validateSystem() {
@@ -40,7 +39,6 @@ async function validateSystem() {
   const queues = [
     { name: 'Export', queue: exportQueue },
     { name: 'Sync', queue: syncQueue },
-    { name: 'Email', queue: emailQueue },
     { name: 'Report', queue: reportQueue },
   ];
 

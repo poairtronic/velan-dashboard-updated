@@ -5,7 +5,7 @@ const { pool } = require('../db/pool');
 const redisClient = require('../cache/redisClient');
 const { exportQueue } = require('../queues/exportQueue');
 const { syncQueue } = require('../queues/syncQueue');
-const { emailQueue } = require('../queues/emailQueue');
+
 const { reportQueue } = require('../queues/reportQueue');
 const asyncHandler = require('../utils/asyncHandler');
 const { getCacheStats } = require('../cache/cacheService');
@@ -32,7 +32,6 @@ router.get('/', asyncHandler(async (req, res) => {
   try {
     queueMetrics.exportQueue = await exportQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     queueMetrics.syncQueue = await syncQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
-    queueMetrics.emailQueue = await emailQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
     queueMetrics.reportQueue = await reportQueue.getJobCounts('waiting', 'active', 'completed', 'failed');
   } catch (e) {
     queueMetrics = { error: e.message };
@@ -121,7 +120,6 @@ router.get('/queues', asyncHandler(async (req, res) => {
   try {
     const exportWorker = require('../workers/exportWorker');
     const syncWorker = require('../workers/syncWorker');
-    const emailWorker = require('../workers/emailWorker');
     const reportWorker = require('../workers/reportWorker');
 
     const getWorkerStatus = (w) => {
@@ -141,10 +139,7 @@ router.get('/queues', asyncHandler(async (req, res) => {
         counts: await syncQueue.getJobCounts('waiting', 'active', 'completed', 'failed'),
         workerStatus: getWorkerStatus(syncWorker)
       },
-      emailQueue: {
-        counts: await emailQueue.getJobCounts('waiting', 'active', 'completed', 'failed'),
-        workerStatus: getWorkerStatus(emailWorker)
-      },
+
       reportQueue: {
         counts: await reportQueue.getJobCounts('waiting', 'active', 'completed', 'failed'),
         workerStatus: getWorkerStatus(reportWorker)
