@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useFilters } from '../context/FilterContext';
 import KPICard from '../components/KPICard';
-import { useUI } from '../context/UIContext';
+import LoadingScreen from '../components/LoadingScreen';
 import {
   TrendingUp,
   TrendingDown,
@@ -15,14 +15,14 @@ import {
 
 export default function ExecutivePage() {
   const { filters } = useFilters();
-  const { setIsLoading } = useUI();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     const fetchIntelligence = async () => {
-      setIsLoading(true);
+      setLoading(true);
       try {
         const query = new URLSearchParams(filters).toString();
         const apiBase = import.meta.env.VITE_API_BASE || '';
@@ -35,13 +35,13 @@ export default function ExecutivePage() {
       } catch (err) {
         if (isMounted) setError(err.message);
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchIntelligence();
     return () => { isMounted = false; };
-  }, [filters, setIsLoading]);
+  }, [filters]);
 
   if (error) {
     return (
@@ -54,6 +54,7 @@ export default function ExecutivePage() {
     );
   }
 
+  if (loading) return <LoadingScreen />;
   if (!data) return null;
 
   const getTrendIcon = (trend) => {

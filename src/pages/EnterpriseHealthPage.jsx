@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useUI } from '../context/UIContext';
+import LoadingScreen from '../components/LoadingScreen';
 import { Shield, Database, Server, Clock, HardDrive, CheckCircle2, XCircle } from 'lucide-react';
 
 export default function EnterpriseHealthPage() {
-  const { setIsLoading } = useUI();
   const [healthData, setHealthData] = useState(null);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchHealth = async () => {
-    setIsLoading(true);
+    setLoading(true);
     try {
       const apiBase = import.meta.env.VITE_API_BASE || '';
       const res = await fetch(`${apiBase}/api/health`, { credentials: 'include' });
@@ -18,7 +18,7 @@ export default function EnterpriseHealthPage() {
     } catch (err) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -48,6 +48,7 @@ export default function EnterpriseHealthPage() {
     );
   }
 
+  if (loading) return <LoadingScreen />;
   if (!healthData) return null;
 
   const StatusIcon = ({ status }) => {
