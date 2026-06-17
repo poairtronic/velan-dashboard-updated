@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
 const { env } = require('../config/env');
 const { requireAuth } = require('../middleware/auth');
-const { loginLimiter, adminLimiter } = require('../middleware/rateLimit');
+const { authLimiter, dashboardLimiter } = require('../middleware/rateLimit');
 const { loginSchema, registerSchema } = require('../schemas/auth.schema');
 const { adminCreateSchema, updateStatusSchema } = require('../schemas/user.schema');
 const asyncHandler = require('../utils/asyncHandler');
@@ -32,7 +32,7 @@ router.post('/logout', (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
+router.post('/login', authLimiter, asyncHandler(async (req, res) => {
   const valResult = loginSchema.safeParse(req.body);
   if (!valResult.success) {
     return res.status(400).json({ error: 'Invalid request body', details: valResult.error.errors });
@@ -68,7 +68,7 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/auth/register
-router.post('/register', loginLimiter, asyncHandler(async (req, res) => {
+router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   const valResult = registerSchema.safeParse(req.body);
   if (!valResult.success) {
     return res.status(400).json({ error: 'Invalid request body', details: valResult.error.errors });
@@ -90,7 +90,7 @@ router.post('/register', loginLimiter, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/auth/admin-create
-router.post('/admin-create', requireAuth(['admin']), adminLimiter, asyncHandler(async (req, res) => {
+router.post('/admin-create', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
   const valResult = adminCreateSchema.safeParse(req.body);
   if (!valResult.success) {
     return res.status(400).json({ error: 'Invalid request body', details: valResult.error.errors });
@@ -112,19 +112,19 @@ router.post('/admin-create', requireAuth(['admin']), adminLimiter, asyncHandler(
 }));
 
 // GET /api/auth/users/pending-count
-router.get('/users/pending-count', requireAuth(['admin']), adminLimiter, asyncHandler(async (req, res) => {
+router.get('/users/pending-count', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
   const result = await pool.query("SELECT COUNT(*) FROM users WHERE status = 'pending'");
   return res.json({ count: parseInt(result.rows[0].count, 10) });
 }));
 
 // GET /api/auth/users
-router.get('/users', requireAuth(['admin']), adminLimiter, asyncHandler(async (req, res) => {
+router.get('/users', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
   const result = await pool.query('SELECT id, username, role, status, created_at FROM users ORDER BY created_at DESC');
   return res.json(result.rows);
 }));
 
 // PUT /api/auth/users/:id/status
-router.put('/users/:id/status', requireAuth(['admin']), adminLimiter, asyncHandler(async (req, res) => {
+router.put('/users/:id/status', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id) return res.status(400).json({ error: 'Invalid user ID' });
   if (req.user.id === id) return res.status(400).json({ error: 'Cannot change your own status' });
@@ -144,7 +144,7 @@ router.put('/users/:id/status', requireAuth(['admin']), adminLimiter, asyncHandl
 }));
 
 // DELETE /api/auth/users/:id
-router.delete('/users/:id', requireAuth(['admin']), adminLimiter, asyncHandler(async (req, res) => {
+router.delete('/users/:id', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id) return res.status(400).json({ error: 'Invalid user ID' });
   if (req.user.id === id) return res.status(400).json({ error: 'Cannot delete your own account' });

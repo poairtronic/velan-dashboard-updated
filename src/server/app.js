@@ -85,7 +85,7 @@ app.use(authenticate); // Set req.user for all routes
 const apiRouter = express.Router();
 
 // Public routes
-apiRouter.use('/auth', authLimiter, authRouter);
+apiRouter.use('/auth', authRouter);
 apiRouter.use('/health', healthRouter);
 
 // Admin only routes
