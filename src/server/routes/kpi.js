@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db/pool');
-const authMiddleware = require('../middleware/authMiddleware');
+const { requireAuth } = require('../middleware/auth');
 const { HISTORICAL_OUTPUT_QUERY, RAW_HISTORICAL_ROWS_QUERY } = require('../db/queries/history');
 
-router.get('/history', authMiddleware, async (req, res) => {
+router.get('/history', requireAuth(), async (req, res) => {
   const { metric = 'production', range = '30d' } = req.query;
   const days = parseInt(range) || 30;
 

@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db/pool');
-const authMiddleware = require('../middleware/authMiddleware');
+const { requireAuth } = require('../middleware/auth');
 const { EXECUTIVE_WAR_ROOM_QUERY } = require('../db/queries/executive');
 const { workingDaysBetween } = require('../utils/calculationUtils');
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-router.get('/war-room', authMiddleware, async (req, res) => {
+router.get('/war-room', requireAuth(), async (req, res) => {
   try {
     const { rows } = await pool.query(EXECUTIVE_WAR_ROOM_QUERY);
     const todayStr = getTodayStr();

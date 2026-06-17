@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db/pool');
-const authMiddleware = require('../middleware/authMiddleware');
+const { requireAuth } = require('../middleware/auth');
 const { 
   OTD_DRILLDOWN_QUERY, 
   BOTTLENECK_DRILLDOWN_QUERY, 
@@ -13,7 +13,7 @@ const { workingDaysBetween } = require('../utils/calculationUtils');
 // Helper to get date string
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-router.get('/:kpiType', authMiddleware, async (req, res) => {
+router.get('/:kpiType', requireAuth(), async (req, res) => {
   const { kpiType } = req.params;
   const todayStr = getTodayStr();
 
