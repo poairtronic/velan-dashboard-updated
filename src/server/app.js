@@ -8,7 +8,7 @@ const requestLogger = require('./middleware/requestLogger');
 const errorHandler = require('./middleware/errorHandler');
 const notFound = require('./middleware/notFound');
 const { authenticate, requireAuth } = require('./middleware/auth');
-const { uploadLimiter } = require('./middleware/rateLimit');
+const { authLimiter, syncLimiter, dashboardLimiter } = require('./middleware/rateLimit');
 const { env } = require('./config/env');
 
 // Routers
@@ -30,6 +30,9 @@ const intelligenceRouter = require('./routes/intelligence');
 const micRouter = require('./routes/mic');
 
 const app = express();
+
+// Trust first proxy (Render Load Balancer)
+app.set('trust proxy', 1);
 
 // ── Security Headers ────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -76,14 +79,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(authenticate); // Set req.user for all routes
-
-const { apiLimiter } = require('./middleware/rateLimiter');
+// Rate limiters removed from here as they are imported above
 
 // ── API Routing with Route Protection ─────────────────────────────────────
 const apiRouter = express.Router();
 
 // Public routes
-apiRouter.use('/auth', authRouter);
+apiRouter.use('/auth', authLimiter, authRouter);
 apiRouter.use('/health', healthRouter);
 
 // Admin only routes
@@ -94,18 +96,18 @@ apiRouter.use('/reset', requireAuth(['admin']), (req, res, next) => {
   req.url = '/reset' + req.url;
   importRouter(req, res, next);
 });
-apiRouter.use('/import', requireAuth(['admin']), uploadLimiter, (req, res, next) => {
+apiRouter.use('/import', requireAuth(['admin']), syncLimiter, (req, res, next) => {
   // Map /api/import to the /import endpoint of import router
   req.url = '/import' + req.url;
   importRouter(req, res, next);
 });
 
 // Mixed protection routes
-apiRouter.use('/data', apiLimiter, (req, res, next) => {
+apiRouter.use('/data', dashboardLimiter, (req, res, next) => {
   if (req.method === 'POST') {
     return requireAuth(['admin'])(req, res, (err) => {
       if (err) return next(err);
-      uploadLimiter(req, res, next);
+      syncLimiter(req, res, next);
     });
   } else if (req.method === 'DELETE') {
     return requireAuth(['admin'])(req, res, next);
@@ -119,12 +121,12 @@ apiRouter.use('/sheets', requireAuth(['admin', 'user']), sheetsRouter);
 apiRouter.use('/config', requireAuth(['admin', 'user']), configRouter);
 apiRouter.use('/security-status', requireAuth(['admin', 'user']), securityRouter);
 apiRouter.use('/reports', requireAuth(['admin', 'user']), reportsRouter);
-apiRouter.use('/dashboard', apiLimiter, requireAuth(['admin', 'user']), dashboardRouter);
+apiRouter.use('/dashboard', dashboardLimiter, requireAuth(['admin', 'user']), dashboardRouter);
 apiRouter.use('/admin', requireAuth(['admin']), adminRouter);
-apiRouter.use('/alerts', requireAuth(['admin', 'user']), alertsRouter);
-apiRouter.use('/timeline', requireAuth(['admin', 'user']), timelineRouter);
-apiRouter.use('/intelligence', apiLimiter, requireAuth(['admin', 'user']), intelligenceRouter);
-apiRouter.use('/mic', apiLimiter, requireAuth(['admin', 'user']), micRouter);
+apiRouter.use('/alerts', dashboardLimiter, requireAuth(['admin', 'user']), alertsRouter);
+apiRouter.use('/timeline', dashboardLimiter, requireAuth(['admin', 'user']), timelineRouter);
+apiRouter.use('/intelligence', dashboardLimiter, requireAuth(['admin', 'user']), intelligenceRouter);
+apiRouter.use('/mic', dashboardLimiter, requireAuth(['admin', 'user']), micRouter);
 
 app.use('/api', apiRouter);
 
