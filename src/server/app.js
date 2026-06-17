@@ -26,7 +26,6 @@ const dashboardRouter = require('./routes/dashboard');
 const adminRouter = require('./routes/admin');
 const alertsRouter = require('./routes/alerts');
 const timelineRouter = require('./routes/timeline');
-const notificationsRouter = require('./routes/notifications');
 const drilldownRouter = require('./routes/drilldown');
 const executiveRouter = require('./routes/executive');
 const kpiRouter = require('./routes/kpi');
@@ -134,7 +133,6 @@ apiRouter.use('/mic', dashboardLimiter, requireAuth(['admin', 'user']), micRoute
 
 app.use('/api', apiRouter);
 
-app.use('/api/notifications', notificationsRouter);
 app.use('/api/drilldown', drilldownRouter);
 app.use('/api/executive', executiveRouter);
 app.use('/api/kpi', kpiRouter);
