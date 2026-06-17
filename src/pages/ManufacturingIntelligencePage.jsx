@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useFilters } from '../context/FilterContext';
+import { useTheme } from '../context/ThemeContext';
 import useMicDataQuery from '../hooks/useMicDataQuery';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import useChart from '../utils/chartUtils';
@@ -367,6 +368,7 @@ function ExecutiveActionCenter({ data }) {
 export default function ManufacturingIntelligencePage() {
   const { data: micData, isLoading, error } = useMicDataQuery();
   const { filters } = useFilters();
+  const { theme } = useTheme();
   const { rows: allRows, isLoading: rowsLoading } = useProductionDataQuery({ ...filters, source: 'database' }, 1, 200000);
   const [drillDown, setDrillDown] = useState(null);
 
@@ -422,7 +424,7 @@ export default function ManufacturingIntelligencePage() {
       </div>
 
       {drillDown && (
-        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Drill Down: ${drillDown.title}`} maxWidth="90%" lightMode={true}>
+        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Drill Down: ${drillDown.title}`} maxWidth="90%" lightMode={theme === 'light'}>
           <div style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: '5px' }}>
             {rowsLoading ? (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading records...</div>
@@ -430,7 +432,7 @@ export default function ManufacturingIntelligencePage() {
               <DataTable
                 headers={['PO', 'SC', 'Product', 'Stage', 'Vendor', 'Timestamp']}
                 isEmpty={!drillDown.data || drillDown.data.length === 0}
-                lightMode={true}
+                lightMode={theme === 'light'}
               >
                 {drillDown.data && drillDown.data.slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
