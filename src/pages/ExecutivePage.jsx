@@ -316,7 +316,7 @@ export default function ExecutivePage() {
 
       {/* Drill Down Modal */}
       {drillDown && (
-        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Drill Down: ${drillDown.title}`} maxWidth="90%">
+        <Modal isOpen={true} onClose={() => setDrillDown(null)} title={`Drill Down: ${drillDown.title}`} maxWidth="90%" lightMode={true}>
           <div style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: '5px' }}>
             {rowsLoading ? (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading records...</div>
@@ -324,6 +324,7 @@ export default function ExecutivePage() {
               <DataTable
                 headers={['PO', 'SC', 'Product', 'Stage', 'Vendor', 'Timestamp']}
                 isEmpty={!drillDown.rows || drillDown.rows.length === 0}
+                lightMode={true}
               >
                 {drillDown.rows && drillDown.rows.slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>

@@ -1,7 +1,7 @@
 import React from 'react';
 // ─── MODAL UI COMPONENT ───────────────────────────────────────────────────────
 
-function Modal({ isOpen, onClose, title, children, width = 600 }) {
+function Modal({ isOpen, onClose, title, children, maxWidth = '600px', lightMode = false }) {
   React.useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
@@ -41,11 +41,11 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
     >
       <div
         style={{
-          background: '#091629',
-          border: '1px solid var(--border)',
+          background: lightMode ? '#ffffff' : '#091629',
+          border: lightMode ? '1px solid #e2e8f0' : '1px solid var(--border)',
           borderRadius: 12,
           width: '100%',
-          maxWidth: width,
+          maxWidth: maxWidth,
           maxHeight: '90vh',
           overflowY: 'auto',
           boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
@@ -60,7 +60,7 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: lightMode ? '#f8fafc' : 'rgba(255, 255, 255, 0.02)',
           }}
         >
           <h3
@@ -68,7 +68,7 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
               margin: 0,
               fontSize: 16,
               fontFamily: 'Share Tech Mono, monospace',
-              color: 'var(--accent1)',
+              color: lightMode ? '#0f172a' : 'var(--accent1)',
             }}
           >
             {title}
@@ -78,7 +78,7 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
             style={{
               background: 'none',
               border: 'none',
-              color: 'var(--text-muted)',
+              color: lightMode ? '#64748b' : 'var(--text-muted)',
               fontSize: 20,
               cursor: 'pointer',
               lineHeight: 1,
@@ -88,7 +88,7 @@ function Modal({ isOpen, onClose, title, children, width = 600 }) {
             &times;
           </button>
         </div>
-        <div style={{ padding: 20, flex: 1 }}>{children}</div>
+        <div style={{ padding: 20, flex: 1, color: lightMode ? '#334155' : 'inherit' }}>{children}</div>
       </div>
     </div>
   );
