@@ -23,12 +23,12 @@ export function useWebSocket() {
         wsUrl = `${protocol}//${window.location.host}`;
       }
       
-      console.log(`[WebSocket] Connecting to ${wsUrl}...`);
+      // console.log(`[WebSocket] Connecting to ${wsUrl}...`);
       const socket = new WebSocket(wsUrl);
       wsRef.current = socket;
 
       socket.onopen = () => {
-        console.log('[WebSocket] Connection established');
+        // console.log('[WebSocket] Connection established');
         retryDelay.current = 1000; // Reset retry delay
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
@@ -40,7 +40,7 @@ export function useWebSocket() {
         try {
           const payload = JSON.parse(messageEvent.data);
           const { event, data } = payload;
-          console.log(`[WebSocket] Received event: ${event}`, data);
+          // console.log(`[WebSocket] Received event: ${event}`, data);
 
           if (event === 'sync:completed') {
             // Invalidate React Query caches to trigger automatic reload of all UI values
@@ -76,7 +76,7 @@ export function useWebSocket() {
       };
 
       socket.onclose = () => {
-        console.log(`[WebSocket] Connection closed. Retrying in ${retryDelay.current}ms...`);
+        // console.log(`[WebSocket] Connection closed. Retrying in ${retryDelay.current}ms...`);
         reconnectTimeoutRef.current = setTimeout(() => {
           retryDelay.current = Math.min(retryDelay.current * 2, 16000); // Exponential backoff max 16s
           connect();
