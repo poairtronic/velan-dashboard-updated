@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
   { id: 'executive-war-room', label: 'Executive War Room', icon: '⚔' },
+  { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'monthday', label: 'Month / Day View', icon: '📅' },
   { id: 'database', label: 'Database', icon: '🗄' },
   { id: 'production', label: 'Production', icon: '⚙' },

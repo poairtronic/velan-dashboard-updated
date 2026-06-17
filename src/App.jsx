@@ -33,6 +33,7 @@ const SCPage = React.lazy(() => import('./pages/SCPage'));
 const VendorPage = React.lazy(() => import('./pages/VendorPage'));
 const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
+const PredictiveAnalyticsPage = React.lazy(() => import('./pages/PredictiveAnalyticsPage'));
 
 function AppRoutes() {
   const { setActiveNav } = useUI();
@@ -133,6 +134,14 @@ function DashboardLayout() {
                 element={
                   <RouteWrapper>
                     <ManufacturingIntelligencePage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/forecast"
+                element={
+                  <RouteWrapper>
+                    <PredictiveAnalyticsPage />
                   </RouteWrapper>
                 }
               />
