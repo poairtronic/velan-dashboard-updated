@@ -68,22 +68,22 @@ router.get('/', async (req, res) => {
 
       // 2. Bottleneck Intelligence
       // Map bottlenecks and determine risks
-      const bottleneckTrends = bottlenecks.bottleneckData.map(b => ({
+      const bottleneckTrends = (bottlenecks.bottleneckStages || []).map(b => ({
         stage: b.stage,
-        bottleneckScore: b.bottleneckScore,
-        avgCycleTime: b.avgCycleTime,
-        trend: getTrend(b.bottleneckScore, 50, true), // Higher score = worse
-        riskLevel: b.bottleneckScore > 70 ? 'High' : (b.bottleneckScore > 40 ? 'Medium' : 'Low')
+        bottleneckScore: b.score,
+        avgCycleTime: b.duration,
+        trend: getTrend(b.score, 50, true), // Higher score = worse
+        riskLevel: b.score > 70 ? 'High' : (b.score > 40 ? 'Medium' : 'Low')
       })).sort((a, b) => b.bottleneckScore - a.bottleneckScore).slice(0, 5);
 
       // 3. Vendor Intelligence
-      const vendorTrends = vendors.vendorStats.map(v => ({
-        vendor: v.vendor,
-        totalItems: v.totalItems,
-        inProgress: v.inProgress,
-        avgCycleTime: v.avgCycleTime,
-        trend: getTrend(v.avgCycleTime, 14, true), // Less than 14 days is good
-        slaRisk: v.avgCycleTime > 21 ? 'High' : (v.avgCycleTime > 14 ? 'Medium' : 'Low')
+      const vendorTrends = (vendors.vendors || []).map(v => ({
+        vendor: v.code || v.vendor || 'UNKNOWN',
+        totalItems: v.count || 0,
+        inProgress: v.count || 0,
+        avgCycleTime: v.avgDays || 0,
+        trend: getTrend(v.avgDays || 0, 14, true), // Less than 14 days is good
+        slaRisk: (v.avgDays || 0) > 21 ? 'High' : ((v.avgDays || 0) > 14 ? 'Medium' : 'Low')
       })).sort((a, b) => b.avgCycleTime - a.avgCycleTime).slice(0, 5);
 
       // 4. Production Risk Analysis
