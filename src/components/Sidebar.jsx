@@ -6,10 +6,6 @@ import { useAuth } from '../hooks/useAuth';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: '⬡' },
-  { id: 'executive', label: 'Executive Intel', icon: '📊' },
-  { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
-  { id: 'executive-war-room', label: 'Executive War Room', icon: '⚔' },
-  { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'monthday', label: 'Month / Day View', icon: '📅' },
   { id: 'database', label: 'Database', icon: '🗄' },
   { id: 'production', label: 'Production', icon: '⚙' },
@@ -19,10 +15,14 @@ const NAV_ITEMS = [
   { id: 'po', label: 'PO Analysis', icon: '📋' },
   { id: 'sc', label: 'SC Sets', icon: '📦' },
   { id: 'vendor', label: 'Vendor Eval', icon: '🏭' },
-  { id: 'upload', label: 'Upload Data', icon: '⬆' },
-  { id: 'users', label: 'User Management', icon: '👥' },
-  { id: 'audit-trail', label: 'Audit Trail', icon: '📜' },
+  { id: 'executive', label: 'Executive Intel', icon: '📊' },
+  { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
+  { id: 'executive-war-room', label: 'Executive War Room', icon: '⚔' },
+  { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
+  { id: 'users', label: 'User Management', icon: '👥' },
+  { id: 'upload', label: 'Upload Data', icon: '⬆' },
+  { id: 'audit-trail', label: 'Audit Trail', icon: '📜' },
 ];
 
 function Sidebar() {
