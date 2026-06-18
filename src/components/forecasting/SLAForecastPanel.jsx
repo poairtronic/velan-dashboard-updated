@@ -92,7 +92,7 @@ function SLAForecastPanel() {
 
       {/* Sub-header Tabs */}
       <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', padding: '0 10px' }}>
-        <button 
+        <button
           onClick={() => setActiveTab('forecast')}
           style={{
             background: 'none', border: 'none', borderBottom: activeTab === 'forecast' ? '2px solid var(--accent1)' : '2px solid transparent',
@@ -102,7 +102,7 @@ function SLAForecastPanel() {
           }}>
           📊 SLA PROJECTIONS
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('comparison')}
           style={{
             background: 'none', border: 'none', borderBottom: activeTab === 'comparison' ? '2px solid var(--accent1)' : '2px solid transparent',
@@ -139,10 +139,10 @@ function SLAForecastPanel() {
                   const isExpanded = expandedPo === f.poNumber;
                   return (
                     <React.Fragment key={i}>
-                      <tr 
+                      <tr
                         onClick={() => toggleExpand(f.poNumber)}
-                        style={{ 
-                          borderLeft: `3px solid ${risk.color}`, 
+                        style={{
+                          borderLeft: `3px solid ${risk.color}`,
                           cursor: 'pointer',
                           background: isExpanded ? 'rgba(0, 201, 255, 0.04)' : 'transparent',
                           transition: 'background 0.2s'
@@ -198,7 +198,7 @@ function SLAForecastPanel() {
                                   </div>
                                 </div>
                               </div>
-                              
+
                               {/* Old vs New Model Comparison */}
                               <div style={{ background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                                 <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', letterSpacing: 1, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>

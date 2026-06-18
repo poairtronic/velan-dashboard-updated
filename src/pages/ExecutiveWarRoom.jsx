@@ -46,11 +46,11 @@ export default function ExecutiveWarRoom() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-        
+
         {/* Column 1: Critical Issues */}
         <div className="chart-card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert color="var(--danger)" size={18}/> Critical Issues
+            <ShieldAlert color="var(--danger)" size={18} /> Critical Issues
           </div>
           <div className="chart-sub">STAGE QUEUES EXCEEDING THRESHOLD</div>
           <div style={{ marginTop: '15px', flex: 1, overflowY: 'auto', paddingRight: '5px' }}>
@@ -76,10 +76,10 @@ export default function ExecutiveWarRoom() {
         {/* Column 2: Operational Risks */}
         <div className="chart-card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle color="var(--warning)" size={18}/> Operational Risks
+            <AlertTriangle color="var(--warning)" size={18} /> Operational Risks
           </div>
           <div className="chart-sub">POs CLOSE TO OR PAST EXPECTED COMPLETION</div>
-          
+
           <div style={{ display: 'flex', gap: '10px', marginTop: '15px', marginBottom: '15px' }}>
             <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.1)', textAlign: 'center', padding: '10px', borderRadius: '6px' }}>
               <div style={{ fontSize: '11px', color: '#ef4444', fontWeight: 'bold' }}>CRITICAL</div>
@@ -124,7 +124,7 @@ export default function ExecutiveWarRoom() {
         {/* Column 3: Priority Actions */}
         <div className="chart-card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Zap color="var(--accent1)" size={18}/> Priority Actions
+            <Zap color="var(--accent1)" size={18} /> Priority Actions
           </div>
           <div className="chart-sub">AUTOMATED SYSTEM RECOMMENDATIONS</div>
           <div style={{ marginTop: '15px', flex: 1, overflowY: 'auto', paddingRight: '5px' }}>

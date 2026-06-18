@@ -46,12 +46,13 @@ function Sidebar() {
         const data = await res.json();
         setPendingCount(data.count);
       }
-    } catch (err) {
-      console.error('Failed to fetch pending count:', err);
+    } catch {
+      // Silently ignore network errors — backend may be unreachable
     }
   }, [isAdmin]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPendingCount();
     window.addEventListener('pending-users-updated', fetchPendingCount);
     // Poll every 30 seconds as fallback

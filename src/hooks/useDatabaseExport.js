@@ -1,7 +1,7 @@
 import { toast } from 'react-hot-toast';
 
 export function useDatabaseExport(filtered, kpiStats, fromDate, toDate, filters = {}) {
-  
+
   async function triggerExport(type) {
     const toastId = toast.loading(`Preparing ${type.toUpperCase()} export in background...`);
     try {
@@ -51,7 +51,7 @@ export function useDatabaseExport(filtered, kpiStats, fromDate, toDate, filters 
 
         if (status === 'completed') {
           toast.success(`${type.toUpperCase()} export ready! Downloading...`, { id: toastId });
-          
+
           // Trigger file download
           const downloadUrl = `/api/reports/download/${jobId}`;
           const a = document.createElement('a');

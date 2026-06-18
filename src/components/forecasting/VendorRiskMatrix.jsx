@@ -64,7 +64,7 @@ function VendorRiskMatrix() {
 
       {/* Sub-header Tabs */}
       <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', padding: '0 10px' }}>
-        <button 
+        <button
           onClick={() => setActiveTab('risk_matrix')}
           style={{
             background: 'none', border: 'none', borderBottom: activeTab === 'risk_matrix' ? '2px solid var(--accent1)' : '2px solid transparent',
@@ -74,7 +74,7 @@ function VendorRiskMatrix() {
           }}>
           📊 VENDOR RISK MATRIX
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('validation')}
           style={{
             background: 'none', border: 'none', borderBottom: activeTab === 'validation' ? '2px solid var(--accent1)' : '2px solid transparent',
@@ -124,9 +124,9 @@ function VendorRiskMatrix() {
                         {v.stabilityScore} / <span style={{ color: v.riskTrend === 'Rising' ? 'var(--danger)' : v.riskTrend === 'Improving' ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>{v.riskTrend}</span>
                       </td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.3)' }}>
-                        <span style={{ 
-                          padding: '3px 10px', borderRadius: 10, fontSize: 10, fontWeight: 700, fontFamily: 'Share Tech Mono, monospace', 
-                          background: risk.bg, color: risk.color, border: `1px solid ${risk.color}44` 
+                        <span style={{
+                          padding: '3px 10px', borderRadius: 10, fontSize: 10, fontWeight: 700, fontFamily: 'Share Tech Mono, monospace',
+                          background: risk.bg, color: risk.color, border: `1px solid ${risk.color}44`
                         }}>
                           {v.breachProbability}% - {risk.label}
                         </span>
@@ -193,8 +193,8 @@ function VendorRiskMatrix() {
                         {rankShiftText}
                       </td>
                       <td style={{ padding: '10px 12px', color: isSaturated ? 'var(--accent1)' : 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>
-                        {isSaturated 
-                          ? 'Resolved 100% Saturation Flaw' 
+                        {isSaturated
+                          ? 'Resolved 100% Saturation Flaw'
                           : 'Age-Ratio Curve Applied'}
                       </td>
                     </tr>

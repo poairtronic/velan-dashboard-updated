@@ -12,7 +12,7 @@ export function useWebSocket() {
     function connect() {
       const apiBase = import.meta.env.VITE_API_BASE;
       let wsUrl = '';
-      
+
       if (apiBase) {
         // Convert HTTP/HTTPS to WS/WSS
         const url = new URL(apiBase, window.location.href);
@@ -22,7 +22,7 @@ export function useWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         wsUrl = `${protocol}//${window.location.host}`;
       }
-      
+
       // console.log(`[WebSocket] Connecting to ${wsUrl}...`);
       const socket = new WebSocket(wsUrl);
       wsRef.current = socket;

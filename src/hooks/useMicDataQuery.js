@@ -3,7 +3,7 @@ import { useFilters } from '../context/FilterContext';
 
 export default function useMicDataQuery() {
   const { filters } = useFilters();
-  
+
   return useQuery({
     queryKey: ['micData', filters],
     queryFn: async () => {
