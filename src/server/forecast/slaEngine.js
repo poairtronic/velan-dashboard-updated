@@ -4,6 +4,8 @@
  */
 const { workingDaysBetween5Day, addWorkingDays5Day, TARGET_DAYS } = require('../utils/calculationUtils');
 
+const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
+
 function getTodayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -193,22 +195,33 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
     // Historical active stage remaining duration (default 3 days if no history)
     const stageDuration = stageAvgDurations[currentStage] !== undefined ? stageAvgDurations[currentStage] : 3;
 
-    // Expected Remaining Days
+    // --- OLD MODEL (Double Counting) ---
     const baseRemaining = Math.max(0, projectedTotalDays - elapsedDays);
-    const expectedRemainingDays = Math.round(Math.max(1, baseRemaining + queueDelay + stageDuration));
+    const oldRemainingDays = Math.round(Math.max(1, baseRemaining + queueDelay + stageDuration));
+    const oldProjectedCompletionDate = addWorkingDays5Day(todayStr, oldRemainingDays);
+    const oldTotalDuration = elapsedDays + oldRemainingDays;
+    const oldExpectedDelay = Math.max(0, oldTotalDuration - TARGET_DAYS);
+    let oldRiskLevel = 'low';
+    if (oldTotalDuration > TARGET_DAYS) oldRiskLevel = 'high';
+    else if (TARGET_DAYS - oldTotalDuration <= 3) oldRiskLevel = 'medium';
+
+    const oldSlaRatio = oldTotalDuration / TARGET_DAYS;
+    const oldDelayProbability = Math.min(99, Math.max(5, Math.round(Math.max(0, (oldSlaRatio - 0.6) * 200))));
+
+    // --- NEW REFINED MODEL (No Double Counting) ---
+    const queueImpact = Math.max(0.0, Math.min(0.5, projectedTotalDays > 0 ? (queueDelay / projectedTotalDays) : 0));
+    const adjustedDuration = projectedTotalDays * (1 + queueImpact);
+    const expectedRemainingDays = Math.max(1, Math.round(adjustedDuration - elapsedDays));
 
     const projectedCompletionDate = addWorkingDays5Day(todayStr, expectedRemainingDays);
     const slaDate = addWorkingDays5Day(po.poDate, TARGET_DAYS);
 
-    // Expected Delay (exceeding 21 days target)
     const totalWorkingDaysEstimate = elapsedDays + expectedRemainingDays;
     const expectedDelay = Math.max(0, totalWorkingDaysEstimate - TARGET_DAYS);
 
-    // Delay Probability calculation based on queue ahead and age
     const slaRatio = totalWorkingDaysEstimate / TARGET_DAYS;
     const delayProbability = Math.min(99, Math.max(5, Math.round(Math.max(0, (slaRatio - 0.6) * 200))));
 
-    // Risk assessment
     let riskLevel = 'low';
     if (totalWorkingDaysEstimate > TARGET_DAYS) riskLevel = 'high';
     else if (TARGET_DAYS - totalWorkingDaysEstimate <= 3) riskLevel = 'medium';
@@ -221,13 +234,29 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
       currentStage,
       elapsedDays, // current age
       projectedTotalDays,
-      projectedCompletionDate, // expected completion
-      expectedDelay, // expected delay in days
-      delayProbability, // delay probability %
+      projectedCompletionDate, // expected completion (refined)
+      expectedDelay, // expected delay in days (refined)
+      delayProbability, // delay probability % (refined)
       slaDate,
-      riskLevel,
+      riskLevel, // refined
       confidence,
-      itemCount: po.items.length
+      itemCount: po.items.length,
+      oldModel: {
+        remainingDays: oldRemainingDays,
+        projectedCompletionDate: oldProjectedCompletionDate,
+        expectedDelay: oldExpectedDelay,
+        riskLevel: oldRiskLevel,
+        delayProbability: oldDelayProbability
+      },
+      newModel: {
+        queueImpact: Math.round(queueImpact * 100) / 100,
+        adjustedDuration: Math.round(adjustedDuration * 10) / 10,
+        remainingDays: expectedRemainingDays,
+        projectedCompletionDate,
+        expectedDelay,
+        riskLevel,
+        delayProbability
+      }
     });
   });
 

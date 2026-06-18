@@ -157,19 +157,36 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       stabilityScore = Math.min(100, Math.max(0, Math.round((1 - cv) * 100)));
     }
 
-    // Breach probability
-    const breachProbability = Math.min(100, Math.round((currentAvgDays / Math.max(VENDOR_SLA_DAYS, 0.1)) * 100));
+    // --- OLD MODEL (Immediate Saturation) ---
+    const oldBreachProbability = Math.min(100, Math.round((currentAvgDays / Math.max(VENDOR_SLA_DAYS, 0.1)) * 100));
+    let oldRiskLevel = 'low';
+    if (oldBreachProbability > 75) oldRiskLevel = 'high';
+    else if (oldBreachProbability >= 50) oldRiskLevel = 'medium';
 
-    // Risk level
+    // --- NEW REFINED MODEL (Normalized Risk Score) ---
+    const scoreDenominator = currentAvgDays + historicalAvgDays + VENDOR_SLA_DAYS;
+    const riskScoreVal = scoreDenominator > 0 ? (100 * (currentAvgDays / scoreDenominator)) : 0;
+    const riskScore = Math.min(100, Math.round(riskScoreVal));
+
     let riskLevel = 'low';
-    if (breachProbability > 75) riskLevel = 'high';
-    else if (breachProbability >= 50) riskLevel = 'medium';
+    if (riskScore >= 90) riskLevel = 'critical';
+    else if (riskScore >= 75) riskLevel = 'high';
+    else if (riskScore >= 50) riskLevel = 'medium';
 
-    // Confidence score V2
+    // Risk Trend
+    const riskTrend = delayDiff > 0.5 ? 'Rising' : delayDiff < -0.5 ? 'Improving' : 'Stable';
+
+    // Enhanced Risk Confidence Score V2
     const activeDaysCount = throughputValues.filter(v => v > 0).length;
     const activityScore = activeDaysCount / ANALYSIS_WORKING_DAYS;
     const consistencyScore = Math.max(0, 1 - cv);
-    const finalConfidence = Math.min(100, Math.max(10, Math.round(((activityScore * 0.6) + (consistencyScore * 0.4)) * 100)));
+    const historyScore = Math.min(1.0, historicalCycles.length / 20);
+    const finalConfidence = Math.min(100, Math.max(10, Math.round((historyScore * 0.4 + consistencyScore * 0.3 + activityScore * 0.3) * 100)));
+
+    let confidenceLabel = 'Low';
+    if (finalConfidence >= 80) confidenceLabel = 'Very High';
+    else if (finalConfidence >= 60) confidenceLabel = 'High';
+    else if (finalConfidence >= 40) confidenceLabel = 'Medium';
 
     results.push({
       vendor: v.vendor,
@@ -179,19 +196,47 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       throughputTrend,
       delayTrend,
       stabilityScore: `${stabilityScore}%`,
-      breachProbability,
-      riskLevel,
+      breachProbability: riskScore, // Map main key to the refined new score for backward compatibility
+      riskLevel,                   // Map main key to the refined new level
       confidence: finalConfidence,
-      maxAge: v.ages.length > 0 ? Math.max(...v.ages) : 0
+      confidenceLabel,
+      maxAge: v.ages.length > 0 ? Math.max(...v.ages) : 0,
+      riskTrend,
+      oldModel: {
+        riskScore: oldBreachProbability,
+        riskLevel: oldRiskLevel,
+        rank: 0 // Will compute below
+      },
+      newModel: {
+        riskScore,
+        riskLevel,
+        rank: 0 // Will compute below
+      }
     });
   });
 
-  results.sort((a, b) => b.breachProbability - a.breachProbability);
+  // Calculate Old ranks (sorted by old risk score descending)
+  const sortedOld = [...results].sort((a, b) => b.oldModel.riskScore - a.oldModel.riskScore || a.vendor.localeCompare(b.vendor));
+  sortedOld.forEach((v, index) => {
+    const original = results.find(o => o.vendor === v.vendor);
+    if (original) original.oldModel.rank = index + 1;
+  });
+
+  // Calculate New ranks (sorted by new risk score descending)
+  const sortedNew = [...results].sort((a, b) => b.newModel.riskScore - a.newModel.riskScore || a.vendor.localeCompare(b.vendor));
+  sortedNew.forEach((v, index) => {
+    const original = results.find(o => o.vendor === v.vendor);
+    if (original) original.newModel.rank = index + 1;
+  });
+
+  // Sort final results by refined new model risk score descending
+  results.sort((a, b) => b.newModel.riskScore - a.newModel.riskScore || a.vendor.localeCompare(b.vendor));
 
   return {
     vendors: results,
     metadata: {
       totalVendors: results.length,
+      criticalRisk: results.filter(v => v.riskLevel === 'critical').length,
       highRisk: results.filter(v => v.riskLevel === 'high').length,
       mediumRisk: results.filter(v => v.riskLevel === 'medium').length,
       lowRisk: results.filter(v => v.riskLevel === 'low').length,
