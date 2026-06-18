@@ -95,6 +95,14 @@ router.post('/', asyncHandler(async (req, res) => {
     incomingLength = incoming.length;
 
     const syncQueueEvents = new QueueEvents('syncQueue', { connection });
+    const { logAudit } = require('../utils/auditLogger');
+    await logAudit({
+      req,
+      action: syncType === 'Google Sheets Sync' ? 'SYNC_TRIGGER' : 'DATA_UPLOAD',
+      entityType: 'data',
+      metadata: { rowCount: incoming.length, syncType }
+    });
+
     const job = await syncQueue.add('sync-data', { incoming, syncType });
     const result = await job.waitUntilFinished(syncQueueEvents);
 

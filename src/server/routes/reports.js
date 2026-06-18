@@ -12,6 +12,15 @@ router.post('/generate', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Invalid export type' });
   }
 
+  const { logAudit } = require('../utils/auditLogger');
+  await logAudit({
+    req,
+    action: 'EXPORT',
+    entityType: 'report',
+    entityId: type,
+    metadata: { type, filters, search }
+  });
+
   const job = await exportQueue.add('generate-report', { type, filters, search });
   
   return res.status(202).json({ 

@@ -8,10 +8,15 @@ export async function apiClient(url, options = {}) {
 
   // Always include credentials (cookies) for all API calls
   options.credentials = 'include';
-  const isBackend = url.startsWith('/api/') || (apiBase && url.startsWith(`${apiBase}/api/`));
+  
+  // Set up 10-second timeout using AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  options.signal = controller.signal;
 
   try {
     const res = await fetch(url, options);
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       if (res.status === 401) {
@@ -26,6 +31,10 @@ export async function apiClient(url, options = {}) {
 
       const errorMessage = await normalizeError(res);
       const err = new Error(errorMessage);
+      err.error = true;
+      err.code = `HTTP_ERROR_${res.status}`;
+      err.message = errorMessage;
+      err.retryable = res.status >= 500 || res.status === 429;
       err.status = res.status;
       err.response = res;
       throw err;
@@ -33,12 +42,30 @@ export async function apiClient(url, options = {}) {
 
     return res;
   } catch (error) {
-    logger.error(`API Error on ${url}`, error);
-    if (!error.status) {
-      // Network error or other non-HTTP error
-      const errorMessage = await normalizeError(error);
-      throw new Error(errorMessage);
+    clearTimeout(timeoutId);
+    
+    // Check if error already has standardized shape
+    if (error.error === true) {
+      throw error;
     }
-    throw error;
+
+    logger.error(`API Error on ${url}`, error);
+    
+    if (error.name === 'AbortError') {
+      const err = new Error('Request timed out after 10s');
+      err.error = true;
+      err.code = 'TIMEOUT';
+      err.message = 'The server took too long to respond. Please try again.';
+      err.retryable = true;
+      throw err;
+    }
+
+    const errorMessage = error.message || 'A network error occurred. Please verify your connection.';
+    const err = new Error(errorMessage);
+    err.error = true;
+    err.code = 'NETWORK_ERROR';
+    err.message = errorMessage;
+    err.retryable = true;
+    throw err;
   }
 }

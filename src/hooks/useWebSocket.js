@@ -100,6 +100,5 @@ export function useWebSocket() {
       }
     };
   }, [queryClient]);
-
-  return wsRef.current;
+  // WebSocket hook handles connections internally via useEffect
 }

@@ -8,7 +8,9 @@ const { syncQueue } = require('../queues/syncQueue');
 
 const { reportQueue } = require('../queues/reportQueue');
 const asyncHandler = require('../utils/asyncHandler');
-const { getCacheStats } = require('../cache/cacheService');
+const { getCacheStats, setRedisAvailable } = require('../cache/cacheService');
+const { requireAuth } = require('../middleware/auth');
+const { getActiveConnections } = require('../utils/websocket');
 
 // Aggregate health endpoint
 router.get('/', asyncHandler(async (req, res) => {
@@ -158,26 +160,177 @@ router.get('/queues', asyncHandler(async (req, res) => {
   }
 }));
 
-// Sync only health check
-router.get('/sync', asyncHandler(async (req, res) => {
+// Full health report endpoint
+router.get('/full', asyncHandler(async (req, res) => {
+  const start = Date.now();
+  
+  // 1. API status
+  const apiStatus = { status: 'healthy', responseTimeMs: 0 };
+  
+  // 2. Database status
+  let dbStatus = { status: 'healthy', connectionCount: 0, avgQueryTimeMs: 0 };
   try {
-    const logsRes = await pool.query(
-      'SELECT sync_type, row_count, status, created_at FROM sync_logs ORDER BY created_at DESC LIMIT 50'
-    );
-    const history = logsRes.rows.slice(0, 10);
-    const errorCount = logsRes.rows.filter(row => row.status === 'failed' || row.status === 'error').length;
-    res.json({
-      status: 'healthy',
-      lastSync: state._lastSync || 'never',
-      errorCount,
-      history
-    });
-  } catch (e) {
-    res.status(500).json({
-      status: 'unhealthy',
-      error: e.message
-    });
+    const dbStart = Date.now();
+    await pool.query('SELECT 1');
+    dbStatus.avgQueryTimeMs = Date.now() - dbStart;
+    dbStatus.connectionCount = pool.totalCount || 0;
+  } catch (dbErr) {
+    dbStatus.status = 'unhealthy';
+    dbStatus.error = dbErr.message;
   }
+  
+  // 3. Redis status
+  let redisStatus = { status: 'healthy', hitRatio: 0, memoryUsedMB: 0 };
+  try {
+    const stats = getCacheStats();
+    redisStatus.status = stats.isRedisAvailable ? 'healthy' : 'unhealthy';
+    redisStatus.hitRatio = parseFloat(stats.ratio) || 0;
+    
+    // Memory usage check (failsafe)
+    let memoryUsedMB = 0.5;
+    try {
+      if (typeof redisClient.info === 'function') {
+        const info = await redisClient.info();
+        if (typeof info === 'string') {
+          const match = info.match(/used_memory:(\d+)/);
+          if (match) memoryUsedMB = (parseInt(match[1], 10) / 1024 / 1024).toFixed(2);
+        } else if (info && info.memory) {
+          memoryUsedMB = (info.memory.used_memory / 1024 / 1024).toFixed(2);
+        }
+      }
+    } catch (_) {}
+    redisStatus.memoryUsedMB = parseFloat(memoryUsedMB);
+  } catch (redisErr) {
+    redisStatus.status = 'unhealthy';
+    redisStatus.error = redisErr.message;
+  }
+  
+  // 4. WebSocket status
+  const wsStatus = {
+    status: 'healthy',
+    activeConnections: getActiveConnections()
+  };
+  
+  // 5. Background Jobs status
+  let bgStatus = { status: 'healthy', lastRunAt: null, nextRunAt: null, failedCount: 0 };
+  try {
+    const syncCounts = await syncQueue.getJobCounts('failed');
+    const exportCounts = await exportQueue.getJobCounts('failed');
+    const reportCounts = await reportQueue.getJobCounts('failed');
+    bgStatus.failedCount = (syncCounts.failed || 0) + (exportCounts.failed || 0) + (reportCounts.failed || 0);
+
+    // Get last run time from database logs
+    const syncRes = await pool.query("SELECT created_at FROM sync_logs WHERE sync_type = 'Google Sheets Sync' ORDER BY created_at DESC LIMIT 1");
+    if (syncRes.rows.length > 0) {
+      bgStatus.lastRunAt = syncRes.rows[0].created_at;
+      // Estimate next run (5 minutes interval standard)
+      bgStatus.nextRunAt = new Date(new Date(bgStatus.lastRunAt).getTime() + 5 * 60 * 1000).toISOString();
+    }
+  } catch (qErr) {
+    bgStatus.status = 'degraded';
+    bgStatus.error = qErr.message;
+  }
+  
+  // 6. Google Sheet sync status
+  let sheetSyncStatus = { status: 'healthy', lastSyncAt: null, lastSyncRowCount: 0, errorMessage: null };
+  try {
+    const syncRes = await pool.query(
+      'SELECT created_at, row_count, status, error_message FROM sync_logs ORDER BY created_at DESC LIMIT 1'
+    );
+    if (syncRes.rows.length > 0) {
+      const latest = syncRes.rows[0];
+      sheetSyncStatus.lastSyncAt = latest.created_at;
+      sheetSyncStatus.lastSyncRowCount = latest.row_count;
+      sheetSyncStatus.errorMessage = latest.error_message;
+      if (latest.status === 'failed' || latest.status === 'error') {
+        sheetSyncStatus.status = 'degraded';
+      }
+    }
+  } catch (syncErr) {
+    sheetSyncStatus.status = 'degraded';
+    sheetSyncStatus.error = syncErr.message;
+  }
+  
+  apiStatus.responseTimeMs = Date.now() - start;
+  
+  res.json({
+    api: apiStatus,
+    database: dbStatus,
+    redis: redisStatus,
+    websocket: wsStatus,
+    backgroundJobs: bgStatus,
+    googleSheetSync: sheetSyncStatus
+  });
+}));
+
+// POST /api/health/dr/test (Simulate DR outage and degradation scenarios)
+router.post('/dr/test', requireAuth(['admin']), asyncHandler(async (req, res) => {
+  const { scenario } = req.body;
+  const testedAt = new Date().toISOString();
+  
+  if (scenario === 'gracefulDegradationTest') {
+    try {
+      // 1. Check current state and disable Redis
+      const stats = getCacheStats();
+      const originalAvailable = stats.isRedisAvailable;
+      
+      setRedisAvailable(false);
+      
+      // 2. Perform a test calculation run (goes direct to DB without throwing)
+      const { calculateKPIs } = require('../services/kpiService');
+      const { getFilteredData, computeGroups } = require('../services/dataQueryService');
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const filtered = await getFilteredData({}, todayStr);
+      const { scGroups, poGroups } = computeGroups(filtered);
+      const kpis = calculateKPIs({ filtered, scGroups, poGroups, todayStr });
+      
+      // 3. Restore original cache state
+      setRedisAvailable(originalAvailable);
+      
+      return res.json({
+        scenario,
+        passed: true,
+        details: `Simulated Redis offline successfully. KPIs fell back to Neon DB and calculated ${kpis.totalItems} items. Redis caching restored.`,
+        testedAt
+      });
+    } catch (err) {
+      return res.json({
+        scenario,
+        passed: false,
+        details: `Redis graceful degradation test failed: ${err.message}`,
+        testedAt
+      });
+    }
+  }
+  
+  if (scenario === 'fallbackTest') {
+    try {
+      // 1. Simulate Google Sheets sync failure
+      const { logSync } = require('../db/pool');
+      await logSync('Google Sheets Sync (DR Test)', 0, 'failed', 0, 0, 0, 'Simulated Google Sheets API Outage (HTTP 503)');
+      
+      // 2. Verify we can still query Neon state without crashes
+      const countRes = await pool.query('SELECT COUNT(*) FROM velan_live_rows');
+      const rowCount = countRes.rows[0] ? parseInt(countRes.rows[0].count, 10) : 0;
+      
+      return res.json({
+        scenario,
+        passed: true,
+        details: `Simulated Google Sheets sync failure. Logged 'failed' to sync history. Database live state is preserved with ${rowCount} entries. Server is operational.`,
+        testedAt
+      });
+    } catch (err) {
+      return res.json({
+        scenario,
+        passed: false,
+        details: `DR fallback test failed: ${err.message}`,
+        testedAt
+      });
+    }
+  }
+  
+  res.status(400).json({ error: 'Unknown DR test scenario' });
 }));
 
 module.exports = router;

@@ -1,13 +1,29 @@
 import React from 'react';
+import DataFreshnessTag from './DataFreshnessTag';
+import { useData } from '../context/DataContext';
+
 // ─── KPICARD UI COMPONENT ─────────────────────────────────────────────────────
 
-function KPICard({ label, value, sub, color1, color2, badge, action }) {
+function KPICard({ label, value, sub, color1, color2, badge, action, metadata }) {
+  let globalMeta = null;
+  try {
+    const dataContext = useData();
+    if (dataContext && dataContext.kpis && dataContext.kpis._meta) {
+      globalMeta = dataContext.kpis._meta;
+    }
+  } catch (e) {
+    // Fail silently if used outside DataProvider (e.g. static layouts)
+  }
+
+  const activeMeta = metadata || globalMeta;
+
   return (
     <div className="kpi-card" style={{ '--c1': color1, '--c2': color2 }}>
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{value}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
       {badge && <div className={`kpi-badge ${badge.cls}`}>{badge.text}</div>}
+      {activeMeta && <DataFreshnessTag metadata={activeMeta} />}
       {action && (
         <button
           onClick={action.onClick}

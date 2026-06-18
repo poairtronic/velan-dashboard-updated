@@ -72,7 +72,13 @@ function broadcast(event, data = {}) {
   logger.debug(logger.categories.API, `Broadcasted event '${event}' to ${count} clients`);
 }
 
+function getActiveConnections() {
+  if (!wss) return 0;
+  return wss.clients.size;
+}
+
 module.exports = {
   initWebSocket,
-  broadcast
+  broadcast,
+  getActiveConnections
 };

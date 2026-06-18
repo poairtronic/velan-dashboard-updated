@@ -71,6 +71,7 @@ async function startup() {
     );
     if (syncRes.rows.length > 0) {
       state._lastSync = new Date(syncRes.rows[0].created_at).toLocaleString('en-IN');
+      state._lastSyncTime = new Date(syncRes.rows[0].created_at);
     }
   } catch (err) {
     logger.warn(logger.categories.STARTUP, `Failed to load last sync timestamp: ${err.message}`);

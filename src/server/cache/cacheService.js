@@ -70,6 +70,11 @@ async function getOrSetCache(key, ttlSeconds, fetchFn) {
     // Upstash returns objects if they were stringified sometimes, but let's be safe
     if (cachedData) {
       stats.hits++;
+      try {
+        const perfLocalStorage = require('../utils/perfContext');
+        const store = perfLocalStorage.getStore();
+        if (store) store.cacheHit = true;
+      } catch (_) {}
       const parsed = typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
       return parsed;
     }
@@ -135,11 +140,17 @@ async function flushCache() {
   }
 }
 
+function setRedisAvailable(val) {
+  isRedisAvailable = val;
+  logger.info(logger.categories.REDIS, `Redis availability manually set to ${val} for DR Testing`);
+}
+
 module.exports = {
   TTL,
   getOrSetCache,
   invalidateCache,
   invalidatePattern,
   flushCache,
-  getCacheStats
+  getCacheStats,
+  setRedisAvailable
 };

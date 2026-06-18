@@ -36,6 +36,7 @@ const workerHandler = async (job) => {
     const currentTotal = await getTotalCount();
     const lastSyncStr = new Date().toLocaleString('en-IN');
     state._lastSync = lastSyncStr;
+    state._lastSyncTime = new Date();
 
     // Invalidate caches
     await invalidatePattern('dashboard:*');
@@ -51,6 +52,14 @@ const workerHandler = async (job) => {
       await runAlertEngine(incoming);
     } catch (alertErr) {
       logger.error(logger.categories.SYNC, `Alert Engine run failed: ${alertErr.message}`, alertErr);
+    }
+
+    // 4.1 Run Data Quality Scan
+    try {
+      const { runScan } = require('../routes/dataQuality');
+      await runScan();
+    } catch (scanErr) {
+      logger.error(logger.categories.SYNC, `Data Quality scan failed: ${scanErr.message}`, scanErr);
     }
 
     // 5. Log Timeline Event

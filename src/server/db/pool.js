@@ -67,6 +67,9 @@ if (!isMock) {
           created_at: new Date().toISOString(),
         },
       ];
+      this.dataQualityIssues = [];
+      this.auditLogs = [];
+      this.perfLogs = [];
     }
     async connect() {
       return {
@@ -289,6 +292,89 @@ if (!isMock) {
           rows: [...this.users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
         };
       }
+
+      // data_quality_issues mocks
+      if (cleanSql.includes('INSERT INTO DATA_QUALITY_ISSUES')) {
+        const [issue_type, affected_row_id, affected_field] = params;
+        const newIssue = {
+          id: this.dataQualityIssues.length + 1,
+          issue_type,
+          affected_row_id,
+          affected_field,
+          detected_at: new Date().toISOString(),
+          resolved_at: null
+        };
+        this.dataQualityIssues.push(newIssue);
+        return { rowCount: 1, rows: [newIssue] };
+      }
+      if (cleanSql.includes('UPDATE DATA_QUALITY_ISSUES SET RESOLVED_AT')) {
+        let updated = 0;
+        if (cleanSql.includes('WHERE ID = $1')) {
+          const id = parseInt(params[0], 10);
+          this.dataQualityIssues.forEach(i => {
+            if (i.id === id) {
+              i.resolved_at = new Date().toISOString();
+              updated++;
+            }
+          });
+        } else if (cleanSql.includes('WHERE RESOLVED_AT IS NULL')) {
+          const currentKeys = params[0] || [];
+          this.dataQualityIssues.forEach(i => {
+            if (!i.resolved_at && !currentKeys.includes(i.affected_row_id)) {
+              i.resolved_at = new Date().toISOString();
+              updated++;
+            }
+          });
+        }
+        return { rowCount: updated };
+      }
+      if (cleanSql.includes('FROM DATA_QUALITY_ISSUES')) {
+        let list = this.dataQualityIssues;
+        if (cleanSql.includes('RESOLVED_AT IS NULL')) {
+          list = list.filter(i => !i.resolved_at);
+        }
+        return { rows: list };
+      }
+
+      // audit_log mocks
+      if (cleanSql.includes('INSERT INTO AUDIT_LOG')) {
+        const [user_id, user_email, action, entity_type, entity_id, metadata, ip_address] = params;
+        const newLog = {
+          id: this.auditLogs.length + 1,
+          user_id,
+          user_email,
+          action,
+          entity_type,
+          entity_id,
+          metadata: metadata ? JSON.parse(metadata) : null,
+          ip_address,
+          timestamp: new Date().toISOString()
+        };
+        this.auditLogs.unshift(newLog);
+        return { rowCount: 1, rows: [newLog] };
+      }
+      if (cleanSql.includes('FROM AUDIT_LOG')) {
+        return { rows: this.auditLogs };
+      }
+
+      // perf_log mocks
+      if (cleanSql.includes('INSERT INTO PERF_LOG')) {
+        const [endpoint, cache_hit, db_query_time_ms, total_response_time_ms] = params;
+        const newPerf = {
+          id: this.perfLogs.length + 1,
+          endpoint,
+          cache_hit: Boolean(cache_hit),
+          db_query_time_ms: parseInt(db_query_time_ms, 10),
+          total_response_time_ms: parseInt(total_response_time_ms, 10),
+          recorded_at: new Date().toISOString()
+        };
+        this.perfLogs.push(newPerf);
+        return { rowCount: 1, rows: [newPerf] };
+      }
+      if (cleanSql.includes('FROM PERF_LOG')) {
+        return { rows: this.perfLogs };
+      }
+
       return { rows: [] };
     }
     async end() {}
@@ -416,6 +502,45 @@ async function initDB() {
       )
     `);
 
+    // 4.4 Create data_quality_issues table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS data_quality_issues (
+        id              SERIAL PRIMARY KEY,
+        issue_type      VARCHAR(100) NOT NULL,
+        affected_row_id VARCHAR(255) NOT NULL,
+        affected_field  VARCHAR(100),
+        detected_at     TIMESTAMPTZ DEFAULT NOW(),
+        resolved_at     TIMESTAMPTZ
+      )
+    `);
+
+    // 4.5 Create audit_log table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id          SERIAL PRIMARY KEY,
+        user_id     INTEGER,
+        user_email  VARCHAR(255),
+        action      VARCHAR(100) NOT NULL,
+        entity_type VARCHAR(100),
+        entity_id   VARCHAR(100),
+        metadata    JSONB,
+        ip_address  VARCHAR(45),
+        timestamp   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // 4.6 Create perf_log table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS perf_log (
+        id                     SERIAL PRIMARY KEY,
+        endpoint               VARCHAR(255) NOT NULL,
+        cache_hit              BOOLEAN NOT NULL,
+        db_query_time_ms       INTEGER NOT NULL,
+        total_response_time_ms INTEGER NOT NULL,
+        recorded_at            TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
     await client.query(
@@ -424,6 +549,12 @@ async function initDB() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts (created_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_timeline_created_at ON operational_timeline (created_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_data_quality_issues_resolved ON data_quality_issues (resolved_at) WHERE resolved_at IS NULL');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_data_quality_issues_type ON data_quality_issues (issue_type)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_perf_log_recorded ON perf_log (recorded_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_perf_log_endpoint ON perf_log (endpoint)');
 
     // Scalability Indices for fast searching, filtering, and sorting
     await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_stage ON velan_rows ((data->>'currentStage'))");

@@ -5,8 +5,9 @@ const { calculateCycleTimes } = require('../services/cycleTimeService');
 const { calculateVendors } = require('../services/vendorService');
 const { calculateBottlenecks } = require('../services/bottleneckService');
 const { getFilteredData, computeGroups } = require('../services/dataQueryService');
-const cacheKeys = require('../cache/cacheKeys');
+const keys = require('../cache/cacheKeys');
 const { getOrSetCache, TTL } = require('../cache/cacheService');
+const { getFreshnessMetadata } = require('./meta');
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ function getTodayStr() {
 router.get('/calculations', async (req, res) => {
   try {
     const filters = req.query;
-    const cacheKey = cacheKeys.DASHBOARD_OVERVIEW(filters);
+    const cacheKey = keys.DASHBOARD_OVERVIEW(filters);
     
     const combinedResult = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
@@ -55,7 +56,7 @@ router.get('/calculations', async (req, res) => {
       };
     });
 
-    res.json(combinedResult);
+    res.json({ ...combinedResult, _meta: getFreshnessMetadata() });
   } catch (error) {
     console.error('Calculation error:', error);
     res.status(500).json({ error: 'Calculation failed', details: error.message });
@@ -66,14 +67,14 @@ router.get('/calculations', async (req, res) => {
 router.get('/kpis', async (req, res) => {
   try {
     const filters = req.query;
-    const cacheKey = cacheKeys.DASHBOARD_KPIS(filters);
+    const cacheKey = keys.DASHBOARD_KPIS(filters);
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
       const { scGroups, poGroups } = computeGroups(filtered);
       return calculateKPIs({ filtered, scGroups, poGroups, todayStr });
     });
-    res.json(result);
+    res.json({ ...result, _meta: getFreshnessMetadata() });
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -84,14 +85,14 @@ router.get('/stages', async (req, res) => {
     const filters = req.query;
     // We didn't explicitly define DASHBOARD_STAGES in plan, but we can reuse overview or define a new one. 
     // The user didn't ask for a separate stages cache step, but we will just use a generic hash.
-    const cacheKey = `dashboard:stages:${cacheKeys.DASHBOARD_KPIS(filters).split(':').pop()}`;
+    const cacheKey = `dashboard:stages:${keys.DASHBOARD_KPIS(filters).split(':').pop()}`;
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
       const { poGroups } = computeGroups(filtered);
       return calculateStages({ filtered, poGroups, todayStr });
     });
-    res.json(result);
+    res.json({ ...result, _meta: getFreshnessMetadata() });
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -100,14 +101,14 @@ router.get('/stages', async (req, res) => {
 router.get('/cycle-times', async (req, res) => {
   try {
     const filters = req.query;
-    const cacheKey = cacheKeys.DASHBOARD_CYCLE_TIME(filters);
+    const cacheKey = keys.DASHBOARD_CYCLE_TIME(filters);
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
       const { scGroups } = computeGroups(filtered);
       return calculateCycleTimes({ filtered, scGroups });
     });
-    res.json(result);
+    res.json({ ...result, _meta: getFreshnessMetadata() });
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -116,13 +117,13 @@ router.get('/cycle-times', async (req, res) => {
 router.get('/vendors', async (req, res) => {
   try {
     const filters = req.query;
-    const cacheKey = cacheKeys.DASHBOARD_VENDORS(filters);
+    const cacheKey = keys.DASHBOARD_VENDORS(filters);
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
       return calculateVendors({ filtered, todayStr });
     });
-    res.json(result);
+    res.json({ ...result, _meta: getFreshnessMetadata() });
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }
@@ -132,7 +133,7 @@ router.get('/vendors', async (req, res) => {
 router.get('/bottlenecks', async (req, res) => {
   try {
     const filters = req.query;
-    const cacheKey = cacheKeys.DASHBOARD_BOTTLENECKS(filters);
+    const cacheKey = keys.DASHBOARD_BOTTLENECKS(filters);
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
@@ -150,7 +151,7 @@ router.get('/bottlenecks', async (req, res) => {
         vendorStats: vendors.vendorStats,
       });
     });
-    res.json(result);
+    res.json({ ...result, _meta: getFreshnessMetadata() });
   } catch (error) {
     res.status(500).json({ error: 'Calculation failed', details: error.message });
   }

@@ -49,6 +49,14 @@ router.put('/read', asyncHandler(async (req, res) => {
   // Broadcast WebSocket alert update so clients know they were cleared
   broadcast('alerts:read_updated', { ids: result.rows.map(r => r.id), all: all === true });
 
+  const { logAudit } = require('../utils/auditLogger');
+  await logAudit({
+    req,
+    action: 'ALERT_ACKNOWLEDGED',
+    entityType: 'alerts',
+    metadata: { ids: result.rows.map(r => r.id), all: all === true }
+  });
+
   res.json({
     success: true,
     updatedCount: result.rowCount
@@ -99,6 +107,14 @@ router.put('/rules', requireAuth(['admin']), asyncHandler(async (req, res) => {
 
   // Broadcast that rules have changed
   broadcast('alert_rules:changed', {});
+
+  const { logAudit } = require('../utils/auditLogger');
+  await logAudit({
+    req,
+    action: 'CONFIG_CHANGE',
+    entityType: 'alert_rules',
+    metadata: { rules }
+  });
 
   res.json({
     success: true,

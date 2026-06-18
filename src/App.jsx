@@ -5,7 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { UIProvider, useUI } from './context/UIContext';
 import { FilterProvider } from './context/FilterContext';
 import { DataProvider } from './context/DataContext';
-import AppErrorBoundary from './components/common/AppErrorBoundary';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Toaster } from 'react-hot-toast';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -34,6 +34,10 @@ const VendorPage = React.lazy(() => import('./pages/VendorPage'));
 const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
 const PredictiveAnalyticsPage = React.lazy(() => import('./pages/PredictiveAnalyticsPage'));
+
+const DataQualityDashboard = React.lazy(() => import('./pages/DataQualityDashboard'));
+const AuditTrailViewer = React.lazy(() => import('./pages/AuditTrailViewer'));
+const ProductionReadinessDashboard = React.lazy(() => import('./pages/ProductionReadinessDashboard'));
 
 function AppRoutes() {
   const { setActiveNav } = useUI();
@@ -64,9 +68,9 @@ function AppRoutes() {
 }
 
 const RouteWrapper = ({ children }) => (
-  <AppErrorBoundary>
+  <ErrorBoundary>
     <Suspense fallback={<LoadingScreen />}>{children}</Suspense>
-  </AppErrorBoundary>
+  </ErrorBoundary>
 );
 
 function DashboardLayout() {
@@ -247,6 +251,36 @@ function DashboardLayout() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/data-quality"
+                element={
+                  <ProtectedRoute adminOnly={true}>
+                    <RouteWrapper>
+                      <DataQualityDashboard />
+                    </RouteWrapper>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/audit-trail"
+                element={
+                  <ProtectedRoute adminOnly={true}>
+                    <RouteWrapper>
+                      <AuditTrailViewer />
+                    </RouteWrapper>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/production-readiness"
+                element={
+                  <ProtectedRoute adminOnly={true}>
+                    <RouteWrapper>
+                      <ProductionReadinessDashboard />
+                    </RouteWrapper>
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
@@ -258,7 +292,7 @@ function DashboardLayout() {
 
 function App() {
   return (
-    <AppErrorBoundary>
+    <ErrorBoundary>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -287,7 +321,7 @@ function App() {
           </UIProvider>
         </ThemeProvider>
       </AuthProvider>
-    </AppErrorBoundary>
+    </ErrorBoundary>
   );
 }
 

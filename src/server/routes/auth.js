@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
 const { env } = require('../config/env');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, authenticate } = require('../middleware/auth');
 const { authLimiter, dashboardLimiter } = require('../middleware/rateLimit');
 const { loginSchema, registerSchema } = require('../schemas/auth.schema');
 const { adminCreateSchema, updateStatusSchema } = require('../schemas/user.schema');
@@ -25,11 +25,15 @@ router.get('/me', requireAuth(), (req, res) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', (req, res) => {
+router.post('/logout', authenticate, asyncHandler(async (req, res) => {
+  if (req.user) {
+    const { logAudit } = require('../utils/auditLogger');
+    await logAudit({ req, action: 'USER_LOGOUT' });
+  }
   res.clearCookie('vd_token', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/' });
   res.clearCookie('vd_refresh_token', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/' });
   return res.json({ success: true });
-});
+}));
 
 // POST /api/auth/login
 router.post('/login', authLimiter, asyncHandler(async (req, res) => {
@@ -41,9 +45,9 @@ router.post('/login', authLimiter, asyncHandler(async (req, res) => {
 
   // Legacy Login Fallback
   if (username === env.ADMIN_USER && password === env.ADMIN_PASS) {
-    return handleLegacyLogin(res, 'admin', username);
+    return handleLegacyLogin(req, res, 'admin', username);
   } else if (username === env.USER_USER && password === env.USER_PASS) {
-    return handleLegacyLogin(res, 'user', username);
+    return handleLegacyLogin(req, res, 'user', username);
   }
 
   // Normal Login
@@ -64,6 +68,8 @@ router.post('/login', authLimiter, asyncHandler(async (req, res) => {
   }
 
   setAuthCookies(res, user);
+  const { logAudit } = require('../utils/auditLogger');
+  await logAudit({ req, userId: user.id, userEmail: user.username, action: 'USER_LOGIN' });
   return res.json({ id: user.id, role: user.role, username: user.username });
 }));
 
@@ -163,8 +169,16 @@ function setAuthCookies(res, user) {
   res.cookie('vd_refresh_token', refreshToken, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 7 * 24 * 60 * 60 * 1000 });
 }
 
-function handleLegacyLogin(res, role, username) {
+async function handleLegacyLogin(req, res, role, username) {
   setAuthCookies(res, { id: 9999, username, role });
+  const { logAudit } = require('../utils/auditLogger');
+  await logAudit({
+    userId: 9999,
+    userEmail: username,
+    action: 'USER_LOGIN',
+    metadata: { legacy: true, role },
+    req
+  });
   return res.json({ success: true, id: 9999, role, username });
 }
 
