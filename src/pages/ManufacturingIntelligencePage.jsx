@@ -13,6 +13,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, AlertTriangle, Info, CheckCircle2
 } from 'lucide-react';
 import DrilldownCard from '../components/DrilldownCard';
+import TrendSelector from '../components/TrendSelector';
 
 // --- Shared Components ---
 
@@ -40,7 +41,7 @@ function PlantHealthSection({ data }) {
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sub}</span>
           <TrendBadge trend={metric.trend} variance={metric.variance} />
         </div>
-        
+        {kpiType && <TrendSelector metric={kpiType} />}
       </div>
     </DrilldownCard>
   );

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 
 function TrendSelector({ metric }) {
   const [range, setRange] = useState('30d');
@@ -42,9 +41,20 @@ function TrendSelector({ metric }) {
     return () => { isMounted = false; };
   }, [metric, range]);
 
+  const avg = data.length > 0 
+    ? Math.round(data.reduce((sum, item) => sum + item.value, 0) / data.length)
+    : 0;
+
+  const formatAvg = () => {
+    if (metric === 'otd') return `${avg}%`;
+    if (metric === 'production') return `${avg} units`;
+    if (metric === 'bottleneck') return `${avg} items`;
+    return `${avg}%`; // Default/fallback score percentage
+  };
+
   return (
-    <div style={{ marginTop: '10px', height: '60px', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: '-25px', right: '0', display: 'flex', gap: '4px', zIndex: 10 }}>
+    <div style={{ marginTop: '10px', height: '52px', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: '-22px', right: '0', display: 'flex', gap: '4px', zIndex: 10 }}>
         {['7d', '30d', '90d'].map(r => (
           <span 
             key={r}
@@ -65,23 +75,28 @@ function TrendSelector({ metric }) {
       </div>
       
       {loading ? (
-        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '11px', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '6px' }}>
           Loading trend...
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <YAxis domain={['auto', 'auto']} hide />
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke="var(--accent1)" 
-              strokeWidth={2} 
-              dot={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <div style={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0, 201, 255, 0.04)',
+          border: '1px dashed rgba(0, 201, 255, 0.15)',
+          borderRadius: '6px',
+          fontFamily: 'Share Tech Mono'
+        }}>
+          <div style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Average ({range.toUpperCase()})
+          </div>
+          <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--accent1)', marginTop: '2px', textShadow: '0 0 6px rgba(0, 201, 255, 0.3)' }}>
+            {formatAvg()}
+          </div>
+        </div>
       )}
     </div>
   );
