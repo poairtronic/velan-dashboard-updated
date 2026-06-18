@@ -21,8 +21,8 @@ const NAV_ITEMS = [
   { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
   { id: 'users', label: 'User Management', icon: '👥' },
-  { id: 'upload', label: 'Upload Data', icon: '⬆' },
   { id: 'audit-trail', label: 'Audit Trail', icon: '📜' },
+  { id: 'upload', label: 'Upload Data', icon: '⬆' },
 ];
 
 function Sidebar() {
