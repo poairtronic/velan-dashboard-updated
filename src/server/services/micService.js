@@ -1,4 +1,4 @@
-const { getSCLastTimestamp, daysBetween, workingDaysBetween, isSCComplete, TARGET_DAYS } = require('../utils/calculationUtils');
+const { getSCLastTimestamp, daysBetween, workingDaysBetween, workingDaysBetween5Day, addWorkingDays5Day, isSCComplete, TARGET_DAYS } = require('../utils/calculationUtils');
 const { calculateKPIs } = require('./kpiService');
 const { calculateStages } = require('./stageService');
 const { calculateCycleTimes } = require('./cycleTimeService');
@@ -26,7 +26,7 @@ function getVariance(current, past) {
 function filterByDays(items, todayStr, maxDays, minDays = 0) {
   return items.filter(item => {
     if (!item.timestamp) return false;
-    const age = workingDaysBetween(item.timestamp, todayStr);
+    const age = workingDaysBetween5Day(item.timestamp, todayStr);
     return age >= minDays && age < maxDays;
   });
 }
@@ -168,15 +168,14 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
-  const exactWorkingDays = Math.max(1, workingDaysBetween(thirtyDaysAgoStr, todayStr) || 22);
+  const exactWorkingDays = Math.max(1, workingDaysBetween5Day(thirtyDaysAgoStr, todayStr) || 22);
 
   const queueClearance = Object.entries(stages.stageCounts).map(([stage, count]) => {
     const exitedCount = stageThroughput[stage] || 0;
     const avgDaily = exitedCount / exactWorkingDays;
     
     const daysToClear = avgDaily > 0 ? Math.round(count / avgDaily) : count; // fallback if 0
-    let expectedDate = new Date();
-    expectedDate.setDate(expectedDate.getDate() + daysToClear);
+    const expectedCompletion = addWorkingDays5Day(todayStr, daysToClear);
     
     let risk = 'Low';
     if (daysToClear > 21) risk = 'Critical';
@@ -188,7 +187,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
       queueSize: count,
       avgDailyThroughput: avgDaily.toFixed(2),
       daysToClear,
-      expectedCompletion: expectedDate.toISOString().split('T')[0],
+      expectedCompletion,
       risk
     };
   }).sort((a,b) => b.daysToClear - a.daysToClear);
@@ -196,7 +195,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   // --- 4. Advanced Predictive Delay Engine ---
   const predictions = [];
   poGroups.forEach(pg => {
-    const elapsed = daysBetween(pg.poDate, todayStr);
+    const elapsed = workingDaysBetween5Day(pg.poDate, todayStr);
     const allDone = pg.items.every(i => isCompletedStage(i.currentStage));
     if (!allDone && elapsed !== null) {
       // Data-driven cycle time lookup
@@ -209,8 +208,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
         const expectedDelay = elapsed - 21 > 0 ? elapsed - 21 + 5 : 5; 
         const prob = Math.min(99, Math.round((elapsed / expectedTotalCycle) * 100));
         
-        let expectedDate = new Date();
-        expectedDate.setDate(expectedDate.getDate() + expectedDelay);
+        const expectedCompletion = addWorkingDays5Day(todayStr, expectedDelay);
 
         let risk = 'Low';
         if (elapsed > 21) risk = 'Critical';
@@ -222,7 +220,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
           stage: activeStage,
           currentAge: elapsed,
           expectedDelay,
-          expectedCompletion: expectedDate.toISOString().split('T')[0],
+          expectedCompletion,
           probability: prob,
           confidence: Math.min(95, Math.max(50, prob - 5)),
           risk
@@ -236,7 +234,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const rootCausesMap = {};
   filtered.forEach(item => {
     if (!item.poDate) return;
-    const age = workingDaysBetween(item.poDate, todayStr);
+    const age = workingDaysBetween5Day(item.poDate, todayStr);
     if (age > 21 && !isCompletedStage(item.currentStage)) {
       let cause = 'Processing';
       if (item.currentStage.endsWith('V')) cause = 'Vendor';
@@ -270,7 +268,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   filtered.forEach(i => {
     if (['READY', 'STORES', 'STOCK'].includes(i.currentStage)) {
       const stage = i.currentStage === 'READY' ? 'Ready' : (i.currentStage === 'STORES' ? 'Stores' : 'Stock');
-      const age = i.timestamp ? workingDaysBetween(i.timestamp, todayStr) : 0;
+      const age = i.timestamp ? workingDaysBetween5Day(i.timestamp, todayStr) : 0;
       
       inventoryCounts[stage]++;
       inventoryAges[stage] += age;

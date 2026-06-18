@@ -1,21 +1,14 @@
 /**
- * Dynamic Capacity Planner
- * Projects queue sizes at +7/14/30 days using historical inflow/outflow rates.
- * All rates derived from velan_rows timestamps — zero hardcoded values.
+ * Dynamic Capacity Planner V2
+ * Projects queue sizes using weighted inflow/outflow rates on working days.
+ * Key tracking: SC + PO + Product.
  */
-const { workingDaysBetween } = require('../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day } = require('../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
-const ANALYSIS_WINDOW_DAYS = 14;
-
-function getTodayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+const ANALYSIS_WINDOW_WORKING_DAYS = 14;
 
 async function calculateCapacityForecast({ liveRows, dbRows }) {
-  const todayStr = getTodayStr();
-
   // 1. Current queue per stage from live data
   const currentQueues = {};
   liveRows.forEach(row => {
@@ -25,29 +18,40 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
     currentQueues[stage]++;
   });
 
-  // 2. Calculate inflow/outflow from historical data
-  // Group historical rows by SC+product to track stage transitions
-  const itemHistory = {}; // key: `${sc}|${product}` → [{stage, timestamp, dateStr}]
+  // 2. Generate list of last 14 working days (excluding Sat, Sun, and holidays)
+  const workingDays = [];
+  let d = new Date();
+  while (workingDays.length < ANALYSIS_WINDOW_WORKING_DAYS) {
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (workingDaysBetween5Day(ds, ds) === 1) {
+      workingDays.push(ds);
+    }
+    d.setDate(d.getDate() - 1);
+  }
 
+  // Split into recent 7 and previous 7 working days
+  const recent7Days = workingDays.slice(0, 7);
+  const previous7Days = workingDays.slice(7, 14);
+
+  // 3. Track item stage transition histories using SC + PO + Product key
+  const itemHistory = {}; // key: `${sc}|${po}|${product}`
   dbRows.forEach(row => {
-    if (!row.sc || !row.timestamp) return;
-    const key = `${row.sc}|${(row.product || '').trim()}`;
+    if (!row.sc || !row.po || !row.timestamp) return;
+    const key = `${row.sc}|${row.po}|${(row.product || '').trim()}`;
     if (!itemHistory[key]) itemHistory[key] = [];
-    const dateStr = row.timestamp.substring(0, 10);
     itemHistory[key].push({
       stage: row.currentStage || '',
       timestamp: row.timestamp,
-      dateStr
+      dateStr: row.timestamp.substring(0, 10)
     });
   });
 
-  // Count daily inflow (items entering a stage) and outflow (items leaving)
+  // Count daily inflow and outflow transitions
   const stageInflow = {};  // stage → { dateStr → count }
   const stageOutflow = {}; // stage → { dateStr → count }
 
   Object.values(itemHistory).forEach(history => {
     if (history.length < 2) return;
-    // Sort by timestamp
     history.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     for (let i = 0; i < history.length; i++) {
@@ -55,12 +59,12 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
       const stage = entry.stage;
       if (!stage || TERMINAL_STAGES.includes(stage)) continue;
 
-      // This is an inflow event for this stage
+      // Inflow
       if (!stageInflow[stage]) stageInflow[stage] = {};
       if (!stageInflow[stage][entry.dateStr]) stageInflow[stage][entry.dateStr] = 0;
       stageInflow[stage][entry.dateStr]++;
 
-      // If there's a next entry with a different stage, this is an outflow event
+      // Outflow (if next stage is different)
       if (i < history.length - 1 && history[i + 1].stage !== stage) {
         if (!stageOutflow[stage]) stageOutflow[stage] = {};
         const outDate = history[i + 1].dateStr;
@@ -70,7 +74,7 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
     }
   });
 
-  // 3. Calculate daily averages over the analysis window
+  // 4. Calculate weighted metrics per stage
   const results = [];
   const allStages = [...new Set([...Object.keys(currentQueues), ...Object.keys(stageInflow)])];
 
@@ -81,70 +85,100 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
     const inflowDays = stageInflow[stage] || {};
     const outflowDays = stageOutflow[stage] || {};
 
-    // Count data points within the analysis window
-    let inflowTotal = 0, outflowTotal = 0, daysWithData = 0;
-    const today = new Date();
+    // Inflow sums
+    const recentInflow = recent7Days.reduce((sum, ds) => sum + (inflowDays[ds] || 0), 0);
+    const prevInflow = previous7Days.reduce((sum, ds) => sum + (inflowDays[ds] || 0), 0);
 
-    for (let i = 0; i < ANALYSIS_WINDOW_DAYS; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // Outflow sums
+    const recentOutflow = recent7Days.reduce((sum, ds) => sum + (outflowDays[ds] || 0), 0);
+    const prevOutflow = previous7Days.reduce((sum, ds) => sum + (outflowDays[ds] || 0), 0);
 
-      const dayInflow = inflowDays[ds] || 0;
-      const dayOutflow = outflowDays[ds] || 0;
+    // Weighted formulas (over the 7-day periods)
+    const weightedInflow7Day = (recentInflow * 0.7) + (prevInflow * 0.3);
+    const weightedOutflow7Day = (recentOutflow * 0.7) + (prevOutflow * 0.3);
 
-      inflowTotal += dayInflow;
-      outflowTotal += dayOutflow;
-      if (dayInflow > 0 || dayOutflow > 0) daysWithData++;
-    }
+    // Daily weighted rates
+    const weightedDailyInflow = weightedInflow7Day / 7;
+    const weightedDailyOutflow = weightedOutflow7Day / 7;
+    const netDailyChange = weightedDailyInflow - weightedDailyOutflow;
 
-    const avgInflowPerDay = ANALYSIS_WINDOW_DAYS > 0 ? inflowTotal / ANALYSIS_WINDOW_DAYS : 0;
-    const avgOutflowPerDay = ANALYSIS_WINDOW_DAYS > 0 ? outflowTotal / ANALYSIS_WINDOW_DAYS : 0;
-    const netDailyChange = avgInflowPerDay - avgOutflowPerDay;
-
-    // Project forward
+    // Projections forward
     const projected7d = Math.max(0, Math.round(queue + netDailyChange * 7));
     const projected14d = Math.max(0, Math.round(queue + netDailyChange * 14));
     const projected30d = Math.max(0, Math.round(queue + netDailyChange * 30));
 
-    // Capacity gap
+    // Capacity Gap
     const capacityGapPercent = queue > 0
       ? Math.round(((projected30d - queue) / queue) * 100)
       : (projected30d > 0 ? 100 : 0);
 
-    // Recommended action
+    // Recommendation
     let recommendedAction = 'Monitor — Stable';
     if (capacityGapPercent > 50) recommendedAction = 'Increase capacity — Growing backlog';
     else if (capacityGapPercent > 20) recommendedAction = 'Plan capacity increase';
     else if (capacityGapPercent < -30) recommendedAction = 'Reduce allocation — Shrinking queue';
     else if (capacityGapPercent < -10) recommendedAction = 'Queue clearing — Good progress';
 
-    // Confidence based on data density
-    const confidence = Math.min(100, Math.max(10, Math.round((daysWithData / ANALYSIS_WINDOW_DAYS) * 100)));
+    // 5. Confidence Score V2
+    // Activity Score (60%)
+    let activeDaysCount = 0;
+    workingDays.forEach(ds => {
+      if ((inflowDays[ds] || 0) > 0 || (outflowDays[ds] || 0) > 0) {
+        activeDaysCount++;
+      }
+    });
+    const activityScore = activeDaysCount / ANALYSIS_WINDOW_WORKING_DAYS;
+
+    // Consistency Score (40%) using Coefficient of Variation (CV) on daily throughput (outflow)
+    const dailyOutflowValues = workingDays.map(ds => outflowDays[ds] || 0);
+    const meanOutflow = dailyOutflowValues.reduce((s, v) => s + v, 0) / ANALYSIS_WINDOW_WORKING_DAYS;
+    
+    let consistencyScore = 0;
+    let cv = 0;
+    if (meanOutflow > 0) {
+      const variance = dailyOutflowValues.reduce((s, v) => s + Math.pow(v - meanOutflow, 2), 0) / ANALYSIS_WINDOW_WORKING_DAYS;
+      const stdDev = Math.sqrt(variance);
+      cv = stdDev / meanOutflow;
+      consistencyScore = Math.max(0, 1 - cv);
+    } else {
+      consistencyScore = 0;
+    }
+
+    const finalConfidence = Math.min(100, Math.max(10, Math.round(((activityScore * 0.6) + (consistencyScore * 0.4)) * 100)));
+
+    let confidenceLabel = 'Low';
+    if (finalConfidence >= 80) confidenceLabel = 'Very High';
+    else if (finalConfidence >= 60) confidenceLabel = 'High';
+    else if (finalConfidence >= 40) confidenceLabel = 'Medium';
 
     results.push({
       stage,
       currentQueue: queue,
-      avgInflowPerDay: Math.round(avgInflowPerDay * 10) / 10,
-      avgOutflowPerDay: Math.round(avgOutflowPerDay * 10) / 10,
-      netDailyChange: Math.round(netDailyChange * 10) / 10,
+      weightedInflow: Math.round(weightedDailyInflow * 10) / 10,
+      weightedOutflow: Math.round(weightedDailyOutflow * 10) / 10,
+      netChange: Math.round(netDailyChange * 10) / 10,
       projectedQueue7d: projected7d,
       projectedQueue14d: projected14d,
       projectedQueue30d: projected30d,
       capacityGapPercent,
       recommendedAction,
-      confidence
+      confidence: finalConfidence,
+      confidencePercent: finalConfidence,
+      confidenceLabel,
+      // Backward compatibility:
+      avgInflowPerDay: Math.round(weightedDailyInflow * 10) / 10,
+      avgOutflowPerDay: Math.round(weightedDailyOutflow * 10) / 10,
+      netDailyChange: Math.round(netDailyChange * 10) / 10
     });
   });
 
-  // Sort by current queue descending
   results.sort((a, b) => b.currentQueue - a.currentQueue);
 
   return {
     stages: results,
     metadata: {
-      analysisWindowDays: ANALYSIS_WINDOW_DAYS,
-      basedOnDays: ANALYSIS_WINDOW_DAYS,
+      analysisWindowDays: ANALYSIS_WINDOW_WORKING_DAYS,
+      basedOnDays: ANALYSIS_WINDOW_WORKING_DAYS,
       stagesAnalyzed: results.length
     }
   };

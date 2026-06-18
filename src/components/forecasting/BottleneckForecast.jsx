@@ -83,7 +83,7 @@ function BottleneckForecast() {
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>items in queue</span>
           </div>
 
-          <div style={{ height: 24, background: 'var(--bg-bar-empty)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ height: 24, background: 'var(--bg-bar-empty)', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
             <div style={{
               width: `${(currentBottleneck.queue / maxQueue) * 100}%`,
               height: '100%', borderRadius: 6,
@@ -91,6 +91,21 @@ function BottleneckForecast() {
               transition: 'width 0.8s ease',
               boxShadow: '0 0 12px rgba(255, 61, 90, 0.3)'
             }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5 }}>THROUGHPUT TREND</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Rajdhani, sans-serif', color: 'var(--text-primary)', marginTop: 2 }}>
+                {currentBottleneck.throughputTrend || '0.0/d'}
+              </div>
+            </div>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5 }}>QUEUE GROWTH</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Rajdhani, sans-serif', color: currentBottleneck.growthRate > 0 ? 'var(--danger)' : 'var(--success)', marginTop: 2 }}>
+                {currentBottleneck.growthRate > 0 ? '+' : ''}{currentBottleneck.growthRate}/d
+              </div>
+            </div>
           </div>
         </div>
 
@@ -128,7 +143,7 @@ function BottleneckForecast() {
             </div>
           )}
 
-          <div style={{ height: 24, background: 'var(--bg-bar-empty)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ height: 24, background: 'var(--bg-bar-empty)', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
             <div style={{
               width: `${(predictedNextBottleneck.projectedQueue / maxQueue) * 100}%`,
               height: '100%', borderRadius: 6,
@@ -136,6 +151,21 @@ function BottleneckForecast() {
               transition: 'width 0.8s ease',
               boxShadow: '0 0 12px rgba(0, 201, 255, 0.3)'
             }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5 }}>PROJECTED DELAY</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Rajdhani, sans-serif', color: 'var(--warning)', marginTop: 2 }}>
+                {predictedNextBottleneck.projectedDelay} days
+              </div>
+            </div>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', letterSpacing: 0.5 }}>FORECAST CONFIDENCE</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Rajdhani, sans-serif', color: 'var(--accent1)', marginTop: 2 }}>
+                {predictedNextBottleneck.confidence}%
+              </div>
+            </div>
           </div>
         </div>
       </div>

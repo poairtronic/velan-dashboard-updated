@@ -264,8 +264,113 @@ const dateDiff = (poDate, tsStr) => {
   return d !== null && d >= 0 ? d : null;
 };
 
+function workingDaysBetween5Day(d1Str, d2Str) {
+  if (!d1Str || !d2Str) return null;
+  try {
+    function parseLocalDate(str) {
+      if (!str) return null;
+      const clean = String(str).trim().substring(0, 10);
+      let day, month, year;
+
+      if (clean.includes('/')) {
+        const parts = clean.split('/');
+        const p0 = parseInt(parts[0], 10);
+        const p1 = parseInt(parts[1], 10);
+        let p2 = parseInt(parts[2], 10);
+        if (p2 < 100) p2 += 2000;
+        year = p2;
+        if (String(parts[2]).trim().length <= 2) {
+          month = p0;
+          day = p1; // Google Sheets M/D/YY
+        } else {
+          if (p0 > 12) {
+            day = p0;
+            month = p1;
+          } else if (p1 > 12) {
+            month = p0;
+            day = p1;
+          } else {
+            day = p0;
+            month = p1;
+          } // DD/MM default
+        }
+      } else if (clean.includes('-')) {
+        const parts = clean.split('-');
+        if (parts[0].length === 4) {
+          year = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          day = parseInt(parts[2], 10);
+        } else {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          year = parseInt(parts[2], 10);
+          if (year < 100) year += 2000;
+          if (p0 > 12) {
+            day = p0;
+            month = p1;
+          } else if (p1 > 12) {
+            month = p0;
+            day = p1;
+          } else {
+            day = p0;
+            month = p1;
+          }
+        }
+      } else {
+        return null;
+      }
+
+      if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+      return new Date(year, month - 1, day);
+    }
+    const d1 = parseLocalDate(d1Str);
+    const d2 = parseLocalDate(d2Str);
+    if (!d1 || !d2 || isNaN(d1.getTime()) || isNaN(d2.getTime())) {
+      return null;
+    }
+    let count = 0;
+    const cur = new Date(d1 < d2 ? d1.getTime() : d2.getTime());
+    const end = new Date(d1 > d2 ? d1.getTime() : d2.getTime());
+    while (cur <= end) {
+      const dow = cur.getDay();
+      const ds =
+        cur.getFullYear() +
+        '-' +
+        String(cur.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(cur.getDate()).padStart(2, '0');
+      if (dow !== 0 && dow !== 6 && !COMPANY_HOLIDAYS.has(ds)) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return d2 < d1 ? -count : count;
+  } catch {
+    return null;
+  }
+}
+
+function addWorkingDays5Day(fromDateStr, daysToAdd) {
+  if (!fromDateStr) return '';
+  const parts = fromDateStr.split('-');
+  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  let added = 0;
+  while (added < daysToAdd) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    const ds =
+      d.getFullYear() +
+      '-' +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(d.getDate()).padStart(2, '0');
+    if (dow !== 0 && dow !== 6 && !COMPANY_HOLIDAYS.has(ds)) added++;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 module.exports = {
   workingDaysBetween,
+  workingDaysBetween5Day,
+  addWorkingDays5Day,
   daysBetween,
   getProductCategory,
   parseDateTime,

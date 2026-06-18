@@ -1,38 +1,26 @@
 /**
- * SLA Forecast Engine
- * Projects PO completion dates using historical velocity per type/vendor category.
- * Confidence is derived from the number of historical samples — never hardcoded.
+ * SLA Forecast Engine V2
+ * Projects PO completion dates using working-day velocities, stage queue delays, and weighted throughput.
  */
-const { workingDaysBetween, TARGET_DAYS } = require('../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day, TARGET_DAYS } = require('../utils/calculationUtils');
 
 function getTodayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function addWorkingDays(fromDateStr, daysToAdd) {
-  const parts = fromDateStr.split('-');
-  const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-  let added = 0;
-  while (added < daysToAdd) {
-    d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0) added++; // Skip Sundays
-  }
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 async function calculateSLAForecast({ liveRows, dbRows }) {
   const todayStr = getTodayStr();
 
-  // 1. Build historical velocity map: type+inhouse → avg days to completion
+  // 1. Build historical velocity per PO type+inhouse category from completed POs
   const velocityMap = {}; // key: `${type}|${inhouse}` → { totalDays, count }
-  const poCompletionMap = {}; // po → { poDate, lastTimestamp, type, inhouse }
-
+  const poHistoryMap = {}; // po → { poDate, lastTimestamp, type, inhouse, stages: [{stage, dateStr}] }
+  
   dbRows.forEach(row => {
     if (!row.po || !row.poDate || !row.timestamp) return;
     const key = row.po;
-    if (!poCompletionMap[key]) {
-      poCompletionMap[key] = {
+    if (!poHistoryMap[key]) {
+      poHistoryMap[key] = {
         poDate: row.poDate,
         type: row.type || 'UNKNOWN',
         inhouse: row.inhouse || 'UNKNOWN',
@@ -40,26 +28,45 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
         stages: []
       };
     }
-    poCompletionMap[key].timestamps.push(row.timestamp);
-    poCompletionMap[key].stages.push(row.currentStage || '');
+    poHistoryMap[key].timestamps.push(row.timestamp);
+    poHistoryMap[key].stages.push({
+      stage: row.currentStage || '',
+      dateStr: row.timestamp.substring(0, 10)
+    });
   });
 
-  // Calculate velocity from completed POs in history
-  Object.values(poCompletionMap).forEach(po => {
-    const isComplete = po.stages.some(s => ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s));
+  // Calculate stage durations and overall PO completion velocities
+  const stageDurations = {}; // stage → [days]
+  Object.values(poHistoryMap).forEach(po => {
+    const isComplete = po.stages.some(s => ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s.stage));
     if (!isComplete || !po.poDate) return;
 
+    // Po total working days
     const lastTs = po.timestamps.sort().pop();
-    const days = workingDaysBetween(po.poDate, lastTs);
+    const days = workingDaysBetween5Day(po.poDate, lastTs);
     if (days === null || days <= 0) return;
 
     const vKey = `${po.type}|${po.inhouse}`;
     if (!velocityMap[vKey]) velocityMap[vKey] = { totalDays: 0, count: 0 };
     velocityMap[vKey].totalDays += days;
     velocityMap[vKey].count++;
+
+    // Calculate stage durations from sorted transitions
+    po.stages.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+    for (let i = 0; i < po.stages.length - 1; i++) {
+      const curr = po.stages[i];
+      const next = po.stages[i + 1];
+      if (curr.stage && curr.stage !== next.stage) {
+        const stageDiff = workingDaysBetween5Day(curr.dateStr, next.dateStr);
+        if (stageDiff !== null && stageDiff >= 0) {
+          if (!stageDurations[curr.stage]) stageDurations[curr.stage] = [];
+          stageDurations[curr.stage].push(stageDiff);
+        }
+      }
+    }
   });
 
-  // Calculate averages
+  // Averages for PO types
   const velocityAvg = {};
   Object.entries(velocityMap).forEach(([key, val]) => {
     velocityAvg[key] = {
@@ -68,14 +75,78 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
     };
   });
 
-  // Global average fallback
   const allVelocities = Object.values(velocityMap);
   const globalAvgDays = allVelocities.length > 0
     ? Math.round(allVelocities.reduce((s, v) => s + v.totalDays, 0) / allVelocities.reduce((s, v) => s + v.count, 0))
     : TARGET_DAYS;
   const globalSampleCount = allVelocities.reduce((s, v) => s + v.count, 0);
 
-  // 2. For each open PO in live data, project completion
+  // Averages for stage durations
+  const stageAvgDurations = {};
+  Object.entries(stageDurations).forEach(([stage, list]) => {
+    stageAvgDurations[stage] = list.reduce((s, v) => s + v, 0) / list.length;
+  });
+
+  // Calculate weighted daily throughput for each stage (from capacityPlanner logic)
+  const workingDays = [];
+  let wd = new Date();
+  while (workingDays.length < 14) {
+    const ds = `${wd.getFullYear()}-${String(wd.getMonth() + 1).padStart(2, '0')}-${String(wd.getDate()).padStart(2, '0')}`;
+    if (workingDaysBetween5Day(ds, ds) === 1) {
+      workingDays.push(ds);
+    }
+    wd.setDate(wd.getDate() - 1);
+  }
+  const recent7Days = workingDays.slice(0, 7);
+  const previous7Days = workingDays.slice(7, 14);
+
+  // Group by transition key: sc + po + product
+  const transitionHistory = {};
+  dbRows.forEach(row => {
+    if (!row.sc || !row.po || !row.timestamp) return;
+    const key = `${row.sc}|${row.po}|${(row.product || '').trim()}`;
+    if (!transitionHistory[key]) transitionHistory[key] = [];
+    transitionHistory[key].push({
+      stage: row.currentStage || '',
+      timestamp: row.timestamp,
+      dateStr: row.timestamp.substring(0, 10)
+    });
+  });
+
+  const stageOutflow = {};
+  Object.values(transitionHistory).forEach(history => {
+    if (history.length < 2) return;
+    history.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    for (let i = 0; i < history.length - 1; i++) {
+      const entry = history[i];
+      if (entry.stage !== history[i + 1].stage && entry.stage) {
+        if (!stageOutflow[entry.stage]) stageOutflow[entry.stage] = {};
+        const outDate = history[i + 1].dateStr;
+        if (!stageOutflow[entry.stage][outDate]) stageOutflow[entry.stage][outDate] = 0;
+        stageOutflow[entry.stage][outDate]++;
+      }
+    }
+  });
+
+  const stageWeightedThroughput = {};
+  Object.keys(stageOutflow).forEach(stage => {
+    const outflowDays = stageOutflow[stage] || {};
+    const recentOut = recent7Days.reduce((sum, ds) => sum + (outflowDays[ds] || 0), 0);
+    const prevOut = previous7Days.reduce((sum, ds) => sum + (outflowDays[ds] || 0), 0);
+    const weightedOutflow = (recentOut * 0.7) + (prevOut * 0.3);
+    stageWeightedThroughput[stage] = Math.max(0.1, weightedOutflow / 7); // minimum throughput 0.1 items/day
+  });
+
+  // Calculate current stage queue sizes
+  const stageQueueSizes = {};
+  liveRows.forEach(row => {
+    const stage = row.currentStage || '';
+    if (stage && !TERMINAL_STAGES.includes(stage)) {
+      stageQueueSizes[stage] = (stageQueueSizes[stage] || 0) + 1;
+    }
+  });
+
+  // 2. Identify open POs in live data
   const openPOs = {};
   liveRows.forEach(row => {
     if (!row.po) return;
@@ -101,44 +172,58 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
   Object.values(openPOs).forEach(po => {
     if (!po.hasOpenItems || !po.poDate) return;
 
-    const elapsedDays = workingDaysBetween(po.poDate, todayStr);
+    const elapsedDays = workingDaysBetween5Day(po.poDate, todayStr);
     if (elapsedDays === null) return;
 
-    // Look up velocity
+    // Look up historical type velocity
     const vKey = `${po.type}|${po.inhouse}`;
     const velocity = velocityAvg[vKey];
     const projectedTotalDays = velocity ? velocity.avgDays : globalAvgDays;
     const sampleCount = velocity ? velocity.sampleCount : globalSampleCount;
 
-    const remainingDays = Math.max(0, projectedTotalDays - elapsedDays);
-    const projectedCompletionDate = addWorkingDays(todayStr, remainingDays);
+    // Get current stage
+    const stageArr = [...po.stages].filter(s => !TERMINAL_STAGES.includes(s));
+    const currentStage = stageArr[0] || 'UNKNOWN';
 
-    // SLA date = poDate + TARGET_DAYS working days
-    const slaDate = addWorkingDays(po.poDate, TARGET_DAYS);
+    // Calculate Queue Delay Ahead
+    const activeStageQueue = stageQueueSizes[currentStage] || 0;
+    const activeStageThroughput = stageWeightedThroughput[currentStage] || 1; // default 1 item/day
+    const queueDelay = activeStageQueue / activeStageThroughput;
+
+    // Historical active stage remaining duration (default 3 days if no history)
+    const stageDuration = stageAvgDurations[currentStage] !== undefined ? stageAvgDurations[currentStage] : 3;
+
+    // Expected Remaining Days
+    const baseRemaining = Math.max(0, projectedTotalDays - elapsedDays);
+    const expectedRemainingDays = Math.round(Math.max(1, baseRemaining + queueDelay + stageDuration));
+
+    const projectedCompletionDate = addWorkingDays5Day(todayStr, expectedRemainingDays);
+    const slaDate = addWorkingDays5Day(po.poDate, TARGET_DAYS);
+
+    // Expected Delay (exceeding 21 days target)
+    const totalWorkingDaysEstimate = elapsedDays + expectedRemainingDays;
+    const expectedDelay = Math.max(0, totalWorkingDaysEstimate - TARGET_DAYS);
+
+    // Delay Probability calculation based on queue ahead and age
+    const slaRatio = totalWorkingDaysEstimate / TARGET_DAYS;
+    const delayProbability = Math.min(99, Math.max(5, Math.round(Math.max(0, (slaRatio - 0.6) * 200))));
 
     // Risk assessment
-    const projectedVsSla = workingDaysBetween(projectedCompletionDate, slaDate);
     let riskLevel = 'low';
-    if (projectedVsSla !== null) {
-      if (projectedVsSla < 0) riskLevel = 'high';       // projected AFTER sla
-      else if (projectedVsSla <= 3) riskLevel = 'medium'; // within 3 days of SLA
-    }
-    // If already past SLA
-    if (elapsedDays > TARGET_DAYS) riskLevel = 'high';
+    if (totalWorkingDaysEstimate > TARGET_DAYS) riskLevel = 'high';
+    else if (TARGET_DAYS - totalWorkingDaysEstimate <= 3) riskLevel = 'medium';
 
-    // Confidence: based on sample count (more data = higher confidence)
-    const confidence = Math.min(100, Math.max(10, sampleCount * 5));
-
-    // Current stage = most common non-terminal stage
-    const stageArr = [...po.stages].filter(s => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s));
-    const currentStage = stageArr[0] || 'UNKNOWN';
+    // Confidence: sample count + stage history stability
+    const confidence = Math.min(100, Math.max(10, Math.round(Math.min(95, sampleCount * 4 + 20))));
 
     forecasts.push({
       poNumber: po.po,
       currentStage,
-      elapsedDays,
+      elapsedDays, // current age
       projectedTotalDays,
-      projectedCompletionDate,
+      projectedCompletionDate, // expected completion
+      expectedDelay, // expected delay in days
+      delayProbability, // delay probability %
       slaDate,
       riskLevel,
       confidence,
@@ -148,7 +233,7 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
 
   // Sort by risk (high first)
   const riskOrder = { high: 0, medium: 1, low: 2 };
-  forecasts.sort((a, b) => (riskOrder[a.riskLevel] || 2) - (riskOrder[b.riskLevel] || 2));
+  forecasts.sort((a, b) => (riskOrder[a.riskLevel] || 2) - (riskOrder[b.riskLevel] || 2) || b.delayProbability - a.delayProbability);
 
   return {
     forecasts,

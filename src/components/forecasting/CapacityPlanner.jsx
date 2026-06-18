@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-function ConfidenceBadge({ confidence }) {
+function ConfidenceBadge({ confidence, label }) {
   let color = 'var(--accent4)';
-  let label = 'Low Confidence';
-  if (confidence >= 80) { color = 'var(--success)'; label = 'High'; }
-  else if (confidence >= 50) { color = 'var(--warning)'; label = 'Moderate'; }
+  if (label === 'Very High') color = 'var(--success)';
+  else if (label === 'High') color = '#00c9ff';
+  else if (label === 'Medium') color = 'var(--warning)';
   return (
     <span style={{
       fontSize: 9, fontFamily: 'Share Tech Mono, monospace', color,
@@ -71,7 +71,7 @@ function CapacityPlanner() {
                 {/* Stage header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <span style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{s.stage}</span>
-                  <ConfidenceBadge confidence={s.confidence} />
+                  <ConfidenceBadge confidence={s.confidence} label={s.confidenceLabel} />
                 </div>
 
                 {/* Current queue */}
@@ -87,15 +87,15 @@ function CapacityPlanner() {
                   { label: '+30D', value: s.projectedQueue30d, color: s.capacityGapPercent > 20 ? 'var(--danger)' : 'var(--accent3)' }
                 ].map((p, j) => (
                   <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ width: 30, fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>{p.label}</span>
-                    <div style={{ flex: 1, height: 14, background: 'var(--bg-bar-empty)', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{
-                        width: `${Math.min(100, (p.value / maxQueue) * 100)}%`,
-                        height: '100%', borderRadius: 3, background: p.color,
-                        transition: 'width 0.8s ease'
-                      }} />
-                    </div>
-                    <span style={{ width: 30, textAlign: 'right', fontSize: 11, fontFamily: 'Share Tech Mono, monospace', color: 'var(--text-secondary)' }}>{p.value}</span>
+                     <span style={{ width: 30, fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>{p.label}</span>
+                     <div style={{ flex: 1, height: 14, background: 'var(--bg-bar-empty)', borderRadius: 3, overflow: 'hidden' }}>
+                       <div style={{
+                         width: `${Math.min(100, (p.value / maxQueue) * 100)}%`,
+                         height: '100%', borderRadius: 3, background: p.color,
+                         transition: 'width 0.8s ease'
+                       }} />
+                     </div>
+                     <span style={{ width: 30, textAlign: 'right', fontSize: 11, fontFamily: 'Share Tech Mono, monospace', color: 'var(--text-secondary)' }}>{p.value}</span>
                   </div>
                 ))}
 
@@ -106,10 +106,15 @@ function CapacityPlanner() {
                       GAP: {s.capacityGapPercent > 0 ? '+' : ''}{s.capacityGapPercent}%
                     </span>
                     <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
-                      ↑{s.avgInflowPerDay}/d ↓{s.avgOutflowPerDay}/d
+                      In: {s.weightedInflow}/d | Out: {s.weightedOutflow}/d
                     </span>
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>{s.recommendedAction}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{s.recommendedAction}</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
+                      Net: {s.netChange > 0 ? '+' : ''}{s.netChange}/d
+                    </span>
+                  </div>
                 </div>
               </div>
             );

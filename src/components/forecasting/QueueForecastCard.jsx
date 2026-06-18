@@ -61,12 +61,19 @@ function QueueForecastCard() {
                     <span style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{f.stage}</span>
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>Queue: {f.currentQueue}</span>
                   </div>
-                  <span style={{
-                    fontSize: 9, fontFamily: 'Share Tech Mono, monospace', color: confColor,
-                    background: `${confColor}22`, padding: '2px 6px', borderRadius: 8
-                  }}>
-                    {f.confidence}%
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {f.expectedClearanceDate && (
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace', background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                        Clear Date: {f.expectedClearanceDate}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: 9, fontFamily: 'Share Tech Mono, monospace', color: confColor,
+                      background: `${confColor}22`, padding: '2px 6px', borderRadius: 8
+                    }}>
+                      {f.confidence}%
+                    </span>
+                  </div>
                 </div>
 
                 {/* Three scenario bars */}

@@ -1,13 +1,13 @@
 /**
- * Vendor Risk Forecast
- * Projects SLA breach probability for each active vendor using
- * historical cycle times and current open item ages.
- * All calculations derived from timestamps — zero hardcoded assumptions.
+ * Vendor Risk Forecast V2
+ * Projects vendor risk and performance metrics using working days, weighted throughput, and stability scores.
+ * Key tracking: SC + PO + Product.
  */
-const { workingDaysBetween } = require('../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day } = require('../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
-const VENDOR_SLA_DAYS = 2; // Existing vendor SLA target from the system
+const VENDOR_SLA_DAYS = 2; // Target working days spent per vendor stage
+const ANALYSIS_WORKING_DAYS = 30;
 
 function getTodayStr() {
   const d = new Date();
@@ -17,14 +17,27 @@ function getTodayStr() {
 async function calculateVendorRiskForecast({ liveRows, dbRows }) {
   const todayStr = getTodayStr();
 
-  // 1. Identify active vendor items from live data
+  // 1. Generate list of last 30 working days and last 14 working days
+  const workingDays = [];
+  let d = new Date();
+  while (workingDays.length < ANALYSIS_WORKING_DAYS) {
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (workingDaysBetween5Day(ds, ds) === 1) {
+      workingDays.push(ds);
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  const recent7Days = workingDays.slice(0, 7);
+  const previous7Days = workingDays.slice(7, 14);
+
+  // 2. Identify active vendor items from live data
   const vendorItems = {};
   liveRows.forEach(row => {
     if (row.inhouse !== 'VENDOR') return;
     const stage = row.currentStage || '';
     if (TERMINAL_STAGES.includes(stage) || !stage) return;
 
-    const vendorCode = stage; // Vendor code is derived from stage (consistent with vendorService.js)
+    const vendorCode = stage;
     if (!vendorItems[vendorCode]) {
       vendorItems[vendorCode] = {
         vendor: vendorCode,
@@ -34,43 +47,34 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
     }
     vendorItems[vendorCode].openItems.push(row);
 
-    // Calculate current age of this item
     if (row.timestamp) {
-      const age = workingDaysBetween(row.timestamp, todayStr);
+      const age = workingDaysBetween5Day(row.timestamp, todayStr);
       if (age !== null && age >= 0) {
         vendorItems[vendorCode].ages.push(age);
       }
     }
   });
 
-  // 2. Calculate historical avg cycle time per vendor from completed items
-  const historicalVendorCycles = {};
-  dbRows.forEach(row => {
-    if (row.inhouse !== 'VENDOR') return;
-    const stage = row.currentStage || '';
-    if (!TERMINAL_STAGES.includes(stage)) return; // Only completed items
-    if (!row.timestamp || !row.poDate) return;
-
-    const vendorCode = stage;
-    // For completed vendor items, we need to look at historical stage entries
-    // Use the SC+product to track the vendor stage duration
-  });
-
-  // Better approach: track vendor cycle times from historical transitions
+  // 3. Track historical stage entries and exit transitions using SC + PO + Product key
   const itemHistory = {};
   dbRows.forEach(row => {
-    if (!row.sc || !row.timestamp) return;
-    const key = `${row.sc}|${(row.product || '').trim()}`;
+    if (!row.sc || !row.po || !row.timestamp) return;
+    const key = `${row.sc}|${row.po}|${(row.product || '').trim()}`;
     if (!itemHistory[key]) itemHistory[key] = [];
     itemHistory[key].push({
       stage: row.currentStage || '',
       timestamp: row.timestamp,
+      dateStr: row.timestamp.substring(0, 10),
       inhouse: row.inhouse || ''
     });
   });
 
-  // Find vendor stage durations from transitions
+  // Calculate historical completed vendor stages, durations, and daily exit throughput
   const vendorCompletedCycles = {}; // vendorCode → [days]
+  const vendorDailyOutflow = {};    // vendorCode → { dateStr → count }
+  const vendorRecentCycles = {};    // vendorCode → [days]
+  const vendorPrevCycles = {};      // vendorCode → [days]
+
   Object.values(itemHistory).forEach(history => {
     history.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
@@ -78,19 +82,36 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       const curr = history[i];
       const next = history[i + 1];
 
-      // If current entry is at a vendor stage and next is at a different stage
       if (curr.inhouse === 'VENDOR' && !TERMINAL_STAGES.includes(curr.stage) && curr.stage !== next.stage) {
         const vendorCode = curr.stage;
-        const days = workingDaysBetween(curr.timestamp, next.timestamp);
+        const days = workingDaysBetween5Day(curr.timestamp, next.timestamp);
+        
         if (days !== null && days >= 0) {
           if (!vendorCompletedCycles[vendorCode]) vendorCompletedCycles[vendorCode] = [];
           vendorCompletedCycles[vendorCode].push(days);
+
+          // Categorize by date for delay trends
+          const exitDate = next.dateStr;
+          const isRecent = recent7Days.includes(exitDate);
+          const isPrev = previous7Days.includes(exitDate);
+          if (isRecent) {
+            if (!vendorRecentCycles[vendorCode]) vendorRecentCycles[vendorCode] = [];
+            vendorRecentCycles[vendorCode].push(days);
+          } else if (isPrev) {
+            if (!vendorPrevCycles[vendorCode]) vendorPrevCycles[vendorCode] = [];
+            vendorPrevCycles[vendorCode].push(days);
+          }
+
+          // Count daily exit throughput
+          if (!vendorDailyOutflow[vendorCode]) vendorDailyOutflow[vendorCode] = {};
+          if (!vendorDailyOutflow[vendorCode][exitDate]) vendorDailyOutflow[vendorCode][exitDate] = 0;
+          vendorDailyOutflow[vendorCode][exitDate]++;
         }
       }
     }
   });
 
-  // 3. Build forecast per vendor
+  // 4. Build forecast per vendor
   const results = [];
   const allVendorCycles = Object.values(vendorCompletedCycles).flat();
   const globalAvgCycle = allVendorCycles.length > 0
@@ -107,11 +128,36 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       ? Math.round((historicalCycles.reduce((s, d) => s + d, 0) / historicalCycles.length) * 10) / 10
       : Math.round(globalAvgCycle * 10) / 10;
 
-    // Project: if current avg is X days and historical avg is Y,
-    // projected completion = current avg + remaining (historical avg - current avg if positive)
-    const projectedAvgDays = Math.round(Math.max(currentAvgDays, historicalAvgDays) * 10) / 10;
+    // Vendor Throughput Trend
+    const dailyOut = vendorDailyOutflow[v.vendor] || {};
+    const recentOut = recent7Days.reduce((sum, ds) => sum + (dailyOut[ds] || 0), 0);
+    const prevOut = previous7Days.reduce((sum, ds) => sum + (dailyOut[ds] || 0), 0);
 
-    // Breach probability: how far current age exceeds SLA
+    const tRecent = recentOut / 7;
+    const tPrev = prevOut / 7;
+    const weightedThroughput = (tRecent * 0.7) + (tPrev * 0.3);
+    const throughputDiff = tRecent - tPrev;
+    const throughputTrend = `${weightedThroughput.toFixed(1)}/d (${throughputDiff >= 0 ? '+' : ''}${throughputDiff.toFixed(1)})`;
+
+    // Vendor Delay Trend (Recent cycle times vs Prev cycle times)
+    const recentAvg = (vendorRecentCycles[v.vendor] || []).reduce((s, c) => s + c, 0) / Math.max(1, (vendorRecentCycles[v.vendor] || []).length);
+    const prevAvg = (vendorPrevCycles[v.vendor] || []).reduce((s, c) => s + c, 0) / Math.max(1, (vendorPrevCycles[v.vendor] || []).length);
+    const delayDiff = recentAvg - prevAvg;
+    const delayTrend = `${delayDiff >= 0 ? '+' : ''}${delayDiff.toFixed(1)}d`;
+
+    // Vendor Stability Score (100 - CV * 100 on daily working-day throughput)
+    const throughputValues = workingDays.map(ds => dailyOut[ds] || 0);
+    const meanTP = throughputValues.reduce((s, v) => s + v, 0) / ANALYSIS_WORKING_DAYS;
+    let stabilityScore = 50; // default stability
+    let cv = 0;
+    if (meanTP > 0) {
+      const variance = throughputValues.reduce((s, v) => s + Math.pow(v - meanTP, 2), 0) / ANALYSIS_WORKING_DAYS;
+      const stdDev = Math.sqrt(variance);
+      cv = stdDev / meanTP;
+      stabilityScore = Math.min(100, Math.max(0, Math.round((1 - cv) * 100)));
+    }
+
+    // Breach probability
     const breachProbability = Math.min(100, Math.round((currentAvgDays / Math.max(VENDOR_SLA_DAYS, 0.1)) * 100));
 
     // Risk level
@@ -119,23 +165,27 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
     if (breachProbability > 75) riskLevel = 'high';
     else if (breachProbability >= 50) riskLevel = 'medium';
 
-    // Confidence based on historical sample count
-    const confidence = Math.min(100, Math.max(10, historicalCycles.length * 3 + 10));
+    // Confidence score V2
+    const activeDaysCount = throughputValues.filter(v => v > 0).length;
+    const activityScore = activeDaysCount / ANALYSIS_WORKING_DAYS;
+    const consistencyScore = Math.max(0, 1 - cv);
+    const finalConfidence = Math.min(100, Math.max(10, Math.round(((activityScore * 0.6) + (consistencyScore * 0.4)) * 100)));
 
     results.push({
       vendor: v.vendor,
       openItems: v.openItems.length,
       currentAvgDays,
       historicalAvgDays,
-      projectedAvgDays,
+      throughputTrend,
+      delayTrend,
+      stabilityScore: `${stabilityScore}%`,
       breachProbability,
       riskLevel,
-      confidence,
+      confidence: finalConfidence,
       maxAge: v.ages.length > 0 ? Math.max(...v.ages) : 0
     });
   });
 
-  // Sort by breach probability descending
   results.sort((a, b) => b.breachProbability - a.breachProbability);
 
   return {
@@ -146,7 +196,7 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       mediumRisk: results.filter(v => v.riskLevel === 'medium').length,
       lowRisk: results.filter(v => v.riskLevel === 'low').length,
       slaTargetDays: VENDOR_SLA_DAYS,
-      basedOnDays: 30
+      basedOnDays: ANALYSIS_WORKING_DAYS
     }
   };
 }

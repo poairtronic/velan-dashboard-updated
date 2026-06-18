@@ -85,7 +85,7 @@ function SLAForecastPanel() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['PO', 'STAGE', 'ELAPSED', 'PROJECTED', 'SLA DATE', 'RISK', 'CONFIDENCE'].map(h => (
+              {['PO', 'STAGE', 'CURRENT AGE', 'EXPECTED COMPLETION', 'EXPECTED DELAY', 'DELAY PROBABILITY', 'SLA DATE', 'CONFIDENCE'].map(h => (
                 <th key={h} style={{
                   background: 'var(--bg-secondary)', padding: '10px 12px', textAlign: 'left',
                   fontSize: 10, letterSpacing: 1.5, color: 'var(--text-muted)',
@@ -97,7 +97,7 @@ function SLAForecastPanel() {
           </thead>
           <tbody>
             {forecasts.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No open POs to forecast</td></tr>
+              <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No open POs to forecast</td></tr>
             ) : (
               forecasts.map((f, i) => {
                 const risk = riskColors[f.riskLevel] || riskColors.low;
@@ -109,10 +109,9 @@ function SLAForecastPanel() {
                     </td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{f.elapsedDays}d</td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace' }}>{f.projectedCompletionDate}</td>
+                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: f.expectedDelay > 0 ? 'var(--danger)' : 'var(--success)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>+{f.expectedDelay}d</td>
+                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: f.delayProbability > 70 ? 'var(--danger)' : 'var(--warning)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>{f.delayProbability}%</td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{f.slaDate}</td>
-                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)' }}>
-                      <span style={{ padding: '2px 10px', borderRadius: 10, fontSize: 10, fontWeight: 700, fontFamily: 'Share Tech Mono, monospace', background: risk.bg, color: risk.color }}>{risk.label}</span>
-                    </td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)' }}>
                       <ConfidenceBadge confidence={f.confidence} />
                     </td>

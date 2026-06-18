@@ -1,13 +1,13 @@
 /**
- * Predictive Bottleneck Detection
- * Identifies current bottleneck and predicts the next one at +14 days
- * using historical inflow/outflow rates.
- * All rates derived from timestamps — zero hardcoded assumptions.
+ * Predictive Bottleneck Detection V2
+ * Identifies current bottleneck and predicts next one at +14 days.
+ * Key tracking: SC + PO + Product.
  */
+const { workingDaysBetween5Day } = require('../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const PROJECTION_DAYS = 14;
-const ANALYSIS_WINDOW = 14;
+const ANALYSIS_WINDOW_WORKING_DAYS = 14;
 
 async function calculateBottleneckForecast({ liveRows, dbRows }) {
   // 1. Current queue per stage
@@ -23,15 +23,24 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
   const currentBottleneckStage = Object.entries(currentQueues)
     .sort(([, a], [, b]) => b - a)[0];
 
-  const currentBottleneck = currentBottleneckStage
-    ? { stage: currentBottleneckStage[0], queue: currentBottleneckStage[1] }
-    : { stage: 'None', queue: 0 };
+  // 2. Generate list of last 14 working days
+  const workingDays = [];
+  let d = new Date();
+  while (workingDays.length < ANALYSIS_WINDOW_WORKING_DAYS) {
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (workingDaysBetween5Day(ds, ds) === 1) {
+      workingDays.push(ds);
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  const recent7Days = workingDays.slice(0, 7);
+  const previous7Days = workingDays.slice(7, 14);
 
-  // 2. Calculate net inflow rates from historical data
+  // Group by transition key: sc + po + product
   const itemHistory = {};
   dbRows.forEach(row => {
-    if (!row.sc || !row.timestamp) return;
-    const key = `${row.sc}|${(row.product || '').trim()}`;
+    if (!row.sc || !row.po || !row.timestamp) return;
+    const key = `${row.sc}|${row.po}|${(row.product || '').trim()}`;
     if (!itemHistory[key]) itemHistory[key] = [];
     itemHistory[key].push({
       stage: row.currentStage || '',
@@ -40,22 +49,17 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
     });
   });
 
-  // Count daily inflow and outflow per stage
+  // Inflows and outflows
   const stageInflow = {};
   const stageOutflow = {};
-  const today = new Date();
 
-  // Initialize
   Object.keys(currentQueues).forEach(stage => {
     stageInflow[stage] = {};
     stageOutflow[stage] = {};
-    for (let i = 0; i < ANALYSIS_WINDOW; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    workingDays.forEach(ds => {
       stageInflow[stage][ds] = 0;
       stageOutflow[stage][ds] = 0;
-    }
+    });
   });
 
   Object.values(itemHistory).forEach(history => {
@@ -66,12 +70,12 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
       const stage = entry.stage;
       if (!stage || TERMINAL_STAGES.includes(stage)) continue;
 
-      // Inflow: item arrived at this stage
+      // Inflow
       if (stageInflow[stage] && stageInflow[stage][entry.dateStr] !== undefined) {
         stageInflow[stage][entry.dateStr]++;
       }
 
-      // Outflow: if next entry has different stage
+      // Outflow
       if (i < history.length - 1 && history[i + 1].stage !== stage) {
         const outDate = history[i + 1].dateStr;
         if (stageOutflow[stage] && stageOutflow[stage][outDate] !== undefined) {
@@ -81,64 +85,104 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
     }
   });
 
-  // 3. Calculate average net change per day and project
+  // 3. Projections using weighted throughput
   const projections = {};
   let totalDataPoints = 0;
   let stagesWithData = 0;
 
   Object.keys(currentQueues).forEach(stage => {
-    const inflowVals = Object.values(stageInflow[stage] || {});
-    const outflowVals = Object.values(stageOutflow[stage] || {});
+    const inflowDays = stageInflow[stage] || {};
+    const outflowDays = stageOutflow[stage] || {};
 
-    const totalInflow = inflowVals.reduce((s, v) => s + v, 0);
-    const totalOutflow = outflowVals.reduce((s, v) => s + v, 0);
-    const daysWithActivity = inflowVals.filter((v, i) => v > 0 || outflowVals[i] > 0).length;
+    const recentInflow = recent7Days.reduce((sum, ds) => sum + (inflowDays[ds] || 0), 0);
+    const prevInflow = previous7Days.reduce((sum, ds) => sum + (inflowDays[ds] || 0), 0);
 
-    const avgNetChange = ANALYSIS_WINDOW > 0 ? (totalInflow - totalOutflow) / ANALYSIS_WINDOW : 0;
-    const projectedQueue = Math.max(0, Math.round(currentQueues[stage] + avgNetChange * PROJECTION_DAYS));
+    const recentOutflow = recent7Days.reduce((sum, ds) => sum + (outflowDays[ds] || 0), 0);
+    const prevOutflow = previous7Days.reduce((sum, ds) => sum + (outflowDays[ds] || 0), 0);
+
+    const weightedInflow = (recentInflow * 0.7) + (prevInflow * 0.3);
+    const weightedOutflow = (recentOutflow * 0.7) + (prevOutflow * 0.3);
+
+    const avgInflow = weightedInflow / 7;
+    const avgOutflow = weightedOutflow / 7;
+    const growthRate = avgInflow - avgOutflow; // Queue Growth Rate
+
+    const projectedQueue = Math.max(0, Math.round(currentQueues[stage] + growthRate * PROJECTION_DAYS));
+    const activeDaysCount = workingDays.filter(ds => (inflowDays[ds] || 0) > 0 || (outflowDays[ds] || 0) > 0).length;
+
+    // Consistency Score using CV on daily outflow
+    const dailyOutflows = workingDays.map(ds => outflowDays[ds] || 0);
+    const meanOutflow = dailyOutflows.reduce((s, v) => s + v, 0) / ANALYSIS_WINDOW_WORKING_DAYS;
+    let cv = 0;
+    let consistencyScore = 0;
+    if (meanOutflow > 0) {
+      const variance = dailyOutflows.reduce((s, v) => s + Math.pow(v - meanOutflow, 2), 0) / ANALYSIS_WINDOW_WORKING_DAYS;
+      const stdDev = Math.sqrt(variance);
+      cv = stdDev / meanOutflow;
+      consistencyScore = Math.max(0, 1 - cv);
+    }
+
+    const activityScore = activeDaysCount / ANALYSIS_WINDOW_WORKING_DAYS;
+    const confidence = Math.min(100, Math.max(10, Math.round(((activityScore * 0.6) + (consistencyScore * 0.4)) * 100)));
+
+    const expectedDelay = Math.round(projectedQueue / Math.max(0.1, avgOutflow));
 
     projections[stage] = {
       currentQueue: currentQueues[stage],
       projectedQueue,
-      avgNetChange: Math.round(avgNetChange * 10) / 10,
-      daysWithActivity
+      growthRate: Math.round(growthRate * 10) / 10,
+      throughputTrend: `${avgOutflow.toFixed(1)}/d`,
+      projectedDelay: expectedDelay,
+      daysWithActivity: activeDaysCount,
+      confidence
     };
 
-    totalDataPoints += daysWithActivity;
-    if (daysWithActivity > 0) stagesWithData++;
+    totalDataPoints += activeDaysCount;
+    if (activeDaysCount > 0) stagesWithData++;
   });
 
-  // 4. Find predicted next bottleneck
+  // Find predicted next bottleneck
   const predictedEntry = Object.entries(projections)
     .sort(([, a], [, b]) => b.projectedQueue - a.projectedQueue)[0];
 
-  // Days until: estimate when projected stage will exceed current bottleneck
+  // Days until
+  const currentBottleneckQueue = currentBottleneckStage ? currentBottleneckStage[1] : 0;
   let daysUntil = PROJECTION_DAYS;
   if (predictedEntry) {
     const [pStage, pData] = predictedEntry;
-    if (pData.avgNetChange > 0 && currentBottleneck.queue > pData.currentQueue) {
-      daysUntil = Math.round((currentBottleneck.queue - pData.currentQueue) / pData.avgNetChange);
+    if (pData.growthRate > 0 && currentBottleneckQueue > pData.currentQueue) {
+      daysUntil = Math.round((currentBottleneckQueue - pData.currentQueue) / pData.growthRate);
     } else if (pStage === currentBottleneck.stage) {
-      daysUntil = 0; // Same stage is still the bottleneck
+      daysUntil = 0;
     }
   }
 
   // Confidence based on overall data availability
-  const avgDataDensity = stagesWithData > 0 ? totalDataPoints / (stagesWithData * ANALYSIS_WINDOW) : 0;
-  const confidence = Math.min(100, Math.max(10, Math.round(avgDataDensity * 100)));
+  const avgDataDensity = stagesWithData > 0 ? totalDataPoints / (stagesWithData * ANALYSIS_WINDOW_WORKING_DAYS) : 0;
+  const overallConfidence = Math.min(100, Math.max(10, Math.round(avgDataDensity * 100)));
+
+  const currentBottleneckData = currentBottleneckStage
+    ? {
+        stage: currentBottleneckStage[0],
+        queue: currentBottleneckStage[1],
+        growthRate: projections[currentBottleneckStage[0]]?.growthRate || 0,
+        throughputTrend: projections[currentBottleneckStage[0]]?.throughputTrend || '0.0/d'
+      }
+    : { stage: 'None', queue: 0, growthRate: 0, throughputTrend: '0.0/d' };
 
   const predictedNextBottleneck = predictedEntry
     ? {
         stage: predictedEntry[0],
         projectedQueue: predictedEntry[1].projectedQueue,
         currentQueue: predictedEntry[1].currentQueue,
+        projectedDelay: predictedEntry[1].projectedDelay,
         daysUntil: Math.max(0, daysUntil),
-        confidence
+        confidence: predictedEntry[1].confidence
       }
-    : { stage: 'None', projectedQueue: 0, currentQueue: 0, daysUntil: 0, confidence: 10 };
+    : { stage: 'None', projectedQueue: 0, currentQueue: 0, projectedDelay: 0, daysUntil: 0, confidence: 10 };
 
   return {
-    currentBottleneck,
+    currentBottleneck: currentBottleneckData,
     predictedNextBottleneck,
     stageProjections: Object.entries(projections).map(([stage, data]) => ({
       stage,
@@ -146,9 +190,9 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
     })).sort((a, b) => b.projectedQueue - a.projectedQueue),
     metadata: {
       projectionDays: PROJECTION_DAYS,
-      analysisWindowDays: ANALYSIS_WINDOW,
-      basedOnDays: ANALYSIS_WINDOW,
-      confidence
+      analysisWindowDays: ANALYSIS_WINDOW_WORKING_DAYS,
+      basedOnDays: ANALYSIS_WINDOW_WORKING_DAYS,
+      confidence: overallConfidence
     }
   };
 }

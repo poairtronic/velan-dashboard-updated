@@ -63,7 +63,7 @@ function VendorRiskMatrix() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['VENDOR', 'ITEMS', 'CURRENT AVG', 'HISTORICAL AVG', 'BREACH PROB.', 'RISK', 'CONFIDENCE'].map(h => (
+              {['VENDOR', 'ITEMS', 'THROUGHPUT TREND', 'DELAY TREND', 'STABILITY SCORE', 'RISK', 'CONFIDENCE'].map(h => (
                 <th key={h} style={{
                   background: 'var(--bg-secondary)', padding: '10px 12px', textAlign: 'left',
                   fontSize: 10, letterSpacing: 1.5, color: 'var(--text-muted)',
@@ -79,7 +79,6 @@ function VendorRiskMatrix() {
             ) : (
               data.vendors.map((v, i) => {
                 const risk = riskColors[v.riskLevel] || riskColors.low;
-                const probColor = v.breachProbability > 75 ? 'var(--danger)' : v.breachProbability > 50 ? 'var(--warning)' : 'var(--success)';
                 let confColor = 'var(--accent4)';
                 if (v.confidence >= 80) confColor = 'var(--success)';
                 else if (v.confidence >= 50) confColor = 'var(--warning)';
@@ -88,20 +87,9 @@ function VendorRiskMatrix() {
                   <tr key={i}>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 600 }}>{v.vendor}</td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{v.openItems}</td>
-                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{v.currentAvgDays}d</td>
-                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{v.historicalAvgDays}d</td>
-                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{ flex: 1, height: 14, background: 'var(--bg-bar-empty)', borderRadius: 3, overflow: 'hidden', maxWidth: 100 }}>
-                          <div style={{
-                            width: `${Math.min(100, v.breachProbability)}%`,
-                            height: '100%', borderRadius: 3, background: probColor,
-                            transition: 'width 0.8s ease'
-                          }} />
-                        </div>
-                        <span style={{ fontSize: 11, fontFamily: 'Share Tech Mono, monospace', color: probColor, fontWeight: 700 }}>{v.breachProbability}%</span>
-                      </div>
-                    </td>
+                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace' }}>{v.throughputTrend}</td>
+                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: v.delayTrend.startsWith('+') ? 'var(--danger)' : 'var(--success)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>{v.delayTrend}</td>
+                    <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)', color: 'var(--accent1)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>{v.stabilityScore}</td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(26,58,92,0.5)' }}>
                       <span style={{ padding: '2px 10px', borderRadius: 10, fontSize: 10, fontWeight: 700, fontFamily: 'Share Tech Mono, monospace', background: risk.bg, color: risk.color }}>{risk.label}</span>
                     </td>
