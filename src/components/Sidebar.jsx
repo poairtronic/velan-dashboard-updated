@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { id: 'vendor', label: 'Vendor Eval', icon: '🏭' },
   { id: 'executive', label: 'Executive Intel', icon: '📊' },
   { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
-  { id: 'executive-war-room', label: 'Executive War Room', icon: '⚔' },
+  { id: 'executive-war-room', label: 'Production Control', icon: '⚔' },
   { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
   { id: 'users', label: 'User Management', icon: '👥' },
