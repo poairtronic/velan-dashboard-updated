@@ -54,14 +54,6 @@ const workerHandler = async (job) => {
       logger.error(logger.categories.SYNC, `Alert Engine run failed: ${alertErr.message}`, alertErr);
     }
 
-    // 4.1 Run Data Quality Scan
-    try {
-      const { runScan } = require('../routes/dataQuality');
-      await runScan();
-    } catch (scanErr) {
-      logger.error(logger.categories.SYNC, `Data Quality scan failed: ${scanErr.message}`, scanErr);
-    }
-
     // 5. Log Timeline Event
     try {
       await logTimelineEvent('SYNC_EXECUTED', 'Google Sheets Sync Completed', `Synchronized ${incoming.length} active rows. Database contains ${currentTotal} total archive rows.`, null, { durationMs, incomingLength, syncType });

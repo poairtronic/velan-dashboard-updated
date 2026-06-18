@@ -14,7 +14,6 @@ const { env } = require('./config/env');
 // Routers
 const authRouter = require('./routes/auth');
 const dataRouter = require('./routes/data');
-const dataQualityRouter = require('./routes/dataQuality').router;
 const auditRouter = require('./routes/audit');
 const performanceRouter = require('./routes/performance');
 const metaRouter = require('./routes/meta').router;
@@ -138,7 +137,6 @@ apiRouter.use('/timeline', dashboardLimiter, requireAuth(['admin', 'user']), tim
 apiRouter.use('/intelligence', dashboardLimiter, requireAuth(['admin', 'user']), intelligenceRouter);
 apiRouter.use('/mic', dashboardLimiter, requireAuth(['admin', 'user']), micRouter);
 apiRouter.use('/forecast', dashboardLimiter, requireAuth(['admin', 'user']), forecastRouter);
-apiRouter.use('/data-quality', requireAuth(['admin']), dataQualityRouter);
 apiRouter.use('/audit', auditRouter);
 apiRouter.use('/perf', requireAuth(['admin']), performanceRouter);
 apiRouter.use('/meta', requireAuth(['admin', 'user']), metaRouter);

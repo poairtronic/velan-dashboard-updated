@@ -1,18 +1,5 @@
 -- Phase 10C - Database Migration: Enterprise Governance & Production Excellence
 
--- 1. Create data_quality_issues table
-CREATE TABLE IF NOT EXISTS data_quality_issues (
-  id SERIAL PRIMARY KEY,
-  issue_type VARCHAR(100) NOT NULL,
-  affected_row_id VARCHAR(255) NOT NULL,
-  affected_field VARCHAR(100),
-  detected_at TIMESTAMPTZ DEFAULT NOW(),
-  resolved_at TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_data_quality_issues_resolved ON data_quality_issues (resolved_at) WHERE resolved_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_data_quality_issues_type ON data_quality_issues (issue_type);
-
 -- 2. Create audit_log table
 CREATE TABLE IF NOT EXISTS audit_log (
   id SERIAL PRIMARY KEY,

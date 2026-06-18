@@ -35,7 +35,6 @@ const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
 const PredictiveAnalyticsPage = React.lazy(() => import('./pages/PredictiveAnalyticsPage'));
 
-const DataQualityDashboard = React.lazy(() => import('./pages/DataQualityDashboard'));
 const AuditTrailViewer = React.lazy(() => import('./pages/AuditTrailViewer'));
 const ProductionReadinessDashboard = React.lazy(() => import('./pages/ProductionReadinessDashboard'));
 
@@ -247,16 +246,6 @@ function DashboardLayout() {
                   <ProtectedRoute adminOnly={true}>
                     <RouteWrapper>
                       <UploadPage />
-                    </RouteWrapper>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/data-quality"
-                element={
-                  <ProtectedRoute adminOnly={true}>
-                    <RouteWrapper>
-                      <DataQualityDashboard />
                     </RouteWrapper>
                   </ProtectedRoute>
                 }

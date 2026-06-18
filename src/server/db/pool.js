@@ -67,7 +67,6 @@ if (!isMock) {
           created_at: new Date().toISOString(),
         },
       ];
-      this.dataQualityIssues = [];
       this.auditLogs = [];
       this.perfLogs = [];
     }
@@ -291,49 +290,6 @@ if (!isMock) {
         return {
           rows: [...this.users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
         };
-      }
-
-      // data_quality_issues mocks
-      if (cleanSql.includes('INSERT INTO DATA_QUALITY_ISSUES')) {
-        const [issue_type, affected_row_id, affected_field] = params;
-        const newIssue = {
-          id: this.dataQualityIssues.length + 1,
-          issue_type,
-          affected_row_id,
-          affected_field,
-          detected_at: new Date().toISOString(),
-          resolved_at: null
-        };
-        this.dataQualityIssues.push(newIssue);
-        return { rowCount: 1, rows: [newIssue] };
-      }
-      if (cleanSql.includes('UPDATE DATA_QUALITY_ISSUES SET RESOLVED_AT')) {
-        let updated = 0;
-        if (cleanSql.includes('WHERE ID = $1')) {
-          const id = parseInt(params[0], 10);
-          this.dataQualityIssues.forEach(i => {
-            if (i.id === id) {
-              i.resolved_at = new Date().toISOString();
-              updated++;
-            }
-          });
-        } else if (cleanSql.includes('WHERE RESOLVED_AT IS NULL')) {
-          const currentKeys = params[0] || [];
-          this.dataQualityIssues.forEach(i => {
-            if (!i.resolved_at && !currentKeys.includes(i.affected_row_id)) {
-              i.resolved_at = new Date().toISOString();
-              updated++;
-            }
-          });
-        }
-        return { rowCount: updated };
-      }
-      if (cleanSql.includes('FROM DATA_QUALITY_ISSUES')) {
-        let list = this.dataQualityIssues;
-        if (cleanSql.includes('RESOLVED_AT IS NULL')) {
-          list = list.filter(i => !i.resolved_at);
-        }
-        return { rows: list };
       }
 
       // audit_log mocks
