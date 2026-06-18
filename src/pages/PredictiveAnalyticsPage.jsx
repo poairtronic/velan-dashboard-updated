@@ -4,6 +4,7 @@ import SLAForecastPanel from '../components/forecasting/SLAForecastPanel';
 import CapacityPlanner from '../components/forecasting/CapacityPlanner';
 import QueueForecastCard from '../components/forecasting/QueueForecastCard';
 import VendorRiskMatrix from '../components/forecasting/VendorRiskMatrix';
+import PlantRiskDashboard from '../components/forecasting/PlantRiskDashboard';
 
 function PredictiveAnalyticsPage() {
   return (
@@ -12,6 +13,11 @@ function PredictiveAnalyticsPage() {
       <div className="section-title">
         <span>🔮</span> PREDICTIVE ANALYTICS
         <div className="section-line" />
+      </div>
+
+      {/* Section 0: Plant Risk Intelligence (Section 4 + 5 — full width, top of page) */}
+      <div style={{ marginBottom: 20 }}>
+        <PlantRiskDashboard />
       </div>
 
       {/* Section 1: Bottleneck Forecast (full width) */}
@@ -44,7 +50,7 @@ function PredictiveAnalyticsPage() {
           All forecasts derived from historical production data · No hardcoded rates or assumptions
         </span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
-          Confidence scores reflect data availability
+          Confidence scores reflect data availability · V3 Model: Activity(40%) + Consistency(30%) + Volume(30%)
         </span>
       </div>
     </div>

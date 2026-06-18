@@ -14,6 +14,7 @@ const { calculateCapacityForecast } = require('../forecast/capacityPlanner');
 const { calculateQueueForecast } = require('../forecast/queueForecast');
 const { calculateVendorRiskForecast } = require('../forecast/vendorRisk');
 const { calculateBottleneckForecast } = require('../forecast/bottleneckDetection');
+const { calculatePlantRisk } = require('../forecast/plantRisk');
 
 // Helper: get normalized live + db rows
 async function getForecastData() {
@@ -99,6 +100,18 @@ router.get('/bottleneck', requireAuth(), async (req, res) => {
   } catch (error) {
     console.error('[Forecast Bottleneck Error]', error);
     res.status(500).json({ error: 'Bottleneck forecast calculation failed', details: error.message });
+  }
+});
+
+// GET /api/forecast/plant-risk (Section 4 + Section 5)
+router.get('/plant-risk', requireAuth(), async (req, res) => {
+  try {
+    const data = await getForecastData();
+    const result = await calculatePlantRisk(data);
+    res.json(result);
+  } catch (error) {
+    console.error('[Forecast Plant Risk Error]', error);
+    res.status(500).json({ error: 'Plant risk calculation failed', details: error.message });
   }
 });
 

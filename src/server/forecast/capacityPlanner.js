@@ -1,12 +1,27 @@
 /**
- * Dynamic Capacity Planner V2
+ * Dynamic Capacity Planner V3 — Phase 9.6
  * Projects queue sizes using weighted inflow/outflow rates on working days.
  * Key tracking: SC + PO + Product.
+ *
+ * SECTION 1 — Capacity Planner Recommendations V2
+ *   Current Throughput  = Average Items Exiting Stage per Working Day
+ *   Required Throughput = Projected Queue / Target Clearance Days
+ *   Capacity Increase % = ((Required - Current) / Current) * 100
+ *   Priority: >50% Critical, 20-50% High, 10-20% Medium, <10% Monitor
+ *
+ * SECTION 2 — Confidence Score V3
+ *   Final Confidence = Activity(40%) + Consistency(30%) + Volume(30%)
+ *   Activity  = Days With Events / Total Window Days * 100
+ *   Consistency = 100 - Normalized CV
+ *   Volume = MIN(100, (Total Events / 100) * 100)
+ *   Bands: 90-100 Very High, 75-89 High, 50-74 Medium, <50 Low
  */
 const { workingDaysBetween5Day, addWorkingDays5Day } = require('../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const ANALYSIS_WINDOW_WORKING_DAYS = 14;
+const TARGET_CLEARANCE_DAYS = 10;
+const TARGET_EVENT_COUNT = 100;
 
 async function calculateCapacityForecast({ liveRows, dbRows }) {
   // 1. Current queue per stage from live data
@@ -107,49 +122,102 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
     const projected14d = Math.max(0, Math.round(queue + netDailyChange * 14));
     const projected30d = Math.max(0, Math.round(queue + netDailyChange * 30));
 
-    // Capacity Gap
+    // Capacity Gap (unchanged — backward compat)
     const capacityGapPercent = queue > 0
       ? Math.round(((projected30d - queue) / queue) * 100)
       : (projected30d > 0 ? 100 : 0);
 
-    // Recommendation
-    let recommendedAction = 'Monitor — Stable';
-    if (capacityGapPercent > 50) recommendedAction = 'Increase capacity — Growing backlog';
-    else if (capacityGapPercent > 20) recommendedAction = 'Plan capacity increase';
-    else if (capacityGapPercent < -30) recommendedAction = 'Reduce allocation — Shrinking queue';
-    else if (capacityGapPercent < -10) recommendedAction = 'Queue clearing — Good progress';
+    // ═══════════════════════════════════════════════
+    // SECTION 1 — Capacity Planner Recommendations V2
+    // ═══════════════════════════════════════════════
 
-    // 5. Confidence Score V2
-    // Activity Score (60%)
+    // Current Throughput = Average Items Exiting Stage per Working Day
+    const currentThroughput = Math.round(weightedDailyOutflow * 10) / 10;
+
+    // Use projected queue at +30 days as the basis for required throughput
+    const projectedQueue = projected30d > 0 ? projected30d : queue;
+
+    // Required Throughput = Projected Queue / Target Clearance Days
+    const requiredThroughput = projectedQueue > 0
+      ? Math.round((projectedQueue / TARGET_CLEARANCE_DAYS) * 10) / 10
+      : 0;
+
+    // Capacity Increase % = ((Required - Current) / Current) × 100
+    let capacityIncreasePercent = 0;
+    if (currentThroughput > 0 && requiredThroughput > currentThroughput) {
+      capacityIncreasePercent = Math.round(((requiredThroughput - currentThroughput) / currentThroughput) * 100);
+    } else if (currentThroughput === 0 && requiredThroughput > 0) {
+      capacityIncreasePercent = 100; // Need to establish capacity
+    }
+
+    // Priority based on Capacity Increase %
+    let priority = 'Monitor';
+    let recommendedAction = 'Monitor — Stable';
+    if (capacityIncreasePercent > 50) {
+      priority = 'Critical';
+      recommendedAction = 'Immediate capacity increase required — Critical backlog growth';
+    } else if (capacityIncreasePercent > 20) {
+      priority = 'High';
+      recommendedAction = 'Plan capacity increase — Significant gap detected';
+    } else if (capacityIncreasePercent > 10) {
+      priority = 'Medium';
+      recommendedAction = 'Schedule capacity review — Moderate gap';
+    } else if (capacityIncreasePercent > 0) {
+      priority = 'Monitor';
+      recommendedAction = 'Monitor — Minor gap within tolerance';
+    } else if (capacityGapPercent < -30) {
+      priority = 'Monitor';
+      recommendedAction = 'Reduce allocation — Shrinking queue';
+    } else if (capacityGapPercent < -10) {
+      priority = 'Monitor';
+      recommendedAction = 'Queue clearing — Good progress';
+    }
+
+    // ═══════════════════════════════════════════════
+    // SECTION 2 — Confidence Score V3
+    // ═══════════════════════════════════════════════
+
+    // Activity Score (40%) = Days With Events / Total Window Days × 100
     let activeDaysCount = 0;
     workingDays.forEach(ds => {
       if ((inflowDays[ds] || 0) > 0 || (outflowDays[ds] || 0) > 0) {
         activeDaysCount++;
       }
     });
-    const activityScore = activeDaysCount / ANALYSIS_WINDOW_WORKING_DAYS;
+    const activityScore = (activeDaysCount / ANALYSIS_WINDOW_WORKING_DAYS) * 100;
 
-    // Consistency Score (40%) using Coefficient of Variation (CV) on daily throughput (outflow)
+    // Consistency Score (30%) = 100 - Normalized CV
     const dailyOutflowValues = workingDays.map(ds => outflowDays[ds] || 0);
     const meanOutflow = dailyOutflowValues.reduce((s, v) => s + v, 0) / ANALYSIS_WINDOW_WORKING_DAYS;
-    
+
     let consistencyScore = 0;
     let cv = 0;
     if (meanOutflow > 0) {
       const variance = dailyOutflowValues.reduce((s, v) => s + Math.pow(v - meanOutflow, 2), 0) / ANALYSIS_WINDOW_WORKING_DAYS;
       const stdDev = Math.sqrt(variance);
       cv = stdDev / meanOutflow;
-      consistencyScore = Math.max(0, 1 - cv);
-    } else {
-      consistencyScore = 0;
+      // Normalize CV: cap at 2 so score doesn't go below 0
+      const normalizedCV = Math.min(cv, 2) * 50; // Scale to 0-100 range
+      consistencyScore = Math.max(0, 100 - normalizedCV);
     }
 
-    const finalConfidence = Math.min(100, Math.max(10, Math.round(((activityScore * 0.6) + (consistencyScore * 0.4)) * 100)));
+    // Volume Score (30%) = MIN(100, (Total Events / Target Event Count) × 100)
+    const totalEvents = dailyOutflowValues.reduce((s, v) => s + v, 0);
+    const volumeScore = Math.min(100, (totalEvents / TARGET_EVENT_COUNT) * 100);
 
+    // Final Confidence = Activity(40%) + Consistency(30%) + Volume(30%)
+    const finalConfidence = Math.min(100, Math.max(5, Math.round(
+      (activityScore * 0.40) +
+      (consistencyScore * 0.30) +
+      (volumeScore * 0.30)
+    )));
+
+    // Confidence Bands (V3)
     let confidenceLabel = 'Low';
-    if (finalConfidence >= 80) confidenceLabel = 'Very High';
-    else if (finalConfidence >= 60) confidenceLabel = 'High';
-    else if (finalConfidence >= 40) confidenceLabel = 'Medium';
+    let confidenceGrade = 'D';
+    if (finalConfidence >= 90) { confidenceLabel = 'Very High'; confidenceGrade = 'A'; }
+    else if (finalConfidence >= 75) { confidenceLabel = 'High'; confidenceGrade = 'B'; }
+    else if (finalConfidence >= 50) { confidenceLabel = 'Medium'; confidenceGrade = 'C'; }
 
     results.push({
       stage,
@@ -161,10 +229,29 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
       projectedQueue14d: projected14d,
       projectedQueue30d: projected30d,
       capacityGapPercent,
+
+      // V2 Recommendations (Section 1)
+      currentThroughput,
+      requiredThroughput,
+      capacityIncreasePercent,
+      priority,
       recommendedAction,
+
+      // V3 Confidence (Section 2)
       confidence: finalConfidence,
       confidencePercent: finalConfidence,
       confidenceLabel,
+      confidenceGrade,
+      confidenceBreakdown: {
+        activityScore: Math.round(activityScore),
+        consistencyScore: Math.round(consistencyScore),
+        volumeScore: Math.round(volumeScore),
+        activeDays: activeDaysCount,
+        totalDays: ANALYSIS_WINDOW_WORKING_DAYS,
+        totalEvents,
+        cv: Math.round(cv * 100) / 100
+      },
+
       // Backward compatibility:
       avgInflowPerDay: Math.round(weightedDailyInflow * 10) / 10,
       avgOutflowPerDay: Math.round(weightedDailyOutflow * 10) / 10,
@@ -179,7 +266,10 @@ async function calculateCapacityForecast({ liveRows, dbRows }) {
     metadata: {
       analysisWindowDays: ANALYSIS_WINDOW_WORKING_DAYS,
       basedOnDays: ANALYSIS_WINDOW_WORKING_DAYS,
-      stagesAnalyzed: results.length
+      stagesAnalyzed: results.length,
+      targetClearanceDays: TARGET_CLEARANCE_DAYS,
+      targetEventCount: TARGET_EVENT_COUNT,
+      confidenceModel: 'V3 — Activity(40%) + Consistency(30%) + Volume(30%)'
     }
   };
 }

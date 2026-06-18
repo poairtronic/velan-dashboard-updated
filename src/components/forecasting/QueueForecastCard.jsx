@@ -1,5 +1,69 @@
 import React, { useState, useEffect } from 'react';
 
+function ConfidenceGradeBadge({ confidence, label, grade }) {
+  let color = 'var(--accent4)';
+  if (label === 'Very High') color = 'var(--success)';
+  else if (label === 'High') color = '#00c9ff';
+  else if (label === 'Medium') color = 'var(--warning)';
+  return (
+    <span style={{
+      fontSize: 9, fontFamily: 'Share Tech Mono, monospace', color,
+      background: `${color}22`, padding: '2px 6px', borderRadius: 8,
+      display: 'inline-flex', alignItems: 'center', gap: 3
+    }}>
+      <span style={{ fontWeight: 700 }}>{grade}</span> {confidence}% {label}
+    </span>
+  );
+}
+
+function ForecastUnavailableCard({ forecast }) {
+  const statusColors = {
+    unavailable: { color: 'var(--danger)', bg: 'rgba(255,61,90,0.08)', icon: '⚠' },
+    low_confidence: { color: 'var(--warning)', bg: 'rgba(255,184,54,0.08)', icon: '⚡' }
+  };
+  const s = statusColors[forecast.forecastStatus] || statusColors.unavailable;
+
+  return (
+    <div style={{
+      background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 8, padding: 14,
+      borderLeft: `3px solid ${s.color}`
+    }}>
+      {/* Stage header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{forecast.stage}</span>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>Queue: {forecast.currentQueue}</span>
+        </div>
+        <ConfidenceGradeBadge confidence={forecast.confidence} label={forecast.confidenceLabel} grade={forecast.confidenceGrade} />
+      </div>
+
+      {/* Unavailability Message */}
+      <div style={{
+        padding: '10px 12px', borderRadius: 6, background: s.bg,
+        border: `1px solid ${s.color}33`
+      }}>
+        <div style={{
+          fontSize: 12, fontWeight: 700, color: s.color,
+          fontFamily: 'Rajdhani, sans-serif', letterSpacing: 0.5, marginBottom: 6
+        }}>
+          {s.icon} {forecast.forecastMessage}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace', lineHeight: 1.5 }}>
+          {forecast.forecastReason}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
+            DATA COVERAGE: <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{forecast.dataCoverage}%</span>
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
+            SAMPLE SIZE: <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{forecast.sampleSize} events</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function QueueForecastCard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +93,9 @@ function QueueForecastCard() {
 
   if (!data || !data.forecasts) return null;
 
-  const maxDays = Math.max(1, ...data.forecasts.flatMap(f => [f.bestDays || 0, f.expectedDays || 0, f.worstDays || 0]));
+  const availableForecasts = data.forecasts.filter(f => f.forecastStatus === 'available');
+  const unavailableForecasts = data.forecasts.filter(f => f.forecastStatus !== 'available');
+  const maxDays = Math.max(1, ...availableForecasts.flatMap(f => [f.bestDays || 0, f.expectedDays || 0, f.worstDays || 0]));
 
   return (
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
@@ -46,13 +112,10 @@ function QueueForecastCard() {
         {data.forecasts.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: 20 }}>No active queues to forecast</div>
         ) : (
-          data.forecasts.map((f, i) => {
-            let confColor = 'var(--accent4)';
-            if (f.confidence >= 80) confColor = 'var(--success)';
-            else if (f.confidence >= 50) confColor = 'var(--warning)';
-
-            return (
-              <div key={i} style={{
+          <>
+            {/* Available forecasts with scenario bars */}
+            {availableForecasts.map((f, i) => (
+              <div key={`avail-${i}`} style={{
                 background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 8, padding: 14
               }}>
                 {/* Stage header */}
@@ -67,12 +130,7 @@ function QueueForecastCard() {
                         Clear Date: {f.expectedClearanceDate}
                       </span>
                     )}
-                    <span style={{
-                      fontSize: 9, fontFamily: 'Share Tech Mono, monospace', color: confColor,
-                      background: `${confColor}22`, padding: '2px 6px', borderRadius: 8
-                    }}>
-                      {f.confidence}%
-                    </span>
+                    <ConfidenceGradeBadge confidence={f.confidence} label={f.confidenceLabel} grade={f.confidenceGrade} />
                   </div>
                 </div>
 
@@ -99,7 +157,7 @@ function QueueForecastCard() {
                         position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
                         fontSize: 10, fontFamily: 'Share Tech Mono, monospace', color: 'var(--text-primary)', fontWeight: 700
                       }}>
-                        {scenario.days !== null ? `${scenario.days}d` : 'N/A'}
+                        {scenario.days !== null ? `${scenario.days}d` : '—'}
                       </span>
                     </div>
                     <span style={{ width: 50, fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', textAlign: 'right' }}>
@@ -107,15 +165,35 @@ function QueueForecastCard() {
                     </span>
                   </div>
                 ))}
+
+                {/* Data coverage indicator */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                  <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
+                    Coverage: {f.dataCoverage}% · {f.sampleSize} events
+                  </span>
+                  {f.forecastStatus === 'low_confidence' && (
+                    <span style={{ fontSize: 9, color: 'var(--warning)', fontFamily: 'Share Tech Mono, monospace' }}>
+                      ⚡ Low confidence — treat as estimate
+                    </span>
+                  )}
+                </div>
               </div>
-            );
-          })
+            ))}
+
+            {/* Unavailable forecasts with descriptive messaging */}
+            {unavailableForecasts.map((f, i) => (
+              <ForecastUnavailableCard key={`unavail-${i}`} forecast={f} />
+            ))}
+          </>
         )}
       </div>
 
-      <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)' }}>
+      <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
           Based on {data.metadata.basedOnDays} days of throughput history
+        </span>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
+          {data.metadata.confidenceModel}
         </span>
       </div>
     </div>
