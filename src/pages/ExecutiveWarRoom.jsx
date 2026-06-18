@@ -32,7 +32,7 @@ export default function ExecutiveWarRoom() {
     return () => { isMounted = false; };
   }, []);
 
-  if (loading) return <LoadingScreen message="Loading Executive War Room..." />;
+  if (loading) return <LoadingScreen message="Loading Production Control..." />;
   if (error) return <div style={{ padding: '40px', color: 'var(--danger)', textAlign: 'center' }}>Error: {error}</div>;
   if (!data) return null;
 
@@ -40,7 +40,7 @@ export default function ExecutiveWarRoom() {
     <div style={{ paddingBottom: '100px' }}>
       <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
-          Executive <span>War Room</span>
+          Production <span>Control</span>
           <div className="section-line" />
         </div>
       </div>
