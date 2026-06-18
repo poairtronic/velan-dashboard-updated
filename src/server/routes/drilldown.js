@@ -141,6 +141,34 @@ router.get('/:kpiType', requireAuth(), async (req, res) => {
       return res.json(counts);
     }
 
+    if (kpiType === 'wip' || kpiType === 'production') {
+      const { rows } = await pool.query(BOTTLENECK_DRILLDOWN_QUERY);
+      const stageCounts = {};
+      const stagePOs = {};
+      
+      rows.forEach(r => {
+        if (!stageCounts[r.stage]) {
+          stageCounts[r.stage] = 0;
+          stagePOs[r.stage] = new Set();
+        }
+        stageCounts[r.stage]++;
+        stagePOs[r.stage].add(r.po);
+      });
+
+      const topStageEntry = Object.entries(stageCounts).sort((a,b) => b[1] - a[1])[0];
+      const topStage = topStageEntry ? topStageEntry[0] : 'N/A';
+      const queueSize = topStageEntry ? topStageEntry[1] : 0;
+      const affectedPOsCount = topStageEntry ? stagePOs[topStage].size : 0;
+
+      return res.json({
+        topStage,
+        affectedPOCount: affectedPOsCount,
+        currentQueueSize: queueSize,
+        expectedDelayDays: Math.round(queueSize / 10),
+        historicalTrend: []
+      });
+    }
+
     return res.status(400).json({ error: 'Unknown KPI type' });
   } catch (error) {
     console.error(`[Drilldown Error] ${kpiType}:`, error);

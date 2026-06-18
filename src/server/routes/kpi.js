@@ -12,10 +12,20 @@ router.get('/history', requireAuth(), async (req, res) => {
     if (metric === 'production') {
       const { rows } = await pool.query(HISTORICAL_OUTPUT_QUERY, [days]);
       
-      const chartData = rows.map(r => ({
-        date: r.date.toISOString().split('T')[0],
-        value: parseInt(r.value, 10)
-      }));
+      const chartData = rows.map(r => {
+        let dateStr = '';
+        if (r.date instanceof Date) {
+          dateStr = r.date.toISOString().split('T')[0];
+        } else if (typeof r.date === 'string') {
+          dateStr = r.date.split('T')[0];
+        } else if (r.date) {
+          dateStr = new Date(r.date).toISOString().split('T')[0];
+        }
+        return {
+          date: dateStr,
+          value: parseInt(r.value, 10)
+        };
+      });
 
       // Fill missing dates
       const filled = [];

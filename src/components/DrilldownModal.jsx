@@ -74,7 +74,7 @@ function DrilldownModal({ kpiType, title, onClose }) {
       );
     }
 
-    if (kpiType === 'bottleneck') {
+    if (kpiType === 'bottleneck' || kpiType === 'wip' || kpiType === 'production') {
       return (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '20px' }}>
