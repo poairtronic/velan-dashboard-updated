@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: '⬡' },
   { id: 'executive', label: 'Executive Intel', icon: '📊' },
   { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
-  { id: 'health', label: 'Enterprise Health', icon: '🛡' },
   { id: 'executive-war-room', label: 'Executive War Room', icon: '⚔' },
   { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'monthday', label: 'Month / Day View', icon: '📅' },
@@ -23,7 +22,7 @@ const NAV_ITEMS = [
   { id: 'upload', label: 'Upload Data', icon: '⬆' },
   { id: 'users', label: 'User Management', icon: '👥' },
   { id: 'audit-trail', label: 'Audit Trail', icon: '📜' },
-  { id: 'production-readiness', label: 'Prod Readiness', icon: '🚀' },
+  { id: 'health', label: 'Enterprise Health', icon: '🛡' },
 ];
 
 function Sidebar() {
@@ -33,7 +32,7 @@ function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(
-    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health' && n.id !== 'executive-war-room' && n.id !== 'audit-trail' && n.id !== 'production-readiness') || isAdmin
+    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health' && n.id !== 'executive-war-room' && n.id !== 'audit-trail') || isAdmin
   );
 
   const fetchPendingCount = useCallback(async () => {

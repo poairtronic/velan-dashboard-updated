@@ -36,7 +36,6 @@ const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage')
 const PredictiveAnalyticsPage = React.lazy(() => import('./pages/PredictiveAnalyticsPage'));
 
 const AuditTrailViewer = React.lazy(() => import('./pages/AuditTrailViewer'));
-const ProductionReadinessDashboard = React.lazy(() => import('./pages/ProductionReadinessDashboard'));
 
 function AppRoutes() {
   const { setActiveNav } = useUI();
@@ -260,16 +259,7 @@ function DashboardLayout() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/production-readiness"
-                element={
-                  <ProtectedRoute adminOnly={true}>
-                    <RouteWrapper>
-                      <ProductionReadinessDashboard />
-                    </RouteWrapper>
-                  </ProtectedRoute>
-                }
-              />
+
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
