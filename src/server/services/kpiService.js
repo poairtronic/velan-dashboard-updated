@@ -73,14 +73,22 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   let readyCount = 0;
   let storesCount = 0;
   const completeSets = [];
+  const readySetsArr = [];
+  const storeSetsArr = [];
 
   filteredScGroups.forEach((sg) => {
     const isReady = sg.items.every((i) => i.currentStage === 'READY');
     const isStore = sg.items.every((i) => i.currentStage === 'STORES');
     const isComplete = sg.items.every((i) => terminalStages.has(i.currentStage));
 
-    if (isReady) readyCount++;
-    if (isStore) storesCount++;
+    if (isReady) {
+      readyCount++;
+      readySetsArr.push(sg);
+    }
+    if (isStore) {
+      storesCount++;
+      storeSetsArr.push(sg);
+    }
     if (isComplete) completeSets.push(sg);
   });
 
@@ -192,8 +200,8 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     masterOutputCount,
     scDailyOutput,
     completeSets,
-    storeSets: storesCount,
-    readySets: readyCount,
+    storeSets: storeSetsArr,
+    readySets: readySetsArr,
     delayedPOs,
     onTimePOs,
     overviewStats,
