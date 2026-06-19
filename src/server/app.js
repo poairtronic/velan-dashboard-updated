@@ -8,7 +8,7 @@ const requestLogger = require('./middleware/requestLogger');
 const errorHandler = require('./middleware/errorHandler');
 const notFound = require('./middleware/notFound');
 const { authenticate, requireAuth } = require('./middleware/auth');
-const { authLimiter, syncLimiter, dashboardLimiter } = require('./middleware/rateLimit');
+const { syncLimiter, dashboardLimiter } = require('./middleware/rateLimit');
 const { env } = require('./config/env');
 
 // Routers
