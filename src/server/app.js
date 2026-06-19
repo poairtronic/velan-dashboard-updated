@@ -32,7 +32,7 @@ const alertsRouter = require('./routes/alerts');
 const timelineRouter = require('./routes/timeline');
 const drilldownRouter = require('./routes/drilldown');
 const executiveRouter = require('./routes/executive');
-const kpiRouter = require('./routes/kpi');
+
 const intelligenceRouter = require('./routes/intelligence');
 const micRouter = require('./routes/mic');
 const forecastRouter = require('./routes/forecast');
@@ -145,7 +145,7 @@ app.use('/api', apiRouter);
 
 app.use('/api/drilldown', drilldownRouter);
 app.use('/api/executive', executiveRouter);
-app.use('/api/kpi', kpiRouter);
+
 
 // ── Static files ──────────────────────────────────────────────────────────
 const projectRoot = path.resolve(__dirname, '..', '..');

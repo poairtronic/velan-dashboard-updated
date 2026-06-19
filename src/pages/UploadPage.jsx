@@ -2,17 +2,7 @@ import React from 'react';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { getStageColor } from '../services/dataNormalizer';
-import {
-  workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
-} from '../utils/calculationUtils';
-import { fmtTs, fmtDate } from '../utils/dateUtils';
-import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
+
 import DataTable from '../components/DataTable';
 // ─── UPLOAD DATA PAGE COMPONENT ───────────────────────────────────────────────
 
@@ -21,19 +11,10 @@ function UploadPage() {
     data = [],
     uploadStatus,
     setUploadStatus,
-    importState,
-    saveRowsToServer,
-    importRowsToDb,
     handleFileUpload,
-    handleHistoryFileUpload,
-    handleHistoryDragDrop,
     syncLiveDataNow,
-    syncHistorySheet,
-    resetDB,
     liveConfig,
     setLiveConfig,
-    historyConfig,
-    setHistoryConfig,
   } = useData();
   const { liveState } = useUI();
 
@@ -57,121 +38,7 @@ function UploadPage() {
     }
   }
 
-  async function downloadTemplate() {
-    const rows = [
-      {
-        SNO: 1,
-        'PO NO': 'AGIPLPO2326',
-        'PO RECD DATE': '2026-03-25',
-        SC: '1170',
-        'Product Name': 'ARG DIA 15.2 +0.03',
-        QTY: '1 NO',
-        'STATUS 1': 'LATHE COMPLETED, MOVE TO M1',
-        'STATUS 2': 'MOVE TO STORES',
-        'INHOUSE/ VENDOR': 'INHOUSE',
-        OP: 'READY',
-        TIMESTAMP: '2026-04-15 19:20:04',
-      },
-      {
-        SNO: '',
-        'PO NO': '',
-        'PO RECD DATE': '',
-        SC: '1170',
-        'Product Name': 'SP DIA 15.2 +0.03',
-        QTY: '1 SET',
-        'STATUS 1': 'SET MOVE TO FB',
-        'STATUS 2': 'MOVE TO STORES',
-        'INHOUSE/ VENDOR': 'INHOUSE',
-        OP: 'READY',
-        TIMESTAMP: '2026-04-15 19:24:04',
-      },
-      {
-        SNO: '',
-        'PO NO': '',
-        'PO RECD DATE': '',
-        SC: '1170',
-        'Product Name': 'M6 T CONNECTOR',
-        QTY: '1 NO',
-        'STATUS 1': 'INHOUSE',
-        'STATUS 2': '',
-        'INHOUSE/ VENDOR': 'INHOUSE',
-        OP: 'STOCK',
-        TIMESTAMP: '2026-03-30 11:03:33',
-      },
-      {
-        SNO: 2,
-        'PO NO': 'AGIPLPO14',
-        'PO RECD DATE': '2026-03-25',
-        SC: '1187',
-        'Product Name': 'APG DIA 24.0 -0.007/-0.028',
-        QTY: '1 NO',
-        'STATUS 1': 'MOVE TO FB',
-        'STATUS 2': 'MOVE TO STORES',
-        'INHOUSE/ VENDOR': 'INHOUSE',
-        OP: 'READY',
-        TIMESTAMP: '2026-04-13 18:14:43',
-      },
-      {
-        SNO: '',
-        'PO NO': '',
-        'PO RECD DATE': '',
-        SC: '1187',
-        'Product Name': 'SRG DIA 24.0 -0.007/-0.028',
-        QTY: '1 NO',
-        'STATUS 1': 'HT,SZ COMPLETED,MOVE TO SG',
-        'STATUS 2': 'MOVE TO STORES',
-        'INHOUSE/ VENDOR': 'INHOUSE',
-        OP: 'READY',
-        TIMESTAMP: '2026-04-13 18:23:27',
-      },
-      {
-        SNO: '',
-        'PO NO': '',
-        'PO RECD DATE': '',
-        SC: '1187',
-        'Product Name': 'VERTICAL BENCH MOUNT PLATE',
-        QTY: '1 NO',
-        'STATUS 1': 'INHOUSE',
-        'STATUS 2': '',
-        'INHOUSE/ VENDOR': 'VENDOR',
-        OP: 'SDV',
-        TIMESTAMP: '2026-04-13 17:01:58',
-      },
-    ];
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [
-      { wch: 5 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 10 },
-      { wch: 30 },
-      { wch: 8 },
-      { wch: 35 },
-      { wch: 20 },
-      { wch: 14 },
-      { wch: 10 },
-      { wch: 22 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'stdtrack');
-    XLSX.writeFile(wb, 'velan_template.xlsx');
-  }
 
-  async function exportCurrentData() {
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Production');
-    const d = new Date();
-    const exportDate =
-      d.getFullYear() +
-      '-' +
-      String(d.getMonth() + 1).padStart(2, '0') +
-      '-' +
-      String(d.getDate()).padStart(2, '0');
-    XLSX.writeFile(wb, `velan_export_${exportDate}.xlsx`);
-  }
 
   const statusColors = {
     success: { bg: 'rgba(0,230,118,0.1)', border: 'rgba(0,230,118,0.4)', color: 'var(--success)' },
@@ -519,7 +386,7 @@ function UploadPage() {
                 Flexible column name detection.
               </li>
               <li>
-                <span className="mono text-accent">No "type" column needed</span> — product type
+                <span className="mono text-accent">No &quot;type&quot; column needed</span> — product type
                 auto-detected from name prefix (APG, SRG, ARG, SP, etc.)
               </li>
               <li>
@@ -531,22 +398,7 @@ function UploadPage() {
             </ul>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <button
-              className="filter-btn"
-              onClick={downloadTemplate}
-              style={{ flex: 1, padding: '10px' }}
-            >
-              ⬇ Download Template
-            </button>
-            <button
-              className="filter-btn"
-              onClick={exportCurrentData}
-              style={{ flex: 1, padding: '10px' }}
-            >
-              📊 Export Current ({data.length} rows)
-            </button>
-          </div>
+
         </div>
 
         <div className="chart-card">
@@ -609,49 +461,49 @@ function UploadPage() {
       <div className="chart-card">
         <div className="chart-title">Current Data Preview — {data.length} rows loaded</div>
         <div className="chart-sub">FIRST 50 ROWS OF ACTIVE DATASET</div>
-            <DataTable headers={['SC', 'PO', 'PRODUCT', 'TYPE', 'STAGE', 'INHOUSE', 'TIMESTAMP']} isLoading={uploadStatus?.type === 'loading'} isEmpty={data.length === 0} emptyMessage="Upload data to preview">
-              {data.slice(0, 50).map((r, i) => (
-                <tr key={i}>
-                  <td className="mono text-accent">{r.sc || '—'}</td>
-                  <td style={{ fontSize: 11 }}>{r.po}</td>
-                  <td
-                    style={{
-                      fontSize: 11,
-                      maxWidth: 200,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {r.product || '—'}
-                  </td>
-                  <td>
-                    <span className="status-pill badge-blue">{r.type || '—'}</span>
-                  </td>
-                  <td>
-                    <span
-                      className="status-pill"
-                      style={{
-                        background: getStageColor(r.currentStage) + '22',
-                        color: getStageColor(r.currentStage),
-                      }}
-                    >
-                      {r.currentStage || '—'}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}
-                    >
-                      {r.inhouse}
-                    </span>
-                  </td>
-                  <td className="mono" style={{ fontSize: 10 }}>
-                    {r.timestamp?.substring(0, 16) || '—'}
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
+        <DataTable headers={['SC', 'PO', 'PRODUCT', 'TYPE', 'STAGE', 'INHOUSE', 'TIMESTAMP']} isLoading={uploadStatus?.type === 'loading'} isEmpty={data.length === 0} emptyMessage="Upload data to preview">
+          {data.slice(0, 50).map((r, i) => (
+            <tr key={i}>
+              <td className="mono text-accent">{r.sc || '—'}</td>
+              <td style={{ fontSize: 11 }}>{r.po}</td>
+              <td
+                style={{
+                  fontSize: 11,
+                  maxWidth: 200,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {r.product || '—'}
+              </td>
+              <td>
+                <span className="status-pill badge-blue">{r.type || '—'}</span>
+              </td>
+              <td>
+                <span
+                  className="status-pill"
+                  style={{
+                    background: getStageColor(r.currentStage) + '22',
+                    color: getStageColor(r.currentStage),
+                  }}
+                >
+                  {r.currentStage || '—'}
+                </span>
+              </td>
+              <td>
+                <span
+                  className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}
+                >
+                  {r.inhouse}
+                </span>
+              </td>
+              <td className="mono" style={{ fontSize: 10 }}>
+                {r.timestamp?.substring(0, 16) || '—'}
+              </td>
+            </tr>
+          ))}
+        </DataTable>
       </div>
     </div>
   );

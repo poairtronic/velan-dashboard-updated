@@ -152,7 +152,7 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
     const [pStage, pData] = predictedEntry;
     if (pData.growthRate > 0 && currentBottleneckQueue > pData.currentQueue) {
       daysUntil = Math.round((currentBottleneckQueue - pData.currentQueue) / pData.growthRate);
-    } else if (pStage === currentBottleneck.stage) {
+    } else if (currentBottleneckStage && pStage === currentBottleneckStage[0]) {
       daysUntil = 0;
     }
   }

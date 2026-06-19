@@ -198,16 +198,6 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
         ? Math.round(itemCycleDays.reduce((a, b) => a + b, 0) / itemCycleDays.length)
         : null;
 
-    const bottleneckStages = Object.entries(stageCounts)
-      .filter(([s]) => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s))
-      .map(([stage, count]) => {
-        const ct = stageCycleTimes.find((c) => c.stage === stage);
-        const duration = ct ? ct.duration : 1;
-        const score = count * duration;
-        return { stage, count, duration, score };
-      })
-      .sort((a, b) => b.score - a.score);
-
     const vendorStageData = [];
     filtered.forEach((r) => {
       if (r.inhouse !== 'VENDOR' || !r.timestamp) return;
@@ -223,6 +213,7 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
           sc: r.sc,
           product: r.product,
           timestamp: r.timestamp,
+          item: r,
         });
     });
 
@@ -230,6 +221,7 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
     vendorStageData.forEach((s) => {
       if (!vendorStats[s.vendor]) {
         vendorStats[s.vendor] = {
+          code: s.vendor,
           vendor: s.vendor,
           totalPending: 0,
           count: 0,
@@ -246,7 +238,7 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
         vendorStats[s.vendor].totalFromPO += s.daysFromPO;
         vendorStats[s.vendor].fromPODays.push(s.daysFromPO);
       }
-      vendorStats[s.vendor].items.push(s);
+      vendorStats[s.vendor].items.push(s.item);
     });
 
     Object.keys(vendorStats).forEach((v) => {
@@ -289,63 +281,44 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
 
     const topVendorBottleneck = vendorBottlenecks[0] || null;
 
-    {
-      const vendorAvgPendingMap = {};
-      Object.values(vendorStats).forEach((s) => {
-        if (s && s.vendor) vendorAvgPendingMap[s.vendor] = s.avgPending || 0;
-      });
-      const corrected = Object.entries(stageCounts)
-        .filter(([s]) => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s))
-        .map(([stage, count]) => {
-          let duration;
-          if (vendorAvgPendingMap[stage] !== undefined) {
-            duration = vendorAvgPendingMap[stage] || 1;
-          } else {
-            const ct = stageCycleTimes.find((c) => c.stage === stage);
-            duration = ct ? ct.duration : 1;
-          }
-          return { stage, count, duration, score: count * duration };
-        })
-        .sort((a, b) => b.score - a.score);
-      bottleneckStages.length = 0;
-      corrected.forEach((s) => bottleneckStages.push(s));
-    }
+    const bottleneckStages = Object.entries(stageCounts)
+      .filter(([s]) => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s))
+      .map(([stage, count]) => {
+        let duration;
+        const vs = vendorStats[stage];
+        if (vs && vs.avgPending !== undefined) {
+          duration = vs.avgPending || 1;
+        } else {
+          const ct = stageCycleTimes.find((c) => c.stage === stage);
+          duration = ct ? ct.duration : 1;
+        }
+        const score = count * duration;
+        return { stage, count, duration, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
     const topBottleneckCorrected = bottleneckStages[0] || null;
 
-    const vendorTimeMap = {};
-    filtered.forEach((r) => {
-      if (r.inhouse !== 'VENDOR') return;
-      const vcode = r.currentStage || 'UNKNOWN';
-      if (!vendorTimeMap[vcode])
-        vendorTimeMap[vcode] = { code: vcode, count: 0, items: [], days: [] };
-      vendorTimeMap[vcode].count++;
-      vendorTimeMap[vcode].items.push(r);
-      const d = dateDiff(r.timestamp, today);
-      if (d !== null) vendorTimeMap[vcode].days.push(d);
-    });
-    const vendorTotal = Object.values(vendorTimeMap).reduce((s, v) => s + v.count, 0);
-    const vendors = Object.values(vendorTimeMap)
+    const vendorTotal = Object.values(vendorStats).reduce((s, v) => s + v.count, 0);
+    const vendors = Object.values(vendorStats)
       .sort((a, b) => b.count - a.count)
       .map((v) => {
-        const avgDays =
-          v.days.length > 0 ? Math.round(v.days.reduce((a, b) => a + b, 0) / v.days.length) : null;
-        const maxDays = v.days.length > 0 ? Math.max(...v.days) : null;
         const delayed = v.items.filter((i) => {
           const d = dateDiff(i.timestamp, today);
           return d !== null && d > TARGET_DAYS;
         }).length;
-        const stats = vendorStats[v.code] || {};
         return {
           ...v,
           pct: Math.round((v.count / Math.max(vendorTotal, 1)) * 100),
-          avgDays,
-          maxDays,
+          avgDays: v.avgPending,
+          maxDays: v.maxPending,
           delayed,
-          avgFromPO: stats.avgFromPO || null,
-          slaViolations: stats.slaViolations || 0,
-          slaViolationRate: stats.slaViolationRate || 0,
-          processEfficiency: stats.processEfficiency || 0,
-          avgActiveTime: stats.avgActiveTime || 0,
+          avgFromPO: v.avgFromPO || null,
+          slaViolations: v.slaViolations || 0,
+          slaViolationRate: v.slaViolationRate || 0,
+          processEfficiency: v.processEfficiency || 0,
+          avgActiveTime: v.avgActiveTime || 0,
+          days: v.pendingDays,
         };
       });
 
@@ -389,5 +362,5 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
       dailyOutput,
       dailyOutputArray,
     };
-  }, [filtered, scGroups, poGroups, liveData, todayStr]);
+  }, [filtered, scGroups, poGroups, todayStr]);
 }

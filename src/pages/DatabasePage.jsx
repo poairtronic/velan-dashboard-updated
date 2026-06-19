@@ -7,7 +7,7 @@ import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 // Hooks
 import { useDatabaseFilters } from '../hooks/useDatabaseFilters';
 import { useDatabaseKPIs } from '../hooks/useDatabaseKPIs';
-import { useDatabaseExport } from '../hooks/useDatabaseExport';
+
 
 // Components
 import DatabaseHistoryManager from '../components/database/DatabaseHistoryManager';
@@ -15,8 +15,6 @@ import DatabaseFilterBar from '../components/database/DatabaseFilterBar';
 import DatabaseKPIs from '../components/database/DatabaseKPIs';
 import DatabaseTable from '../components/database/DatabaseTable';
 
-import { fmtDate, fmtTs } from '../utils/dateUtils';
-import { normalizeProductsInGroup } from '../utils/calculationUtils';
 
 // ─── DATABASE PAGE COMPONENT ──────────────────────────────────────────────────
 
@@ -45,12 +43,11 @@ function DatabasePage() {
     setFilters,
     hasNonDateFilter,
     setQuickDays,
-    dateInRange,
   } = useDatabaseFilters();
 
   // Fetch the massive filtered array locally to DatabasePage (to avoid global memory pressure)
-  const { rows: filtered, isLoading } = useProductionDataQuery({ ...filters, source: 'database' }, 1, 200000);
-  const data = filtered || []; // For Archive, data and filtered are effectively the same
+  const { rows: filtered } = useProductionDataQuery({ ...filters, source: 'database' }, 1, 200000);
+  const data = React.useMemo(() => filtered || [], [filtered]); // For Archive, data and filtered are effectively the same
 
   // Extract complex derivations required by KPI
   const allScItemsModal = React.useMemo(() => {
@@ -87,8 +84,7 @@ function DatabasePage() {
     hasNonDateFilter
   );
 
-  // 3. Export Logic
-  const { exportJSON, exportCSV, exportPDF } = useDatabaseExport(filtered, kpiStats, fromDate, toDate, { ...filters, dateType });
+
 
 
   // Constants
@@ -138,68 +134,7 @@ function DatabasePage() {
         setSelectedKPI={setSelectedKPI}
       />
 
-      {/* EXPORT BUTTONS */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-        <button
-          className="filter-btn"
-          style={{ background: 'rgba(0,201,255,0.08)', color: 'var(--accent1)', fontWeight: 700 }}
-          onClick={exportJSON}
-        >
-          ⬇ JSON
-        </button>
-        <button
-          className="filter-btn"
-          style={{ background: 'rgba(0,255,100,0.08)', color: 'var(--success)', fontWeight: 700 }}
-          onClick={exportCSV}
-        >
-          ⬇ CSV
-        </button>
-        <button
-          className="filter-btn"
-          style={{ background: 'rgba(255,61,90,0.08)', color: 'var(--danger)', fontWeight: 700 }}
-          onClick={exportPDF}
-        >
-          ⬇ PDF
-        </button>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
-          EXPORT COMPLETED ITEMS (
-          {(() => {
-            const dm = {};
-            const groups = {};
-            filtered.forEach((r) => {
-              if (!r.sc) return;
-              if (!groups[r.sc]) groups[r.sc] = [];
-              groups[r.sc].push(r);
-            });
-            Object.keys(groups).forEach((sc) => {
-              const normalized = normalizeProductsInGroup(groups[sc]);
-              normalized.forEach((r) => {
-                const k = (r.sc || '') + '||' + (r.product || '').trim();
-                const ex = dm[k];
-                if (!ex) {
-                  dm[k] = r;
-                  return;
-                }
-                const rD = kpiStats.isDoneStage(r.currentStage),
-                  eD = kpiStats.isDoneStage(ex.currentStage);
-                if (rD && !eD) {
-                  dm[k] = r;
-                  return;
-                }
-                if (!rD && eD) return;
-                if (r._isLive && !ex._isLive) {
-                  dm[k] = r;
-                  return;
-                }
-                if (!r._isLive && ex._isLive) return;
-                if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) dm[k] = r;
-              });
-            });
-            return Object.values(dm).filter((r) => kpiStats.isDoneStage(r.currentStage)).length;
-          })()}{' '}
-          rows — READY / STOCK / STORES / EXSTOCK only):
-        </span>
-      </div>
+
 
       <DatabaseTable filtered={filtered} isDoneStage={kpiStats.isDoneStage} />
 
@@ -474,66 +409,7 @@ function DatabasePage() {
       {/* DETAIL MODAL — SC COMPLETED + VA BREAKDOWN */}
       {selectedKPI === 'scCompletedPlusVA' &&
         (() => {
-          function exportModalJSON() {
-            const blob = new Blob([JSON.stringify(completedPlusVARows, null, 2)], {
-              type: 'application/json',
-            });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'sc_completed_plus_va.json';
-            a.click();
-          }
-          function exportModalCSV() {
-            const header = ['sc', 'po', 'product', 'currentStage', 'inhouse', 'timestamp'];
-            const rows = completedPlusVARows.map((r) =>
-              header.map((h) => `"${(r[h] || '').toString().replace(/"/g, '""')}"`).join(',')
-            );
-            const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'sc_completed_plus_va.csv';
-            a.click();
-          }
-          function exportModalPDF() {
-            import('jspdf').then(({ jsPDF }) => {
-              import('jspdf-autotable').then(() => {
-                const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-                doc.setFontSize(14);
-                doc.text('Velan Metrology \u2013 SC COMPLETED + VA', 40, 36);
-                doc.setFontSize(9);
-                doc.setTextColor(80, 80, 80);
-                doc.text(
-                  `READY: ${kpiStats.vaBreakdown.READY}  STOCK: ${kpiStats.vaBreakdown.STOCK}  STORES: ${kpiStats.vaBreakdown.STORES}  SC COMPLETED: ${kpiStats.scCompleted}  VA: ${kpiStats.vaBreakdown.VA}  SC COMPLETED+VA: ${kpiStats.scCompletedPlusVA}`,
-                  40,
-                  52
-                );
-                doc.autoTable({
-                  columns: [
-                    { header: 'SC', dataKey: 'sc' },
-                    { header: 'PO', dataKey: 'po' },
-                    { header: 'PRODUCT', dataKey: 'product' },
-                    { header: 'STAGE', dataKey: 'currentStage' },
-                    { header: 'INHOUSE', dataKey: 'inhouse' },
-                    { header: 'TIMESTAMP', dataKey: 'timestamp' },
-                  ],
-                  body: completedPlusVARows.map((r) => ({
-                    sc: r.sc || '',
-                    po: r.po || '',
-                    product: r.product || '',
-                    currentStage: r.currentStage || '',
-                    inhouse: r.inhouse || '',
-                    timestamp: r.timestamp ? fmtTs(r.timestamp) : '',
-                  })),
-                  startY: 68,
-                  styles: { fontSize: 8, cellPadding: 3 },
-                  headStyles: { fillColor: [255, 107, 53] },
-                  theme: 'grid',
-                  margin: { left: 40, right: 40 },
-                });
-                doc.save('sc_completed_plus_va.pdf');
-              });
-            });
-          }
+
 
           const isDoneOrVA = (s) => {
             if (!s) return false;
@@ -588,7 +464,6 @@ function DatabasePage() {
             })
             .filter(Boolean);
 
-          const completedPlusVARows = completedPlusVASCs.flatMap(([, rows]) => rows);
 
           return (
             <div
@@ -702,51 +577,7 @@ function DatabasePage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                    <button
-                      onClick={exportModalJSON}
-                      style={{
-                        padding: '5px 11px',
-                        border: '1px solid rgba(0,201,255,0.4)',
-                        background: 'rgba(0,201,255,0.08)',
-                        color: 'var(--accent1)',
-                        borderRadius: 6,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ⬇ JSON
-                    </button>
-                    <button
-                      onClick={exportModalCSV}
-                      style={{
-                        padding: '5px 11px',
-                        border: '1px solid rgba(0,230,118,0.4)',
-                        background: 'rgba(0,230,118,0.08)',
-                        color: 'var(--success)',
-                        borderRadius: 6,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ⬇ CSV
-                    </button>
-                    <button
-                      onClick={exportModalPDF}
-                      style={{
-                        padding: '5px 11px',
-                        border: '1px solid rgba(255,61,90,0.4)',
-                        background: 'rgba(255,61,90,0.08)',
-                        color: 'var(--danger)',
-                        borderRadius: 6,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ⬇ PDF
-                    </button>
+
                     <button
                       onClick={() => setSelectedKPI(null)}
                       style={{

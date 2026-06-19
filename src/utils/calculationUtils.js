@@ -21,65 +21,66 @@ const COMPANY_HOLIDAYS = new Set([
 ]);
 
 // Count only Mon–Sat, skipping Sundays and company holidays
+function parseLocalDate(str) {
+  if (!str) return null;
+  const clean = String(str).trim().substring(0, 10);
+  let day, month, year;
+
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    let p2 = parseInt(parts[2], 10);
+    if (p2 < 100) p2 += 2000;
+    year = p2;
+    if (String(parts[2]).trim().length <= 2) {
+      month = p0;
+      day = p1; // Google Sheets M/D/YY
+    } else {
+      if (p0 > 12) {
+        day = p0;
+        month = p1;
+      } else if (p1 > 12) {
+        month = p0;
+        day = p1;
+      } else {
+        day = p0;
+        month = p1;
+      } // DD/MM default
+    }
+  } else if (clean.includes('-')) {
+    const parts = clean.split('-');
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10);
+      day = parseInt(parts[2], 10);
+    } else {
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
+      year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+      if (p0 > 12) {
+        day = p0;
+        month = p1;
+      } else if (p1 > 12) {
+        month = p0;
+        day = p1;
+      } else {
+        day = p0;
+        month = p1;
+      }
+    }
+  } else {
+    return null;
+  }
+
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  return new Date(year, month - 1, day);
+}
+
 function workingDaysBetween(d1Str, d2Str) {
   if (!d1Str || !d2Str) return null;
   try {
-    function parseLocalDate(str) {
-      if (!str) return null;
-      const clean = String(str).trim().substring(0, 10);
-      let day, month, year;
-
-      if (clean.includes('/')) {
-        const parts = clean.split('/');
-        const p0 = parseInt(parts[0], 10);
-        const p1 = parseInt(parts[1], 10);
-        let p2 = parseInt(parts[2], 10);
-        if (p2 < 100) p2 += 2000;
-        year = p2;
-        if (String(parts[2]).trim().length <= 2) {
-          month = p0;
-          day = p1; // Google Sheets M/D/YY
-        } else {
-          if (p0 > 12) {
-            day = p0;
-            month = p1;
-          } else if (p1 > 12) {
-            month = p0;
-            day = p1;
-          } else {
-            day = p0;
-            month = p1;
-          } // DD/MM default
-        }
-      } else if (clean.includes('-')) {
-        const parts = clean.split('-');
-        if (parts[0].length === 4) {
-          year = parseInt(parts[0], 10);
-          month = parseInt(parts[1], 10);
-          day = parseInt(parts[2], 10);
-        } else {
-          const p0 = parseInt(parts[0], 10);
-          const p1 = parseInt(parts[1], 10);
-          year = parseInt(parts[2], 10);
-          if (year < 100) year += 2000;
-          if (p0 > 12) {
-            day = p0;
-            month = p1;
-          } else if (p1 > 12) {
-            month = p0;
-            day = p1;
-          } else {
-            day = p0;
-            month = p1;
-          }
-        }
-      } else {
-        return null;
-      }
-
-      if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-      return new Date(year, month - 1, day);
-    }
     const d1 = parseLocalDate(d1Str);
     const d2 = parseLocalDate(d2Str);
     if (!d1 || !d2 || isNaN(d1.getTime()) || isNaN(d2.getTime())) {
@@ -172,29 +173,7 @@ function parseDateTime(str) {
   return new Date(year, month - 1, day, hh, mm, ss);
 }
 
-function hoursBetween(t1Str, t2Str) {
-  if (!t1Str || !t2Str) return null;
-  try {
-    const d1 = parseDateTime(t1Str);
-    const d2 = parseDateTime(t2Str);
-    if (!d1 || !d2 || isNaN(d1) || isNaN(d2)) return null;
-    return Math.round(((d2 - d1) / (1000 * 60 * 60)) * 100) / 100;
-  } catch {
-    return null;
-  }
-}
 
-function minutesBetween(t1Str, t2Str) {
-  if (!t1Str || !t2Str) return null;
-  try {
-    const d1 = parseDateTime(t1Str);
-    const d2 = parseDateTime(t2Str);
-    if (!d1 || !d2 || isNaN(d1) || isNaN(d2)) return null;
-    return Math.round((d2 - d1) / (1000 * 60));
-  } catch {
-    return null;
-  }
-}
 
 function calculateProcessCycleTime(poDate, currentTs) {
   return workingDaysBetween(poDate, currentTs);
@@ -263,8 +242,6 @@ export {
   daysBetween,
   getProductCategory,
   parseDateTime,
-  hoursBetween,
-  minutesBetween,
   calculateProcessCycleTime,
   isSLAViolation,
   calculateVendorAging,
