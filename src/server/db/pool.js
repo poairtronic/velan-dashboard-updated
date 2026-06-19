@@ -65,6 +65,17 @@ async function initDB() {
       )
     `);
 
+    // 2.1 Create pg_trgm extension and indices for ILIKE performance (Issue 2)
+    try {
+      await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_velan_rows_sc ON velan_rows USING GIN ((data->>'sc') gin_trgm_ops)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_velan_rows_po ON velan_rows USING GIN ((data->>'po') gin_trgm_ops)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_velan_rows_prod ON velan_rows USING GIN ((data->>'product') gin_trgm_ops)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_velan_rows_stage ON velan_rows USING GIN ((data->>'currentStage') gin_trgm_ops)`);
+    } catch (idxErr) {
+      console.error('[DB] Note: Could not create pg_trgm extension/indexes. Search will fallback to standard scanning.', idxErr.message);
+    }
+
     // 3. Create sync_logs table
     await client.query(`
       CREATE TABLE IF NOT EXISTS sync_logs (

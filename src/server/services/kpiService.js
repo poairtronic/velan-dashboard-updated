@@ -4,42 +4,93 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   const totalItems = filtered.length;
 
   const filteredScGroupsMap = {};
+  const stageWIP = {};
+  const stageCounts = {};
+  const dailyOutput = {};
+  const poGroupsLive = {};
+
+  const categoryCounts = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
+  let airplugOutputCount = 0;
+  let masterOutputCount = 0;
+
+  let wipCount = 0;
+  let inhouseCount = 0;
+  let vendorCount = 0;
+
+  const terminalStages = new Set(['READY', 'STORES', 'STOCK', 'EXSTOCK']);
+  const { getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } = require('../utils/calculationUtils');
+
   filtered.forEach((row) => {
-    if (!row.sc) return;
-    if (!filteredScGroupsMap[row.sc]) {
-      filteredScGroupsMap[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, items: [] };
+    const stage = row.currentStage;
+    const isTerminal = terminalStages.has(stage);
+
+    // SC grouping
+    if (row.sc) {
+      if (!filteredScGroupsMap[row.sc]) {
+        filteredScGroupsMap[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, items: [] };
+      }
+      filteredScGroupsMap[row.sc].items.push(row);
     }
-    filteredScGroupsMap[row.sc].items.push(row);
+
+    // PO grouping
+    if (row.po) {
+      if (!poGroupsLive[row.po]) poGroupsLive[row.po] = [];
+      poGroupsLive[row.po].push(row);
+    }
+
+    // Categories
+    const cat = getProductCategory(row.type);
+    categoryCounts[cat]++;
+
+    // WIP / Inhouse / Vendor
+    if (!isTerminal) wipCount++;
+    if (row.inhouse === 'INHOUSE') inhouseCount++;
+    if (row.inhouse === 'VENDOR') vendorCount++;
+
+    // Stage Counts
+    if (stage) {
+      stageWIP[stage] = (stageWIP[stage] || 0) + 1;
+      stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+    }
+
+    // Output Count
+    if (stage === 'READY' || stage === 'STORES') {
+      if (AIRPLUG_TYPES.includes(row.type)) airplugOutputCount++;
+      if (MASTER_TYPES.includes(row.type)) masterOutputCount++;
+    }
+
+    // Daily Output
+    if (row.timestamp) {
+      const date = row.timestamp.substring(0, 10);
+      if (!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0, wip: 0 };
+      if (stage === 'READY') dailyOutput[date].ready++;
+      else if (stage === 'STORES') dailyOutput[date].stores++;
+      else dailyOutput[date].wip++;
+    }
   });
+
   const filteredScGroups = Object.values(filteredScGroupsMap);
+  let readyCount = 0;
+  let storesCount = 0;
+  const completeSets = [];
 
-  const readySets = filteredScGroups.filter((sg) =>
-    sg.items.every((i) => i.currentStage === 'READY')
-  );
-  const ready = readySets.length;
+  filteredScGroups.forEach((sg) => {
+    const isReady = sg.items.every((i) => i.currentStage === 'READY');
+    const isStore = sg.items.every((i) => i.currentStage === 'STORES');
+    const isComplete = sg.items.every((i) => terminalStages.has(i.currentStage));
 
-  const storeSets = filteredScGroups.filter((sg) =>
-    sg.items.every((i) => i.currentStage === 'STORES')
-  );
-  const stores = storeSets.length;
+    if (isReady) readyCount++;
+    if (isStore) storesCount++;
+    if (isComplete) completeSets.push(sg);
+  });
 
-  const wip = filtered.filter(
-    (r) => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(r.currentStage)
-  ).length;
-  const inhouse = filtered.filter((r) => r.inhouse === 'INHOUSE').length;
-  const vendor = filtered.filter((r) => r.inhouse === 'VENDOR').length;
-
-  let onTime = 0,
-    delayed = 0,
-    onTimePOs = [],
-    delayedPOs = [],
-    completedPOCount = 0;
+  let onTime = 0, delayed = 0, completedPOCount = 0;
+  const onTimePOs = [], delayedPOs = [];
 
   poGroups.forEach((pg) => {
     const lastTs = getSCLastTimestamp(pg.items);
-    const allDone = pg.items.every((i) =>
-      ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)
-    );
+    const allDone = pg.items.every((i) => terminalStages.has(i.currentStage));
+
     if (allDone) {
       completedPOCount++;
       const days = daysBetween(pg.poDate, lastTs);
@@ -59,35 +110,7 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     }
   });
 
-  const totalPOs = poGroups.length;
   const onTimePct = completedPOCount > 0 ? Math.round((onTime / completedPOCount) * 100) : 0;
-
-  const { getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } = require('../utils/calculationUtils');
-
-  const dailyOutput = {};
-  const categoryCounts = { AIRPLUG: 0, MASTER: 0, ACCESSORY: 0 };
-  let airplugOutputCount = 0;
-  let masterOutputCount = 0;
-
-  filtered.forEach((row) => {
-    // Categories
-    const cat = getProductCategory(row.type);
-    categoryCounts[cat]++;
-
-    // Airplug / Master output
-    if (['READY', 'STORES'].includes(row.currentStage)) {
-      if (AIRPLUG_TYPES.includes(row.type)) airplugOutputCount++;
-      if (MASTER_TYPES.includes(row.type)) masterOutputCount++;
-    }
-
-    // Daily output
-    if (!row.timestamp) return;
-    const date = row.timestamp.substring(0, 10);
-    if (!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0, wip: 0 };
-    if (row.currentStage === 'READY') dailyOutput[date].ready++;
-    else if (row.currentStage === 'STORES') dailyOutput[date].stores++;
-    else dailyOutput[date].wip++;
-  });
   const dailyOutputArray = Object.values(dailyOutput).sort((a, b) => (a.date > b.date ? 1 : -1));
 
   const scByDate = {};
@@ -105,18 +128,6 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   });
   const scDailyOutput = Object.values(scByDate).sort((a, b) => (a.date > b.date ? 1 : -1));
 
-  const completeSets = filteredScGroups.filter((sg) =>
-    sg.items.every((i) => ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage))
-  );
-
-  // Overview Stats Calculations
-  const poGroupsLive = {};
-  filtered.forEach((item) => {
-    if (!item.po) return;
-    if (!poGroupsLive[item.po]) poGroupsLive[item.po] = [];
-    poGroupsLive[item.po].push(item);
-  });
-
   function groupByPO(items) {
     const grouped = {};
     items.forEach((item) => {
@@ -132,25 +143,21 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   }
 
   const dailySetPOsRaw = Object.entries(poGroupsLive).filter(([po, items]) => {
-    const allDone = items.every((i) =>
-      ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)
-    );
-    const completedToday = items.some(
-      (i) => i.timestamp && i.timestamp.slice(0, 10) === todayStr
-    );
+    const allDone = items.every((i) => terminalStages.has(i.currentStage));
+    const completedToday = items.some((i) => i.timestamp && i.timestamp.slice(0, 10) === todayStr);
     return allDone && completedToday;
   });
   const dailySetItems = dailySetPOsRaw.flatMap(([_, items]) => items);
 
   const delayedPOItems = filtered.filter((i) => {
-    if (['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)) return false;
+    if (terminalStages.has(i.currentStage)) return false;
     if (!i.poDate) return false;
     const days = require('../utils/calculationUtils').workingDaysBetween(i.poDate, todayStr);
     return days !== null && days > 21;
   });
 
   const inProgressItems = filtered.filter((i) => {
-    if (['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)) return false;
+    if (terminalStages.has(i.currentStage)) return false;
     const days = i.poDate ? require('../utils/calculationUtils').workingDaysBetween(i.poDate, todayStr) : null;
     return days === null || days <= 21;
   });
@@ -169,15 +176,15 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
 
   return {
     totalItems,
-    ready,
-    stores,
-    wip,
-    inhouse,
-    vendor,
+    ready: readyCount,
+    stores: storesCount,
+    wip: wipCount,
+    inhouse: inhouseCount,
+    vendor: vendorCount,
     onTime,
     delayed,
     onTimePct,
-    totalPOs,
+    totalPOs: poGroups.length,
     dailyOutput,
     dailyOutputArray,
     categoryCounts,
@@ -185,8 +192,8 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     masterOutputCount,
     scDailyOutput,
     completeSets,
-    storeSets,
-    readySets,
+    storeSets: storesCount,
+    readySets: readyCount,
     delayedPOs,
     onTimePOs,
     overviewStats,

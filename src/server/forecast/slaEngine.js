@@ -79,7 +79,7 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
 
   const allVelocities = Object.values(velocityMap);
   const globalAvgDays = allVelocities.length > 0
-    ? Math.round(allVelocities.reduce((s, v) => s + v.totalDays, 0) / allVelocities.reduce((s, v) => s + v.count, 0))
+    ? Math.round(allVelocities.reduce((s, v) => s + v.totalDays, 0) / Math.max(1, allVelocities.reduce((s, v) => s + v.count, 0)))
     : TARGET_DAYS;
   const globalSampleCount = allVelocities.reduce((s, v) => s + v.count, 0);
 
@@ -228,16 +228,9 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
       riskLevel, // refined
       confidence,
       itemCount: po.items.length,
-
-      newModel: {
-        queueImpact: Math.round(queueImpact * 100) / 100,
-        adjustedDuration: Math.round(adjustedDuration * 10) / 10,
-        remainingDays: expectedRemainingDays,
-        projectedCompletionDate,
-        expectedDelay,
-        riskLevel,
-        delayProbability
-      }
+      queueImpact: Math.round(queueImpact * 100) / 100,
+      adjustedDuration: Math.round(adjustedDuration * 10) / 10,
+      remainingDays: expectedRemainingDays
     });
   });
 

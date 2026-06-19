@@ -12,44 +12,104 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
   return useMemo(() => {
     const totalItems = filtered.length;
 
+    // We will do a single unified pass over 'filtered' for all item-level stats
     const filteredScGroupsMap = {};
+    const scRecordMap = {};
+    const stageWIP = {};
+    const stageCounts = {};
+    const dailyOutput = {};
+    const stageAccum = {};
+    const poGroupsLive = {};
+
+    let wipCount = 0;
+    let inhouseCount = 0;
+    let vendorCount = 0;
+
+    const terminalStages = new Set(['READY', 'STORES', 'STOCK', 'EXSTOCK']);
+
     filtered.forEach((row) => {
-      if (!row.sc) return;
-      if (!filteredScGroupsMap[row.sc]) {
-        filteredScGroupsMap[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, items: [] };
+      const stage = row.currentStage;
+      const isTerminal = terminalStages.has(stage);
+
+      // SC grouping (for readySets/storeSets/completeSets/stageDurations)
+      if (row.sc) {
+        if (!filteredScGroupsMap[row.sc]) {
+          filteredScGroupsMap[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, items: [] };
+        }
+        filteredScGroupsMap[row.sc].items.push(row);
+
+        if (!scRecordMap[row.sc]) scRecordMap[row.sc] = [];
+        scRecordMap[row.sc].push(row);
       }
-      filteredScGroupsMap[row.sc].items.push(row);
+
+      // PO grouping (for Overview Stats)
+      if (row.po) {
+        if (!poGroupsLive[row.po]) poGroupsLive[row.po] = [];
+        poGroupsLive[row.po].push(row);
+      }
+
+      // WIP / Inhouse / Vendor counts
+      if (!isTerminal) wipCount++;
+      if (row.inhouse === 'INHOUSE') inhouseCount++;
+      if (row.inhouse === 'VENDOR') vendorCount++;
+
+      // Stage WIP and Counts
+      if (stage) {
+        stageWIP[stage] = (stageWIP[stage] || 0) + 1;
+        stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+      }
+
+      // Daily Output
+      if (row.timestamp) {
+        const date = row.timestamp.substring(0, 10);
+        if (!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0 };
+        if (stage === 'READY') dailyOutput[date].ready++;
+        if (stage === 'STORES') dailyOutput[date].stores++;
+      }
+
+      // Stage Accumulation
+      if (row.timestamp && row.poDate && stage) {
+        const poD = row.poDate;
+        const tsS = row.timestamp;
+        const d = workingDaysBetween(poD, tsS);
+        if (d !== null && d >= 0) {
+          if (!stageAccum[stage]) stageAccum[stage] = [];
+          stageAccum[stage].push(d);
+        }
+      }
     });
+
     const filteredScGroups = Object.values(filteredScGroupsMap);
+    let readyCount = 0;
+    let storesCount = 0;
+    const completeSets = [];
+    const storeSetsArr = [];
+    const readySetsArr = [];
 
-    const readySets = filteredScGroups.filter((sg) =>
-      sg.items.every((i) => i.currentStage === 'READY')
-    );
-    const ready = readySets.length;
+    filteredScGroups.forEach((sg) => {
+      const isReady = sg.items.every((i) => i.currentStage === 'READY');
+      const isStore = sg.items.every((i) => i.currentStage === 'STORES');
+      const isComplete = sg.items.every((i) => terminalStages.has(i.currentStage));
 
-    const storeSets = filteredScGroups.filter((sg) =>
-      sg.items.every((i) => i.currentStage === 'STORES')
-    );
-    const stores = storeSets.length;
+      if (isReady) {
+        readyCount++;
+        readySetsArr.push(sg);
+      }
+      if (isStore) {
+        storesCount++;
+        storeSetsArr.push(sg);
+      }
+      if (isComplete) completeSets.push(sg);
+    });
 
-    const wip = filtered.filter(
-      (r) => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(r.currentStage)
-    ).length;
-    const inhouse = filtered.filter((r) => r.inhouse === 'INHOUSE').length;
-    const vendor = filtered.filter((r) => r.inhouse === 'VENDOR').length;
+    // poGroups single pass
+    let onTime = 0, delayed = 0, completedPOCount = 0;
+    const onTimePOs = [], delayedPOs = [];
 
-    const today = todayStr;
-
-    let onTime = 0,
-      delayed = 0,
-      onTimePOs = [],
-      delayedPOs = [],
-      completedPOCount = 0;
     poGroups.forEach((pg) => {
       const lastTs = getSCLastTimestamp(pg.items);
-      const allDone = pg.items.every((i) =>
-        ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)
-      );
+      const allDone = pg.items.every((i) => terminalStages.has(i.currentStage));
+
       if (allDone) {
         completedPOCount++;
         const days = daysBetween(pg.poDate, lastTs);
@@ -61,55 +121,18 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
           delayedPOs.push({ ...pg, days });
         }
       } else {
-        const elapsed = daysBetween(pg.poDate, today);
+        const elapsed = daysBetween(pg.poDate, todayStr);
         if (elapsed !== null && elapsed > TARGET_DAYS) {
           delayed++;
           delayedPOs.push({ ...pg, days: elapsed, inProgress: true });
         }
       }
     });
-    const totalPOs = poGroups.length;
+
     const onTimePct = completedPOCount > 0 ? Math.round((onTime / completedPOCount) * 100) : 0;
-
-    const stageWIP = {};
-    filtered.forEach((row) => {
-      const stage = row.currentStage;
-      if (!stageWIP[stage]) stageWIP[stage] = 0;
-      stageWIP[stage]++;
-    });
-
-    const stageCounts = {};
-    filtered.forEach((r) => {
-      stageCounts[r.currentStage] = (stageCounts[r.currentStage] || 0) + 1;
-    });
-
-    const bottleneck = [...poGroups]
-      .map((pg) => {
-        const lastTs = getSCLastTimestamp(pg.items);
-        const done = pg.items.every((i) =>
-          ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage)
-        );
-        const days = done ? daysBetween(pg.poDate, lastTs) : daysBetween(pg.poDate, today);
-        return { ...pg, days, done };
-      })
-      .sort((a, b) => (b.days || 0) - (a.days || 0));
-
-    const dateDiff = (poDate, tsStr) => {
-      if (!poDate || !tsStr) return null;
-      const d = workingDaysBetween(poDate, tsStr);
-      return d !== null && d >= 0 ? d : null;
-    };
-
-    const dailyOutput = {};
-    filtered.forEach((row) => {
-      if (!row.timestamp) return;
-      const date = row.timestamp.substring(0, 10);
-      if (!dailyOutput[date]) dailyOutput[date] = { date, ready: 0, stores: 0 };
-      if (row.currentStage === 'READY') dailyOutput[date].ready++;
-      if (row.currentStage === 'STORES') dailyOutput[date].stores++;
-    });
     const dailyOutputArray = Object.values(dailyOutput).sort((a, b) => (a.date > b.date ? 1 : -1));
 
+    // scGroups single pass
     const scByDate = {};
     scGroups.forEach((sg) => {
       const done = isSCComplete(sg.items);
@@ -125,17 +148,7 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
     });
     const scDailyOutput = Object.values(scByDate).sort((a, b) => (a.date > b.date ? 1 : -1));
 
-    const completeSets = filteredScGroups.filter((sg) =>
-      sg.items.every((i) => ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.currentStage))
-    );
-
-    const scRecordMap = {};
-    filtered.forEach((r) => {
-      if (!r.sc) return;
-      if (!scRecordMap[r.sc]) scRecordMap[r.sc] = [];
-      scRecordMap[r.sc].push(r);
-    });
-
+    // Stage Durations & Cycle Times
     const stageDurations = {};
     Object.values(scRecordMap).forEach((records) => {
       const sorted = records.sort((a, b) => {
@@ -162,18 +175,8 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
 
     const stageAvgDuration = {};
     Object.entries(stageDurations).forEach(([stage, durations]) => {
-      const avg =
-        durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+      const avg = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
       stageAvgDuration[stage] = Math.round(avg);
-    });
-
-    const stageAccum = {};
-    filtered.forEach((r) => {
-      if (!r.timestamp || !r.poDate || !r.currentStage) return;
-      const days = dateDiff(r.poDate, r.timestamp);
-      if (days === null) return;
-      if (!stageAccum[r.currentStage]) stageAccum[r.currentStage] = [];
-      stageAccum[r.currentStage].push(days);
     });
 
     const stageAvgToReach = {};
@@ -191,176 +194,39 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
       .sort((a, b) => a.avgToReach - b.avgToReach);
 
     const itemCycleDays = filtered
-      .map((r) => dateDiff(r.poDate, r.timestamp))
-      .filter((d) => d !== null && d >= 0);
-    const avgOverallCycle =
-      itemCycleDays.length > 0
-        ? Math.round(itemCycleDays.reduce((a, b) => a + b, 0) / itemCycleDays.length)
-        : null;
-
-    const vendorStageData = [];
-    filtered.forEach((r) => {
-      if (r.inhouse !== 'VENDOR' || !r.timestamp) return;
-      const daysFromPO = r.poDate ? dateDiff(r.poDate, r.timestamp) : null;
-      const pendingDays = dateDiff(r.timestamp, today);
-      if (pendingDays !== null)
-        vendorStageData.push({
-          vendor: r.currentStage || 'UNKNOWN',
-          stage: r.currentStage,
-          daysFromPO,
-          pendingDays,
-          po: r.po,
-          sc: r.sc,
-          product: r.product,
-          timestamp: r.timestamp,
-          item: r,
-        });
-    });
-
-    const vendorStats = {};
-    vendorStageData.forEach((s) => {
-      if (!vendorStats[s.vendor]) {
-        vendorStats[s.vendor] = {
-          code: s.vendor,
-          vendor: s.vendor,
-          totalPending: 0,
-          count: 0,
-          pendingDays: [],
-          totalFromPO: 0,
-          fromPODays: [],
-          items: [],
-        };
-      }
-      vendorStats[s.vendor].totalPending += s.pendingDays;
-      vendorStats[s.vendor].count++;
-      vendorStats[s.vendor].pendingDays.push(s.pendingDays);
-      if (s.daysFromPO !== null) {
-        vendorStats[s.vendor].totalFromPO += s.daysFromPO;
-        vendorStats[s.vendor].fromPODays.push(s.daysFromPO);
-      }
-      vendorStats[s.vendor].items.push(s.item);
-    });
-
-    Object.keys(vendorStats).forEach((v) => {
-      const stats = vendorStats[v];
-      stats.avgPending = stats.count > 0 ? Math.round(stats.totalPending / stats.count) : 0;
-      stats.maxPending = stats.pendingDays.length > 0 ? Math.max(...stats.pendingDays) : 0;
-      stats.minPending = stats.pendingDays.length > 0 ? Math.min(...stats.pendingDays) : 0;
-      stats.stale = stats.pendingDays.filter((d) => d > TARGET_DAYS).length;
-      stats.avgFromPO =
-        stats.fromPODays.length > 0
-          ? Math.round(stats.totalFromPO / stats.fromPODays.length)
-          : null;
-
-      stats.slaViolations = stats.pendingDays.filter((d) => d > 2).length;
-      stats.slaViolationRate =
-        stats.count > 0 ? Math.round((stats.slaViolations / stats.count) * 100) : 0;
-
-      const completedItems = stats.items.filter((i) =>
-        ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.stage)
-      ).length;
-      stats.processEfficiency =
-        stats.count > 0 ? Math.round((completedItems / stats.count) * 100) : 0;
-
-      stats.avgActiveTime = stats.avgPending;
-    });
-
-    const vendorBottlenecks = Object.values(vendorStats)
-      .map((v) => ({
-        vendor: v.vendor,
-        count: v.count,
-        avgPending: v.avgPending,
-        maxPending: v.maxPending,
-        slaViolations: v.slaViolations,
-        efficiency: v.processEfficiency,
-      }))
-      .sort(
-        (a, b) =>
-          b.slaViolations - a.slaViolations || b.avgPending - a.avgPending || b.count - a.count
-      );
-
-    const topVendorBottleneck = vendorBottlenecks[0] || null;
-
-    const bottleneckStages = Object.entries(stageCounts)
-      .filter(([s]) => !['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(s))
-      .map(([stage, count]) => {
-        let duration;
-        const vs = vendorStats[stage];
-        if (vs && vs.avgPending !== undefined) {
-          duration = vs.avgPending || 1;
-        } else {
-          const ct = stageCycleTimes.find((c) => c.stage === stage);
-          duration = ct ? ct.duration : 1;
-        }
-        const score = count * duration;
-        return { stage, count, duration, score };
+      .map((r) => {
+        if (!r.poDate || !r.timestamp) return null;
+        const d = workingDaysBetween(r.poDate, r.timestamp);
+        return d !== null && d >= 0 ? d : null;
       })
-      .sort((a, b) => b.score - a.score);
+      .filter((d) => d !== null);
 
-    const topBottleneckCorrected = bottleneckStages[0] || null;
-
-    const vendorTotal = Object.values(vendorStats).reduce((s, v) => s + v.count, 0);
-    const vendors = Object.values(vendorStats)
-      .sort((a, b) => b.count - a.count)
-      .map((v) => {
-        const delayed = v.items.filter((i) => {
-          const d = dateDiff(i.timestamp, today);
-          return d !== null && d > TARGET_DAYS;
-        }).length;
-        return {
-          ...v,
-          pct: Math.round((v.count / Math.max(vendorTotal, 1)) * 100),
-          avgDays: v.avgPending,
-          maxDays: v.maxPending,
-          delayed,
-          avgFromPO: v.avgFromPO || null,
-          slaViolations: v.slaViolations || 0,
-          slaViolationRate: v.slaViolationRate || 0,
-          processEfficiency: v.processEfficiency || 0,
-          avgActiveTime: v.avgActiveTime || 0,
-          days: v.pendingDays,
-        };
-      });
-
-    const scCompletion = scGroups.map((sg) => {
-      const done = isSCComplete(sg.items);
-      const lastTs = getSCLastTimestamp(sg.items);
-      const days = dateDiff(sg.poDate, lastTs);
-      return { ...sg, done, lastTs, days };
-    });
+    const avgOverallCycle = itemCycleDays.length > 0
+      ? Math.round(itemCycleDays.reduce((a, b) => a + b, 0) / itemCycleDays.length)
+      : null;
 
     return {
       totalItems,
-      ready,
-      stores,
-      wip,
-      inhouse,
-      vendor,
+      ready: readyCount,
+      stores: storesCount,
+      wip: wipCount,
+      inhouse: inhouseCount,
+      vendor: vendorCount,
       onTime,
       delayed,
       onTimePct,
-      totalPOs,
+      totalPOs: poGroups.length,
       stageCounts,
       stageWIP,
-      bottleneck,
-      bottleneckStages,
-      topBottleneck: topBottleneckCorrected,
-      vendors,
-      vendorTotal,
-      vendorStats,
-      topVendorBottleneck,
-      stageCycleTimes,
-      stageAvgToReach,
-      avgOverallCycle,
-      scCompletion,
+      dailyOutputArray,
       scDailyOutput,
       completeSets,
-      storeSets,
-      readySets,
+      storeSets: storeSetsArr,
+      readySets: readySetsArr,
       delayedPOs,
       onTimePOs,
-      dailyOutput,
-      dailyOutputArray,
+      stageCycleTimes,
+      avgOverallCycle,
     };
   }, [filtered, scGroups, poGroups, todayStr]);
 }
