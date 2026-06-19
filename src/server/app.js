@@ -135,7 +135,6 @@ apiRouter.use('/intelligence', dashboardLimiter, requireAuth(['admin', 'user']),
 apiRouter.use('/mic', dashboardLimiter, requireAuth(['admin', 'user']), micRouter);
 apiRouter.use('/forecast', dashboardLimiter, requireAuth(['admin', 'user']), forecastRouter);
 apiRouter.use('/audit', auditRouter);
-apiRouter.use('/perf', requireAuth(['admin']), performanceRouter);
 apiRouter.use('/meta', requireAuth(['admin', 'user']), metaRouter);
 
 app.use('/api', apiRouter);
