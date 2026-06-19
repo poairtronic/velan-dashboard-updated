@@ -45,4 +45,5 @@ function DrilldownCard({ kpiType, title, children, style = {} }) {
   );
 }
 
-export default DrilldownCard;
+export default React.memo(DrilldownCard);
+

@@ -128,4 +128,4 @@ function DatabaseTable({ filtered, isDoneStage }) {
   );
 }
 
-export default DatabaseTable;
+export default React.memo(DatabaseTable);

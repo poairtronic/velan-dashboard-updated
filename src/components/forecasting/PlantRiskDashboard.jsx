@@ -264,4 +264,5 @@ function PlantRiskDashboard() {
   );
 }
 
-export default PlantRiskDashboard;
+export default React.memo(PlantRiskDashboard);
+

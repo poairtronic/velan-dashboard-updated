@@ -24,6 +24,8 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
     let wipCount = 0;
     let inhouseCount = 0;
     let vendorCount = 0;
+    let totalCycleDays = 0;
+    let totalCycleItems = 0;
 
     const terminalStages = new Set(['READY', 'STORES', 'STOCK', 'EXSTOCK']);
 
@@ -75,6 +77,15 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
         if (d !== null && d >= 0) {
           if (!stageAccum[stage]) stageAccum[stage] = [];
           stageAccum[stage].push(d);
+        }
+      }
+
+      // Overall Cycle
+      if (row.poDate && row.timestamp) {
+        const d = workingDaysBetween(row.poDate, row.timestamp);
+        if (d !== null && d >= 0) {
+          totalCycleDays += d;
+          totalCycleItems++;
         }
       }
     });
@@ -193,16 +204,8 @@ export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
       .filter((s) => s.count > 0)
       .sort((a, b) => a.avgToReach - b.avgToReach);
 
-    const itemCycleDays = filtered
-      .map((r) => {
-        if (!r.poDate || !r.timestamp) return null;
-        const d = workingDaysBetween(r.poDate, r.timestamp);
-        return d !== null && d >= 0 ? d : null;
-      })
-      .filter((d) => d !== null);
-
-    const avgOverallCycle = itemCycleDays.length > 0
-      ? Math.round(itemCycleDays.reduce((a, b) => a + b, 0) / itemCycleDays.length)
+    const avgOverallCycle = totalCycleItems > 0
+      ? Math.round(totalCycleDays / totalCycleItems)
       : null;
 
     return {

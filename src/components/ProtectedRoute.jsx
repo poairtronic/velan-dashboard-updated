@@ -19,4 +19,5 @@ function ProtectedRoute({ children, adminOnly = false }) {
   return children;
 }
 
-export default ProtectedRoute;
+export default React.memo(ProtectedRoute);
+

@@ -305,4 +305,5 @@ function SLAForecastPanel() {
   );
 }
 
-export default SLAForecastPanel;
+export default React.memo(SLAForecastPanel);
+

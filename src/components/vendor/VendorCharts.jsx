@@ -104,4 +104,5 @@ function VendorCharts({ vendors }) {
   );
 }
 
-export default VendorCharts;
+export default React.memo(VendorCharts);
+

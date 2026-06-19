@@ -179,4 +179,5 @@ function BottleneckForecast() {
   );
 }
 
-export default BottleneckForecast;
+export default React.memo(BottleneckForecast);
+

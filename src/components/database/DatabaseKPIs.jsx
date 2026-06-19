@@ -139,4 +139,5 @@ function DatabaseKPIs({ kpiStats, fromDate, toDate, setSelectedKPI }) {
   );
 }
 
-export default DatabaseKPIs;
+export default React.memo(DatabaseKPIs);
+

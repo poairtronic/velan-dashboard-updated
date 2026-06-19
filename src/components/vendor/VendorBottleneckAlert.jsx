@@ -101,4 +101,5 @@ function VendorBottleneckAlert({ bottleneck }) {
   );
 }
 
-export default VendorBottleneckAlert;
+export default React.memo(VendorBottleneckAlert);
+

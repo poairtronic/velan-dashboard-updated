@@ -125,4 +125,5 @@ function VendorEfficiencyTable({ vendors }) {
   );
 }
 
-export default VendorEfficiencyTable;
+export default React.memo(VendorEfficiencyTable);
+

@@ -161,4 +161,5 @@ function DatabaseFilterBar({
   );
 }
 
-export default DatabaseFilterBar;
+export default React.memo(DatabaseFilterBar);
+

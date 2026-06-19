@@ -216,4 +216,5 @@ function VendorRiskMatrix() {
   );
 }
 
-export default VendorRiskMatrix;
+export default React.memo(VendorRiskMatrix);
+

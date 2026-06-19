@@ -13,12 +13,21 @@ export function useDatabaseKPIs(
   return useMemo(() => {
     const total = filtered.length;
 
-    const totalPOCount = new Set(data.filter((r) => r.po).map((r) => r.po)).size;
+    let totalPOCountSet = new Set();
     const _getScFamily = (sc) => String(sc).trim().replace(/-\d+$/, '');
     const _scFamilySet = new Set();
+    const dataBySc = {};
+
     data.forEach((r) => {
-      if (r.sc) _scFamilySet.add(_getScFamily(r.sc));
+      if (r.po) totalPOCountSet.add(r.po);
+      if (r.sc) {
+        _scFamilySet.add(_getScFamily(r.sc));
+        if (!dataBySc[r.sc]) dataBySc[r.sc] = [];
+        dataBySc[r.sc].push(r);
+      }
     });
+
+    const totalPOCount = totalPOCountSet.size;
     const totalSCCount = _scFamilySet.size;
 
     const _isDoneOrVA = (s) => {
@@ -45,14 +54,9 @@ export function useDatabaseKPIs(
       return false;
     };
 
-    const _scFinalMap = {};
-    const dataBySc = {};
-    data.forEach((r) => {
-      if (!r.sc) return;
-      if (!dataBySc[r.sc]) dataBySc[r.sc] = [];
-      dataBySc[r.sc].push(r);
-    });
+    // dataBySc already populated in the single data pass
 
+    const _scFinalMap = {};
     Object.entries(dataBySc).forEach(([sc, rows]) => {
       _scFinalMap[sc] = {};
       const normalizedRows = rows; // We skip deep normalization here for perf, assume it's done elsewhere
@@ -104,16 +108,20 @@ export function useDatabaseKPIs(
       }
     });
 
-    const uniquePO = new Set(filtered.map((r) => r.po)).size;
-    const uniqueSC = new Set(filtered.map((r) => r.sc)).size;
-    const readyItemsCount = filtered.filter((r) => isDoneStage(r.currentStage)).length;
+    let uniquePOSet = new Set();
+    let uniqueSCSet = new Set();
+    let readyItemsCount = 0;
+    let scReceivedSet = new Set();
 
-    const scReceivedSet = new Set(
-      filtered
-        .filter((r) => r.poDate)
-        .map((r) => r.sc)
-        .filter(Boolean)
-    );
+    filtered.forEach(r => {
+      if (r.po) uniquePOSet.add(r.po);
+      if (r.sc) uniqueSCSet.add(r.sc);
+      if (isDoneStage(r.currentStage)) readyItemsCount++;
+      if (r.poDate && r.sc) scReceivedSet.add(r.sc);
+    });
+
+    const uniquePO = uniquePOSet.size;
+    const uniqueSC = uniqueSCSet.size;
 
     const allScItems = allScItemsModal;
     const filteredScGroups = filteredScGroupsModal;

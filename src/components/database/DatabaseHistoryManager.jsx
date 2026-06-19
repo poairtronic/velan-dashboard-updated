@@ -236,4 +236,5 @@ function DatabaseHistoryManager({
   );
 }
 
-export default DatabaseHistoryManager;
+export default React.memo(DatabaseHistoryManager);
+

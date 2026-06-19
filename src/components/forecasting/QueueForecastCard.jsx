@@ -200,4 +200,5 @@ function QueueForecastCard() {
   );
 }
 
-export default QueueForecastCard;
+export default React.memo(QueueForecastCard);
+

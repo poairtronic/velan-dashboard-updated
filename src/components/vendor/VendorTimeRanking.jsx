@@ -50,4 +50,5 @@ function VendorTimeRanking({ vendors, maxDays }) {
   );
 }
 
-export default VendorTimeRanking;
+export default React.memo(VendorTimeRanking);
+

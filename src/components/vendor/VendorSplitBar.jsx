@@ -55,4 +55,5 @@ function VendorSplitBar({ inhPct, venPct, inhouseCount, vendorCount }) {
   );
 }
 
-export default VendorSplitBar;
+export default React.memo(VendorSplitBar);
+

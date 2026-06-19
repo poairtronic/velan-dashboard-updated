@@ -52,4 +52,5 @@ function VendorKPIs({ kpis, vendors, worstVendor, mostDelayed, inhPct, venPct })
   );
 }
 
-export default VendorKPIs;
+export default React.memo(VendorKPIs);
+

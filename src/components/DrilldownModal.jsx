@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
+import VirtualizedTable from './ui/VirtualizedTable';
 
 function DrilldownModal({ kpiType, title, onClose }) {
   const [data, setData] = useState(null);
@@ -102,31 +103,29 @@ function DrilldownModal({ kpiType, title, onClose }) {
     if (kpiType === 'vendor') {
       return (
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ padding: '10px', textAlign: 'left', color: 'var(--text-muted)' }}>Vendor</th>
-                <th style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)' }}>Items</th>
-                <th style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)' }}>Delayed</th>
-                <th style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)' }}>Avg Cycle</th>
-                <th style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)' }}>SLA %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.vendors.map((v, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '10px', fontWeight: 'bold', color: 'var(--accent1)' }}>{v.vendorName}</td>
-                  <td style={{ padding: '10px', textAlign: 'center' }}>{v.itemCount}</td>
-                  <td style={{ padding: '10px', textAlign: 'center', color: v.delayedItemCount > 0 ? 'var(--danger)' : 'var(--success)' }}>{v.delayedItemCount}</td>
-                  <td style={{ padding: '10px', textAlign: 'center' }}>{v.avgCycleTime}d</td>
-                  <td style={{ padding: '10px', textAlign: 'center', color: v.sla < 80 ? 'var(--danger)' : 'var(--success)' }}>{v.sla}%</td>
-                </tr>
-              ))}
-              {data.vendors.length === 0 && (
-                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>No vendor data available</td></tr>
-              )}
-            </tbody>
-          </table>
+          <VirtualizedTable
+            headers={[
+              { label: 'Vendor', flex: 2 },
+              { label: 'Items', flex: 1 },
+              { label: 'Delayed', flex: 1 },
+              { label: 'Avg Cycle', flex: 1 },
+              { label: 'SLA %', flex: 1 }
+            ]}
+            data={data.vendors || []}
+            height={350}
+            itemSize={40}
+            RowComponent={({ row: v }) => (
+              <div style={{ display: 'flex', flex: 1, alignItems: 'center' }}>
+                <div style={{ flex: 2, padding: '0 12px', fontWeight: 'bold', color: 'var(--accent1)' }}>{v.vendorName}</div>
+                <div style={{ flex: 1, padding: '0 12px', textAlign: 'center' }}>{v.itemCount}</div>
+                <div style={{ flex: 1, padding: '0 12px', textAlign: 'center', color: v.delayedItemCount > 0 ? 'var(--danger)' : 'var(--success)' }}>{v.delayedItemCount}</div>
+                <div style={{ flex: 1, padding: '0 12px', textAlign: 'center' }}>{v.avgCycleTime}d</div>
+                <div style={{ flex: 1, padding: '0 12px', textAlign: 'center', color: v.sla < 80 ? 'var(--danger)' : 'var(--success)' }}>{v.sla}%</div>
+              </div>
+            )}
+            isEmpty={!data.vendors || data.vendors.length === 0}
+            emptyMessage="No vendor data available"
+          />
         </div>
       );
     }
@@ -199,4 +198,5 @@ function DrilldownModal({ kpiType, title, onClose }) {
   );
 }
 
-export default DrilldownModal;
+export default React.memo(DrilldownModal);
+

@@ -235,4 +235,5 @@ function CapacityPlanner() {
   );
 }
 
-export default CapacityPlanner;
+export default React.memo(CapacityPlanner);
+
