@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
-import {
-  workingDaysBetween,
+import calculationUtils from '../utils/calculationUtils';
+const { workingDaysBetween,
   daysBetween,
   isSCComplete,
   getSCLastTimestamp,
   TARGET_DAYS,
   parseDateTime,
-} from '../utils/calculationUtils';
+ } = calculationUtils;
 
 export function useKPIs(filtered, scGroups, poGroups, liveData, todayStr) {
   return useMemo(() => {

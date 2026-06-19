@@ -14,7 +14,7 @@
  *   - Historical Data Not Available
  *   Also displays: Confidence %, Reason, Data Coverage, Sample Size
  */
-const { workingDaysBetween5Day, addWorkingDays5Day } = require('../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day } = require('../../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const ANALYSIS_WORKING_DAYS = 30;

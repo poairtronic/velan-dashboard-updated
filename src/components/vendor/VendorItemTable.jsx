@@ -1,5 +1,6 @@
 import React from 'react';
-import { TARGET_DAYS, calculateProcessCycleTime, daysBetween } from '../../utils/calculationUtils';
+import calculationUtils from '../../utils/calculationUtils';
+const { TARGET_DAYS, calculateProcessCycleTime, daysBetween  } = calculationUtils;
 import { fmtTs } from '../../utils/dateUtils';
 
 function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSelectedSC }) {

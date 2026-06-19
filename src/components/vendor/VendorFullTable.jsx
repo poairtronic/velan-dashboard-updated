@@ -1,5 +1,6 @@
 import React from 'react';
-import { TARGET_DAYS } from '../../utils/calculationUtils';
+import calculationUtils from '../../utils/calculationUtils';
+const { TARGET_DAYS  } = calculationUtils;
 import { fmtTs } from '../../utils/dateUtils';
 
 function VendorFullTable({ vendors }) {

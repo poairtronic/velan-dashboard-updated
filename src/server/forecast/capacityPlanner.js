@@ -16,7 +16,7 @@
  *   Volume = MIN(100, (Total Events / 100) * 100)
  *   Bands: 90-100 Very High, 75-89 High, 50-74 Medium, <50 Low
  */
-const { workingDaysBetween5Day, addWorkingDays5Day } = require('../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day } = require('../../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const ANALYSIS_WINDOW_WORKING_DAYS = 14;

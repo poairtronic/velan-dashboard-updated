@@ -8,7 +8,7 @@ const {
   VENDOR_DRILLDOWN_QUERY, 
   INVENTORY_DRILLDOWN_QUERY 
 } = require('../db/queries/drilldown');
-const { workingDaysBetween } = require('../utils/calculationUtils');
+const { workingDaysBetween } = require('../../utils/calculationUtils');
 
 // Helper to get date string
 const getTodayStr = () => new Date().toISOString().split('T')[0];

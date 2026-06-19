@@ -14,7 +14,7 @@ const { getFilteredData, computeGroups } = require('../services/dataQueryService
 router.get('/production', asyncHandler(async (req, res) => {
   try {
     const page = parseInt(req.query.page || '1', 10);
-    const limit = parseInt(req.query.limit || '100', 10);
+    const limit = Math.min(parseInt(req.query.limit || '100', 10), 5000);
     const offset = (page - 1) * limit;
 
     const d = new Date();
@@ -50,7 +50,7 @@ router.get('/production', asyncHandler(async (req, res) => {
 // ── GET /api/data ─────────────────────────────────────────────────────────
 router.get('/', asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page || '1', 10);
-  const limit = parseInt(req.query.limit || '500', 10);
+  const limit = Math.min(parseInt(req.query.limit || '500', 10), 5000);
   const search = req.query.search || '';
   const offset = (page - 1) * limit;
 
@@ -62,7 +62,7 @@ router.get('/', asyncHandler(async (req, res) => {
   
   res.json({
     rows: dbRows,
-    liveRows: liveDbRows.length > 0 ? liveDbRows : dbRows,
+    liveRows: liveDbRows.length > 0 ? liveDbRows.slice(offset, offset + limit) : dbRows,
     lastSync: state._lastSync,
     total: total,
     page,

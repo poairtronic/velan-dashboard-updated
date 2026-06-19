@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { broadcast } = require('../utils/websocket');
-const { workingDaysBetween, calculateVendorAging } = require('../utils/calculationUtils');
+const { workingDaysBetween, calculateVendorAging } = require('../../utils/calculationUtils');
 const logger = require('../utils/logger');
 
 /**

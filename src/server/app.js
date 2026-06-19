@@ -15,9 +15,7 @@ const { env } = require('./config/env');
 const authRouter = require('./routes/auth');
 const dataRouter = require('./routes/data');
 const auditRouter = require('./routes/audit');
-const performanceRouter = require('./routes/performance');
 const metaRouter = require('./routes/meta').router;
-const perfLogger = require('./middleware/perfLogger');
 const syncStatusRouter = require('./routes/syncStatus');
 const migrateRouter = require('./routes/migrate');
 const importRouter = require('./routes/import');
@@ -83,7 +81,6 @@ app.use(cors({
 
 // Middlewares
 app.use(requestLogger);
-app.use(perfLogger);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());

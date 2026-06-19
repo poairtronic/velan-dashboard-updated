@@ -2,14 +2,14 @@ import React from 'react';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { getStageColor } from '../services/dataNormalizer';
-import {
-  workingDaysBetween,
+import calculationUtils from '../utils/calculationUtils';
+const { workingDaysBetween,
   daysBetween,
   calculateProcessCycleTime,
   isSCComplete,
   getSCLastTimestamp,
   getProductCategory,
-} from '../utils/calculationUtils';
+ } = calculationUtils;
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';

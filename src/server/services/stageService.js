@@ -1,4 +1,4 @@
-const { getSCLastTimestamp, daysBetween, TARGET_DAYS } = require('../utils/calculationUtils');
+const { getSCLastTimestamp, daysBetween, TARGET_DAYS } = require('../../utils/calculationUtils');
 
 function calculateStages({ filtered, poGroups, todayStr }) {
   const stageWIP = {};

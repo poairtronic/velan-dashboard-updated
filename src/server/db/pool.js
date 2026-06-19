@@ -187,18 +187,6 @@ async function initDB() {
       )
     `);
 
-    // 4.6 Create perf_log table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS perf_log (
-        id                     SERIAL PRIMARY KEY,
-        endpoint               VARCHAR(255) NOT NULL,
-        cache_hit              BOOLEAN NOT NULL,
-        db_query_time_ms       INTEGER NOT NULL,
-        total_response_time_ms INTEGER NOT NULL,
-        recorded_at            TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
     await client.query(
@@ -209,8 +197,6 @@ async function initDB() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_timeline_created_at ON operational_timeline (created_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_perf_log_recorded ON perf_log (recorded_at DESC)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_perf_log_endpoint ON perf_log (endpoint)');
 
     // Scalability Indices for fast searching, filtering, and sorting
     await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_stage ON velan_rows ((data->>'currentStage'))");

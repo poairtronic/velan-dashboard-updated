@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  workingDaysBetween, 
+import calculationUtils from '../../utils/calculationUtils';
+const { workingDaysBetween, 
   getProductCategory, 
   parseDateTime,
   isSLAViolation,
   calculateProcessEfficiency
-} from '../../utils/calculationUtils';
+ } = calculationUtils;
 
 describe('calculationUtils', () => {
   describe('workingDaysBetween', () => {

@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { getOrSetCache, TTL } = require('../cache/cacheService');
-const { workingDaysBetween, normalizeProductsInGroup, getProductCategory } = require('../utils/calculationUtils');
+const { workingDaysBetween, normalizeProductsInGroup, getProductCategory } = require('../../utils/calculationUtils');
 
 async function getAllRawData() {
   // We fetch both live and history from Neon. 

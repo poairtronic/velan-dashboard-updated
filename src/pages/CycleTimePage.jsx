@@ -3,15 +3,15 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
-import {
-  workingDaysBetween,
+import calculationUtils from '../utils/calculationUtils';
+const { workingDaysBetween,
   daysBetween,
   calculateProcessCycleTime,
   isSCComplete,
   getSCLastTimestamp,
   getProductCategory,
   TARGET_DAYS,
-} from '../utils/calculationUtils';
+ } = calculationUtils;
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';

@@ -2,15 +2,15 @@ import React from 'react';
 import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
-import {
-  workingDaysBetween,
+import calculationUtils from '../utils/calculationUtils';
+const { workingDaysBetween,
   daysBetween,
   calculateProcessCycleTime,
   isSCComplete,
   getSCLastTimestamp,
   getProductCategory,
   TARGET_DAYS,
-} from '../utils/calculationUtils';
+ } = calculationUtils;
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import { getStageColor } from '../services/dataNormalizer';
 import KPICard from '../components/KPICard';

@@ -4,10 +4,10 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { useUI } from '../context/UIContext';
-import {
-  calculateProcessCycleTime,
+import calculationUtils from '../utils/calculationUtils';
+const { calculateProcessCycleTime,
   daysBetween,
-} from '../utils/calculationUtils';
+ } = calculationUtils;
 import { fmtTs } from '../utils/dateUtils';
 
 // Modular Components

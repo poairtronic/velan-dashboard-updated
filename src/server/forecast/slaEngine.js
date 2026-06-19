@@ -2,7 +2,7 @@
  * SLA Forecast Engine V2
  * Projects PO completion dates using working-day velocities, stage queue delays, and weighted throughput.
  */
-const { workingDaysBetween5Day, addWorkingDays5Day, TARGET_DAYS } = require('../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day, TARGET_DAYS } = require('../../utils/calculationUtils');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 
