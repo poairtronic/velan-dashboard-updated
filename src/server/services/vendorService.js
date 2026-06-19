@@ -1,4 +1,4 @@
-const { dateDiff, TARGET_DAYS } = require('../../utils/calculationUtils');
+const { dateDiff, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
 
 function calculateVendors({ filtered, todayStr }) {
   const vendorStageData = [];

@@ -1,4 +1,4 @@
-const { getSCLastTimestamp, daysBetween, workingDaysBetween, workingDaysBetween5Day, addWorkingDays5Day, isSCComplete, TARGET_DAYS } = require('../../utils/calculationUtils');
+const { getSCLastTimestamp, daysBetween, workingDaysBetween, workingDaysBetween5Day, addWorkingDays5Day, isSCComplete, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
 const { calculateKPIs } = require('./kpiService');
 const { calculateStages } = require('./stageService');
 const { calculateCycleTimes } = require('./cycleTimeService');

@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { EXECUTIVE_WAR_ROOM_QUERY } = require('../db/queries/executive');
-const { workingDaysBetween } = require('../../utils/calculationUtils');
+const { workingDaysBetween } = require('../../utils/calculationUtils.cjs');
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 

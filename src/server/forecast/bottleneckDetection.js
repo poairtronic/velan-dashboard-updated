@@ -3,7 +3,7 @@
  * Identifies current bottleneck and predicts next one at +14 days.
  * Key tracking: SC + PO + Product.
  */
-const { workingDaysBetween5Day } = require('../../utils/calculationUtils');
+const { workingDaysBetween5Day } = require('../../utils/calculationUtils.cjs');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const PROJECTION_DAYS = 14;

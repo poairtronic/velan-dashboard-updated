@@ -1,4 +1,4 @@
-const { getSCLastTimestamp, daysBetween, isSCComplete, TARGET_DAYS } = require('../../utils/calculationUtils');
+const { getSCLastTimestamp, daysBetween, isSCComplete, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
 
 function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   const totalItems = filtered.length;
@@ -18,7 +18,7 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   let vendorCount = 0;
 
   const terminalStages = new Set(['READY', 'STORES', 'STOCK', 'EXSTOCK']);
-  const { getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } = require('../../utils/calculationUtils');
+  const { getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } = require('../../utils/calculationUtils.cjs');
 
   filtered.forEach((row) => {
     const stage = row.currentStage;
@@ -160,13 +160,13 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   const delayedPOItems = filtered.filter((i) => {
     if (terminalStages.has(i.currentStage)) return false;
     if (!i.poDate) return false;
-    const days = require('../../utils/calculationUtils').workingDaysBetween(i.poDate, todayStr);
+    const days = require('../../utils/calculationUtils.cjs').workingDaysBetween(i.poDate, todayStr);
     return days !== null && days > 21;
   });
 
   const inProgressItems = filtered.filter((i) => {
     if (terminalStages.has(i.currentStage)) return false;
-    const days = i.poDate ? require('../../utils/calculationUtils').workingDaysBetween(i.poDate, todayStr) : null;
+    const days = i.poDate ? require('../../utils/calculationUtils.cjs').workingDaysBetween(i.poDate, todayStr) : null;
     return days === null || days <= 21;
   });
 

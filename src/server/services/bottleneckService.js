@@ -1,4 +1,4 @@
-const { getSCLastTimestamp, daysBetween } = require('../../utils/calculationUtils');
+const { getSCLastTimestamp, daysBetween } = require('../../utils/calculationUtils.cjs');
 
 function calculateBottlenecks({ poGroups, todayStr, stageCounts, stageCycleTimes, vendorStats }) {
   const bottleneck = [...poGroups]

@@ -367,23 +367,47 @@ function addWorkingDays5Day(fromDateStr, daysToAdd) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-module.exports.workingDaysBetween = workingDaysBetween;
-module.exports.workingDaysBetween5Day = workingDaysBetween5Day;
-module.exports.addWorkingDays5Day = addWorkingDays5Day;
-module.exports.daysBetween = daysBetween;
-module.exports.getProductCategory = getProductCategory;
-module.exports.parseDateTime = parseDateTime;
-module.exports.hoursBetween = hoursBetween;
-module.exports.minutesBetween = minutesBetween;
-module.exports.calculateProcessCycleTime = calculateProcessCycleTime;
-module.exports.isSLAViolation = isSLAViolation;
-module.exports.calculateVendorAging = calculateVendorAging;
-module.exports.calculateProcessEfficiency = calculateProcessEfficiency;
-module.exports.getVendorCode = getVendorCode;
-module.exports.isSCComplete = isSCComplete;
-module.exports.getSCLastTimestamp = getSCLastTimestamp;
-module.exports.normalizeProductsInGroup = normalizeProductsInGroup;
-module.exports.dateDiff = dateDiff;
-module.exports.TARGET_DAYS = TARGET_DAYS;
-module.exports.AIRPLUG_TYPES = AIRPLUG_TYPES;
-module.exports.MASTER_TYPES = MASTER_TYPES;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+module.exports = {
+  workingDaysBetween,
+  workingDaysBetween5Day,
+  addWorkingDays5Day,
+  daysBetween,
+  getProductCategory,
+  parseDateTime,
+  hoursBetween,
+  minutesBetween,
+  calculateProcessCycleTime,
+  isSLAViolation,
+  calculateVendorAging,
+  calculateProcessEfficiency,
+  getVendorCode,
+  isSCComplete,
+  getSCLastTimestamp,
+  normalizeProductsInGroup,
+  dateDiff,
+  TARGET_DAYS,
+  AIRPLUG_TYPES,
+  MASTER_TYPES
+};

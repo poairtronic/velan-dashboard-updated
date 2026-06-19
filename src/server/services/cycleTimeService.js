@@ -4,7 +4,7 @@ const {
   dateDiff,
   isSCComplete,
   getSCLastTimestamp
-} = require('../../utils/calculationUtils');
+} = require('../../utils/calculationUtils.cjs');
 
 function calculateCycleTimes({ filtered, scGroups }) {
   const scRecordMap = {};

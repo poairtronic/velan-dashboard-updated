@@ -3,7 +3,7 @@
  * Projects vendor risk and performance metrics using working days, weighted throughput, and stability scores.
  * Key tracking: SC + PO + Product.
  */
-const { workingDaysBetween5Day, addWorkingDays5Day } = require('../../utils/calculationUtils');
+const { workingDaysBetween5Day, addWorkingDays5Day } = require('../../utils/calculationUtils.cjs');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const VENDOR_SLA_DAYS = 2; // Target working days spent per vendor stage
