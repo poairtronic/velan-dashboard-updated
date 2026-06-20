@@ -1,16 +1,11 @@
-const { getSCLastTimestamp, daysBetween, workingDaysBetween, workingDaysBetween5Day, addWorkingDays5Day, isSCComplete, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
+const { workingDaysBetween5Day, addWorkingDays5Day, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
 const { calculateKPIs } = require('./kpiService');
 const { calculateStages } = require('./stageService');
 const { calculateCycleTimes } = require('./cycleTimeService');
 const { calculateVendors } = require('./vendorService');
 const { calculateBottlenecks } = require('./bottleneckService');
 
-// Helpers
-function classifyAging(days) {
-  if (days > 30) return 'Dead';
-  if (days > 10) return 'Slow';
-  return 'Fast';
-}
+
 
 function getTrend(current, past, higherIsBetter = true) {
   if (current === past) return 'Stable';
@@ -86,7 +81,7 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
     const delayFreq = v.avgDays > 14 ? Math.min(100, Math.round((v.avgDays / 21) * 100)) : 10;
     
     // Vendor Score V2 Calculation
-    const vendorScore = 100 - Math.min(100, (v.avgDays / 2) * 100);
+    const vendorScore = 100 - Math.min(100, (v.avgDays / TARGET_DAYS) * 100);
     totalVendorScore += vendorScore;
     validVendorsCount++;
 
@@ -128,13 +123,28 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const vScorePast = Math.max(0, vScoreCurrent - 5);
 
   // Inventory Score
-  const invVelocity = getThroughput(currentWeekItems) / Math.max(1, filtered.filter(i => isCompletedStage(i.currentStage)).length);
-  const invScoreCurrent = Math.min(100, invVelocity * 500); // arbitrarily scaled to 100
+  const inventoryCounts = { Ready: 0, Stores: 0, Stock: 0 };
+  const inventoryAges = { Ready: 0, Stores: 0, Stock: 0 };
+  let deadCount = 0;
+
+  filtered.forEach(i => {
+    if (['READY', 'STORES', 'STOCK'].includes(i.currentStage)) {
+      const stage = i.currentStage === 'READY' ? 'Ready' : (i.currentStage === 'STORES' ? 'Stores' : 'Stock');
+      const age = i.timestamp ? workingDaysBetween5Day(i.timestamp, todayStr) : 0;
+      
+      inventoryCounts[stage]++;
+      inventoryAges[stage] += age;
+      if (age > 30) deadCount++;
+    }
+  });
+
+  const totalInv = inventoryCounts.Ready + inventoryCounts.Stores + inventoryCounts.Stock;
+  const invScoreCurrent = Math.max(0, 100 - (deadCount / Math.max(1, totalInv)) * 100);
   const invScorePast = Math.max(0, invScoreCurrent - 5);
 
   // Flow Score (Bottlenecks) V2
   const topBN = bottlenecks.bottleneckStages?.[0]?.score || 0;
-  const flowScoreCurrent = 100 / (1 + (topBN / 100));
+  const flowScoreCurrent = 100 - Math.min(100, topBN);
   const flowScorePast = Math.max(0, flowScoreCurrent - 5);
 
   const getHealthMetric = (curr, past) => ({
@@ -261,24 +271,8 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   })).sort((a,b) => b.impactScore - a.impactScore);
 
   // --- 7. Inventory Intelligence V2 ---
-  const inventoryCounts = { Ready: 0, Stores: 0, Stock: 0 };
-  const inventoryAges = { Ready: 0, Stores: 0, Stock: 0 };
-  let deadCount = 0;
-
-  filtered.forEach(i => {
-    if (['READY', 'STORES', 'STOCK'].includes(i.currentStage)) {
-      const stage = i.currentStage === 'READY' ? 'Ready' : (i.currentStage === 'STORES' ? 'Stores' : 'Stock');
-      const age = i.timestamp ? workingDaysBetween5Day(i.timestamp, todayStr) : 0;
-      
-      inventoryCounts[stage]++;
-      inventoryAges[stage] += age;
-      if (age > 30) deadCount++;
-    }
-  });
-
-  const totalInv = inventoryCounts.Ready + inventoryCounts.Stores + inventoryCounts.Stock;
   const inventoryInfo = {
-    healthScore: Math.max(0, 100 - (deadCount / Math.max(1, totalInv)) * 100),
+    healthScore: invScoreCurrent,
     velocity: Math.round(tpCurrentMonth / 30),
     deadInventory: deadCount,
     dispatchRisk: deadCount > 50 ? 'High' : (deadCount > 20 ? 'Medium' : 'Low'),
