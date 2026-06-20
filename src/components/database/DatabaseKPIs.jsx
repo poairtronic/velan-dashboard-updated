@@ -1,6 +1,6 @@
 import React from 'react';
 
-function DatabaseKPIs({ kpiStats, fromDate, toDate, setSelectedKPI }) {
+function DatabaseKPIs({ kpiStats, fromDate, toDate, dateType, setSelectedKPI }) {
   return (
     <div
       style={{
@@ -54,12 +54,12 @@ function DatabaseKPIs({ kpiStats, fromDate, toDate, setSelectedKPI }) {
         </div>
       </div>
       <div className="kpi-card" style={{ '--c1': '#ffd60a', '--c2': '#ff6b35' }}>
-        <div className="kpi-label">SC RECEIVED</div>
+        <div className="kpi-label">SC {dateType === 'timestamp' ? 'UPDATED' : 'RECEIVED'}</div>
         <div className="kpi-value" style={{ color: 'var(--accent5)' }}>
           {kpiStats.scReceived}
         </div>
         <div className="kpi-sub">
-          SCs with PO date in range
+          SCs with {dateType === 'timestamp' ? 'timestamp' : 'PO date'} in range
           {fromDate && (
             <span
               style={{ display: 'block', fontSize: 9, marginTop: 3, color: 'var(--text-muted)' }}

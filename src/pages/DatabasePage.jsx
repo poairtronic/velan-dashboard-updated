@@ -131,6 +131,7 @@ function DatabasePage() {
         kpiStats={kpiStats}
         fromDate={fromDate}
         toDate={toDate}
+        dateType={dateType}
         setSelectedKPI={setSelectedKPI}
       />
 
