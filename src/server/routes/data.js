@@ -13,8 +13,9 @@ const { getFilteredData, computeGroups } = require('../services/dataQueryService
 // ── GET /api/data/production ────────────────────────────────────────────────
 router.get('/production', asyncHandler(async (req, res) => {
   try {
-    const page = parseInt(req.query.page || '1', 10);
-    const limit = Math.min(parseInt(req.query.limit || '100', 10), 5000);
+    const page = Math.max(1, parseInt(req.query.page || '1', 10) || 1);
+    const parsedLimit = parseInt(req.query.limit, 10);
+    const limit = isNaN(parsedLimit) || parsedLimit <= 0 ? 100 : Math.min(parsedLimit, 5000);
     const offset = (page - 1) * limit;
 
     const d = new Date();
@@ -49,8 +50,9 @@ router.get('/production', asyncHandler(async (req, res) => {
 
 // ── GET /api/data ─────────────────────────────────────────────────────────
 router.get('/', asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page || '1', 10);
-  const limit = Math.min(parseInt(req.query.limit || '500', 10), 5000);
+  const page = Math.max(1, parseInt(req.query.page || '1', 10) || 1);
+  const parsedLimit = parseInt(req.query.limit, 10);
+  const limit = isNaN(parsedLimit) || parsedLimit <= 0 ? 500 : Math.min(parsedLimit, 5000);
   const search = req.query.search || '';
   const offset = (page - 1) * limit;
 
