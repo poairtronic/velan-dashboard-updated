@@ -43,8 +43,10 @@ function DatabaseTable({ filtered, isDoneStage }) {
     return da - db;
   });
   
-  const tableRows = deduped.filter((r) => isDoneStage(r.currentStage));
-  const wipCount = deduped.length - tableRows.length;
+  // Display ALL rows, both WIP and completed
+  const tableRows = deduped;
+  const doneCount = tableRows.filter((r) => isDoneStage(r.currentStage)).length;
+  const wipCount = tableRows.length - doneCount;
 
   return (
     <div className="chart-card" style={{ marginBottom: 16 }}>
@@ -59,13 +61,25 @@ function DatabaseTable({ filtered, isDoneStage }) {
         }}
       >
         <div>
-          <div className="chart-title">Completed Items — {tableRows.length} shown</div>
+          <div className="chart-title">All Items (Live & Completed) — {tableRows.length} shown</div>
           <div className="chart-sub">
-            READY / STOCK / STORES / EXSTOCK ONLY · {wipCount} in-process items hidden ·
-            HISTORY + LIVE COMBINED · LATEST STATE PER PRODUCT
+            LIVE OPERATIONAL WIP & HISTORICAL DONE RECORDS COMBINED · LATEST STATE PER PRODUCT
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <span
+            style={{
+              background: 'rgba(255,214,10,0.12)',
+              border: '1px solid rgba(255,214,10,0.3)',
+              color: 'var(--warning)',
+              borderRadius: 20,
+              padding: '3px 12px',
+              fontSize: 11,
+              fontFamily: 'Share Tech Mono,monospace',
+            }}
+          >
+            ⏳ {wipCount} WIP
+          </span>
           <span
             style={{
               background: 'rgba(0,230,118,0.12)',
@@ -77,7 +91,7 @@ function DatabaseTable({ filtered, isDoneStage }) {
               fontFamily: 'Share Tech Mono,monospace',
             }}
           >
-            ✓ {tableRows.length} DONE
+            ✓ {doneCount} DONE
           </span>
         </div>
       </div>
