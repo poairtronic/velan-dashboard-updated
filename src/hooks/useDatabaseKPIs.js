@@ -84,7 +84,7 @@ export function useDatabaseKPIs(
     });
 
     const _scStageCounts = { READY: 0, STORES: 0, STOCK: 0, EXSTOCK: 0 };
-    Object.entries(_scFinalMap).forEach(([sc, prodMap]) => {
+    Object.values(_scFinalMap).forEach((prodMap) => {
       const latestRows = Object.values(prodMap);
       if (latestRows.length > 0 && latestRows.every((r) => _isDoneOrVA(r.currentStage))) {
         const seenStages = new Set();

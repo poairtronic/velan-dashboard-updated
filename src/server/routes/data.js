@@ -1,14 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const state = require('../state');
-const { queryRowsPaginated, getTotalCount, loadLiveDB, saveLiveRows, insertRows, logSync, pool } = require('../db/pool');
+const { queryRowsPaginated, getTotalCount, loadLiveDB, pool } = require('../db/pool');
 const { dataUploadSchema } = require('../schemas/upload.schema');
-const { validateBody } = require('../middleware/validation');
 const { getOrSetCache, invalidatePattern, TTL } = require('../cache/cacheService');
 const keys = require('../cache/cacheKeys');
 const asyncHandler = require('../utils/asyncHandler');
 
-const { getFilteredData, computeGroups } = require('../services/dataQueryService');
+const { getFilteredData } = require('../services/dataQueryService');
 
 // ── GET /api/data/production ────────────────────────────────────────────────
 router.get('/production', asyncHandler(async (req, res) => {
@@ -23,15 +22,7 @@ router.get('/production', asyncHandler(async (req, res) => {
 
     const filtered = await getFilteredData(req.query, todayStr);
     
-    // Additional data for frontend modal or quick access
-    const { allScItemsModal, filteredScGroupsModal } = (() => {
-      const allSc = {};
-      const filtSc = {};
-      // To build allScItemsModal properly we actually need the un-filtered merged data
-      // For performance in pagination, we skip returning it unless requested, 
-      // but if the frontend needs it, we build it.
-      return { allScItemsModal: {}, filteredScGroupsModal: {} };
-    })();
+
 
     const paginatedRows = filtered.slice(offset, offset + limit);
 
@@ -81,7 +72,6 @@ const connection = { url: process.env.REDIS_URL || 'redis://localhost:6379' };
 // The task requires moving validation into Express middlewares or validating inside the controller.
 router.post('/', asyncHandler(async (req, res) => {
   let syncType = req.query.sync_type || 'Manual Upload';
-  let incomingLength = 0;
   
   try {
     const payload = req.body;
@@ -94,7 +84,6 @@ router.post('/', asyncHandler(async (req, res) => {
     const validated = valResult.data;
 
     const incoming = validated.rows;
-    incomingLength = incoming.length;
 
     const syncQueueEvents = new QueueEvents('syncQueue', { connection });
     const { logAudit } = require('../utils/auditLogger');
