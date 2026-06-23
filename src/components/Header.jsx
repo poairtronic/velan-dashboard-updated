@@ -13,10 +13,10 @@ import {
   updateAlertRules
 } from '../services/alertService';
 
-function Header({ onOpenCommandPalette }) {
+function Header() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { liveState, setActiveNav } = useUI();
+  const { setActiveNav } = useUI();
   const { theme, toggleTheme } = useTheme();
   const { user, logout, isAdmin } = useAuth();
   
@@ -76,7 +76,8 @@ function Header({ onOpenCommandPalette }) {
   // Sync server rules to local form state when fetched
   useEffect(() => {
     if (rulesData?.rules) {
-      setLocalRules(rulesData.rules);
+      const timer = setTimeout(() => setLocalRules(rulesData.rules), 0);
+      return () => clearTimeout(timer);
     }
   }, [rulesData]);
 
