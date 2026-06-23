@@ -34,6 +34,7 @@ const executiveRouter = require('./routes/executive');
 const intelligenceRouter = require('./routes/intelligence');
 const micRouter = require('./routes/mic');
 const forecastRouter = require('./routes/forecast');
+const performanceRouter = require('./routes/performance');
 
 const app = express();
 
@@ -135,6 +136,7 @@ apiRouter.use('/intelligence', dashboardLimiter, requireAuth(['admin', 'user']),
 apiRouter.use('/mic', dashboardLimiter, requireAuth(['admin', 'user']), micRouter);
 apiRouter.use('/forecast', dashboardLimiter, requireAuth(['admin', 'user']), forecastRouter);
 apiRouter.use('/audit', auditRouter);
+apiRouter.use('/perf', requireAuth(['admin', 'user']), performanceRouter);
 apiRouter.use('/meta', requireAuth(['admin', 'user']), metaRouter);
 
 app.use('/api', apiRouter);
