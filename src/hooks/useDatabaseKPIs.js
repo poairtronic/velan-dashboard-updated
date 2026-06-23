@@ -302,9 +302,6 @@ export function useDatabaseKPIs(
   }, [
     filtered,
     data,
-    fromDate,
-    toDate,
-    dateType,
     allScItemsModal,
     filteredScGroupsModal,
     hasNonDateFilter,
