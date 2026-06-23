@@ -198,19 +198,7 @@ export function useDatabaseKPIs(
       scsToCheck.filter((sc) => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProduct(allRowsForSC);
-        if (!(latestRows.length > 0 && latestRows.every((r) => isDoneStage(r.currentStage))))
-          return false;
-        if (fromDate || toDate) {
-          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-          return latestRows.some((r) => {
-            const d = (r[dateField] || '').slice(0, 10);
-            if (!d) return false;
-            if (fromDate && d < fromDate) return false;
-            if (toDate && d > toDate) return false;
-            return true;
-          });
-        }
-        return true;
+        return latestRows.length > 0 && latestRows.every((r) => isDoneStage(r.currentStage));
       })
     );
     const scReadySet = scCompletedSet;
@@ -233,20 +221,10 @@ export function useDatabaseKPIs(
       allPrefixes.filter((prefix) => {
         const prefixSCs = Object.keys(allScItems).filter((sc) => getScPrefix(sc) === prefix);
         if (prefixSCs.length === 0) return false;
-        const allDone = prefixSCs.every((sc) => {
+        return prefixSCs.every((sc) => {
           const latest = getLatestPerProduct(allScItems[sc] || []);
           return latest.length > 0 && latest.every((i) => isDoneStage(i.currentStage));
         });
-        if (!allDone) return false;
-        return prefixSCs.some((sc) =>
-          (allScItems[sc] || []).some((i) => {
-            if (!i.timestamp) return false;
-            const d = i.timestamp.slice(0, 10);
-            if (fromDate && d < fromDate) return false;
-            if (toDate && d > toDate) return false;
-            return true;
-          })
-        );
       })
     );
 
@@ -265,19 +243,7 @@ export function useDatabaseKPIs(
       scsToCheck.filter((sc) => {
         const allRowsForSC = allScItems[sc] || [];
         const latestRows = getLatestPerProductForVA(allRowsForSC);
-        if (!(latestRows.length > 0 && latestRows.every((r) => isDoneOrVAStage(r.currentStage))))
-          return false;
-        if (fromDate || toDate) {
-          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-          return latestRows.every((r) => {
-            const d = (r[dateField] || '').slice(0, 10);
-            if (!d) return false;
-            if (fromDate && d < fromDate) return false;
-            if (toDate && d > toDate) return false;
-            return true;
-          });
-        }
-        return true;
+        return latestRows.length > 0 && latestRows.every((r) => isDoneOrVAStage(r.currentStage));
       })
     );
 
@@ -285,25 +251,10 @@ export function useDatabaseKPIs(
       allPrefixes.filter((prefix) => {
         const prefixSCs = Object.keys(allScItems).filter((sc) => getScPrefix(sc) === prefix);
         if (prefixSCs.length === 0) return false;
-        const allDone = prefixSCs.every((sc) => {
+        return prefixSCs.every((sc) => {
           const latest = getLatestPerProductForVA(allScItems[sc] || []);
           return latest.length > 0 && latest.every((i) => isDoneOrVAStage(i.currentStage));
         });
-        if (!allDone) return false;
-        if (fromDate || toDate) {
-          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-          return prefixSCs.every((sc) => {
-            const latest = getLatestPerProductForVA(allScItems[sc] || []);
-            return latest.every((i) => {
-              const d = (i[dateField] || '').slice(0, 10);
-              if (!d) return false;
-              if (fromDate && d < fromDate) return false;
-              if (toDate && d > toDate) return false;
-              return true;
-            });
-          });
-        }
-        return true;
       })
     );
 
@@ -314,13 +265,6 @@ export function useDatabaseKPIs(
         const latestRows = getLatestPerProductForVA(allRowsForSC);
         if (latestRows.length > 0 && latestRows.every((r) => isDoneOrVAStage(r.currentStage))) {
           latestRows.forEach((r) => {
-            if (fromDate || toDate) {
-              const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
-              const d = (r[dateField] || '').slice(0, 10);
-              if (!d) return;
-              if (fromDate && d < fromDate) return;
-              if (toDate && d > toDate) return;
-            }
             const st = String(r.currentStage || '')
               .trim()
               .toUpperCase();
