@@ -9,9 +9,9 @@ export async function apiClient(url, options = {}) {
   // Always include credentials (cookies) for all API calls
   options.credentials = 'include';
   
-  // Set up 10-second timeout using AbortController
+  const timeoutMs = options.timeoutMs || 60000; // default to 60 seconds
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   options.signal = controller.signal;
 
   try {
@@ -52,7 +52,7 @@ export async function apiClient(url, options = {}) {
     logger.error(`API Error on ${url}`, error);
     
     if (error.name === 'AbortError') {
-      const err = new Error('Request timed out after 10s');
+      const err = new Error('Request timed out after 60s');
       err.error = true;
       err.code = 'TIMEOUT';
       err.message = 'The server took too long to respond. Please try again.';

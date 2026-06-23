@@ -69,14 +69,13 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     }
   });
 
-  const filteredScGroups = Object.values(filteredScGroupsMap);
   let readyCount = 0;
   let storesCount = 0;
   const completeSets = [];
   const readySetsArr = [];
   const storeSetsArr = [];
 
-  filteredScGroups.forEach((sg) => {
+  scGroups.forEach((sg) => {
     const isReady = sg.items.every((i) => i.currentStage === 'READY');
     const isStore = sg.items.every((i) => i.currentStage === 'STORES');
     const isComplete = sg.items.every((i) => terminalStages.has(i.currentStage));

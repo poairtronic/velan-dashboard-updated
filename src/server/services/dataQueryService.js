@@ -12,8 +12,16 @@ async function getAllRawData() {
   });
 }
 
+const pendingMerges = {};
+
 async function getMergedData(todayStr) {
-  const { liveRows, dbRows } = await getAllRawData();
+  const cacheKey = 'merged_data_' + todayStr;
+  if (pendingMerges[cacheKey]) {
+    return pendingMerges[cacheKey];
+  }
+
+  const mergePromise = getOrSetCache(cacheKey, TTL.SHORT, async () => {
+    const { liveRows, dbRows } = await getAllRawData();
 
   const seen = new Set();
   const liveProcessed = liveRows.map((row) => ({
@@ -46,6 +54,15 @@ async function getMergedData(todayStr) {
     seen.add(key);
     return true;
   });
+  });
+
+  pendingMerges[cacheKey] = mergePromise;
+  try {
+    const result = await mergePromise;
+    return result;
+  } finally {
+    delete pendingMerges[cacheKey];
+  }
 }
 
 function getActiveData(rawData) {

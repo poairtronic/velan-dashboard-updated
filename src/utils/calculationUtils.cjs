@@ -20,9 +20,14 @@ const COMPANY_HOLIDAYS = new Set([
   '2026-11-09', // Diwali
 ]);
 
+const workingDaysCache = new Map();
+
 // Count only Mon–Sat, skipping Sundays and company holidays
 function workingDaysBetween(d1Str, d2Str) {
   if (!d1Str || !d2Str) return null;
+  const cacheKey = `${d1Str}|${d2Str}`;
+  if (workingDaysCache.has(cacheKey)) return workingDaysCache.get(cacheKey);
+
   try {
     function parseLocalDate(str) {
       if (!str) return null;
