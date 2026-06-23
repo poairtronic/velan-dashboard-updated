@@ -20,8 +20,6 @@ require('./workers/syncWorker');
 require('./workers/reportWorker');
 
 const PORT = env.PORT;
-const LIVE_URL = env.LIVE_URL || '';
-const HISTORY_URL = env.HISTORY_URL || '';
 
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 const server = http.createServer(app);
@@ -77,9 +75,8 @@ async function startup() {
     logger.warn(logger.categories.STARTUP, `Failed to load last sync timestamp: ${err.message}`);
   }
 
-  let totalCount = 0;
   try {
-    totalCount = await getTotalCount();
+    await getTotalCount();
   } catch (err) {
     logger.error(logger.categories.DATABASE, `Failed to retrieve total count: ${err.message}`, err);
   }
@@ -122,7 +119,9 @@ async function gracefulShutdown(signal) {
   logger.warn(logger.categories.STARTUP, `[Server] ${signal} received — closing Neon pool…`);
   try {
     await pool.end();
-  } catch (_) {}
+  } catch (_) {
+    // ignore error
+  }
   server.close(() => {
     logger.warn(logger.categories.STARTUP, '[Server] Closed. Goodbye.');
     process.exit(0);
@@ -142,7 +141,7 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   try {
     logger.error(logger.categories.STARTUP, `UNHANDLED REJECTION: ${reason}`, reason instanceof Error ? reason : new Error(String(reason)));
   } catch (_) {
