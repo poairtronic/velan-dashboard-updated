@@ -14,7 +14,7 @@ router.get('/production', asyncHandler(async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page || '1', 10) || 1);
     const parsedLimit = parseInt(req.query.limit, 10);
-    const limit = isNaN(parsedLimit) || parsedLimit <= 0 ? 100 : Math.min(parsedLimit, 5000);
+    const limit = isNaN(parsedLimit) || parsedLimit <= 0 ? 100 : Math.min(parsedLimit, 500000);
     const offset = (page - 1) * limit;
 
     const d = new Date();
