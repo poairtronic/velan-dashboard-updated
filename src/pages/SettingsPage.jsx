@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 function SettingsPage() {
@@ -12,7 +12,11 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
 
-  const fetchSettingsAndLogs = useCallback(async () => {
+  useEffect(() => {
+    fetchSettingsAndLogs();
+  }, []);
+
+  const fetchSettingsAndLogs = async () => {
     try {
       const apiBase = import.meta.env.VITE_API_BASE || '';
       
@@ -24,10 +28,11 @@ function SettingsPage() {
       if (settingsRes.ok) {
         const data = await settingsRes.json();
         // Merge with defaults
-        setSettings(prev => prev.map(s => {
+        const newSettings = settings.map(s => {
           const found = data.find(d => d.setting_key === s.setting_key);
           return found || s;
-        }));
+        });
+        setSettings(newSettings);
       }
 
       if (logsRes.ok) {
@@ -39,14 +44,7 @@ function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      await fetchSettingsAndLogs();
-    };
-    load();
-  }, [fetchSettingsAndLogs]);
+  };
 
   const handleSaveSettings = async () => {
     setSaving(true);
