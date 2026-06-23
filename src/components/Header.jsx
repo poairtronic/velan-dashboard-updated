@@ -127,70 +127,10 @@ function Header({ onOpenCommandPalette }) {
         <div className="logo-sub">PRODUCTION COMMAND CENTER</div>
       </div>
       
-      {/* Global Search Trigger */}
-      <div 
-        onClick={onOpenCommandPalette}
-        style={{
-          marginLeft: '40px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid var(--border)',
-          borderRadius: '8px',
-          padding: '6px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          cursor: 'pointer',
-          color: 'var(--text-muted)',
-          fontSize: '13px',
-          width: '300px',
-          transition: 'all 0.2s'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--accent1)';
-          e.currentTarget.style.background = 'rgba(0, 201, 255, 0.05)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border)';
-          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-        }}
-      >
-        <span style={{ fontSize: '14px' }}>🔍</span>
-        <span>Search PO, SC, Reports...</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
-          <kbd className="command-kbd" style={{ background: 'var(--bg-card)' }}>Ctrl</kbd>
-          <kbd className="command-kbd" style={{ background: 'var(--bg-card)' }}>K</kbd>
-        </div>
-      </div>
+
 
       <div className="header-right">
-        {liveState?.active && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(0,230,118,0.1)',
-              border: '1px solid rgba(0,230,118,0.35)',
-              padding: '4px 12px',
-              borderRadius: 20,
-              fontSize: 10,
-              fontFamily: 'Share Tech Mono,monospace',
-              color: 'var(--success)',
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                background: 'var(--success)',
-                borderRadius: '50%',
-                animation: 'pulse 1.5s infinite',
-                display: 'inline-block',
-              }}
-            />
-            SHEETS LIVE
-          </div>
-        )}
+
         <div className="live-badge">
           <div className="live-dot" />
           <span>LIVE</span>
