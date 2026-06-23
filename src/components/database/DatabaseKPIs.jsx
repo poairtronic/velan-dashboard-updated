@@ -91,7 +91,7 @@ function DatabaseKPIs({ kpiStats, fromDate, toDate, dateType, setSelectedKPI }) 
           {kpiStats.scSetsCompleted}
         </div>
         <div className="kpi-sub">
-          all items READY/STOCK/STORES/EXSTOCK
+          all items READY/STOCK/STORES/EXSTOCK/VA
           {fromDate && (
             <span
               style={{ display: 'block', fontSize: 9, marginTop: 3, color: 'var(--text-muted)' }}

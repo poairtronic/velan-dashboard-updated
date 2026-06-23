@@ -17,7 +17,7 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   let inhouseCount = 0;
   let vendorCount = 0;
 
-  const terminalStages = new Set(['READY', 'STORES', 'STOCK', 'EXSTOCK']);
+  const terminalStages = new Set(['READY', 'STORES', 'STOCK', 'EXSTOCK', 'VA']);
   const { getProductCategory, AIRPLUG_TYPES, MASTER_TYPES } = require('../../utils/calculationUtils.cjs');
 
   filtered.forEach((row) => {

@@ -24,7 +24,8 @@ router.get('/calculations', async (req, res) => {
     const combinedResult = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
-      const { scGroups, poGroups } = computeGroups(filtered);
+      const allData = await require('../services/dataQueryService').getMergedData(todayStr);
+      const { scGroups, poGroups } = computeGroups(filtered, allData);
 
       // 1. Stages
       const stages = calculateStages({ filtered, poGroups, todayStr });
@@ -71,7 +72,8 @@ router.get('/kpis', async (req, res) => {
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
-      const { scGroups, poGroups } = computeGroups(filtered);
+      const allData = await require('../services/dataQueryService').getMergedData(todayStr);
+      const { scGroups, poGroups } = computeGroups(filtered, allData);
       return calculateKPIs({ filtered, scGroups, poGroups, todayStr });
     });
     res.json({ ...result, _meta: getFreshnessMetadata() });
@@ -89,7 +91,8 @@ router.get('/stages', async (req, res) => {
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
-      const { poGroups } = computeGroups(filtered);
+      const allData = await require('../services/dataQueryService').getMergedData(todayStr);
+      const { poGroups } = computeGroups(filtered, allData);
       return calculateStages({ filtered, poGroups, todayStr });
     });
     res.json({ ...result, _meta: getFreshnessMetadata() });
@@ -105,7 +108,8 @@ router.get('/cycle-times', async (req, res) => {
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
-      const { scGroups } = computeGroups(filtered);
+      const allData = await require('../services/dataQueryService').getMergedData(todayStr);
+      const { scGroups } = computeGroups(filtered, allData);
       return calculateCycleTimes({ filtered, scGroups });
     });
     res.json({ ...result, _meta: getFreshnessMetadata() });
@@ -137,7 +141,8 @@ router.get('/bottlenecks', async (req, res) => {
     const result = await getOrSetCache(cacheKey, 300, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
-      const { poGroups, scGroups } = computeGroups(filtered);
+      const allData = await require('../services/dataQueryService').getMergedData(todayStr);
+      const { poGroups, scGroups } = computeGroups(filtered, allData);
       
       const stages = calculateStages({ filtered, poGroups, todayStr });
       const cycleTimes = calculateCycleTimes({ filtered, scGroups });

@@ -47,7 +47,8 @@ function DatabasePage() {
 
   // Fetch the massive filtered array locally to DatabasePage (to avoid global memory pressure)
   const { rows: filtered, total } = useProductionDataQuery({ ...filters, fromDate, toDate, dateType, source: 'database' }, 1, 200000);
-  const data = React.useMemo(() => filtered || [], [filtered]); // For Archive, data and filtered are effectively the same
+  const { rows: fullData } = useProductionDataQuery({ source: 'database' }, 1, 200000);
+  const data = React.useMemo(() => fullData || [], [fullData]); 
 
   // Extract complex derivations required by KPI
   const allScItemsModal = React.useMemo(() => {

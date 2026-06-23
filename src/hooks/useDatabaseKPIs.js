@@ -210,7 +210,7 @@ export function useDatabaseKPIs(
 
     const allPrefixes = [
       ...new Set(
-        data
+        filtered
           .filter((r) => r.sc)
           .map((r) => getScPrefix(r.sc))
           .filter(Boolean)

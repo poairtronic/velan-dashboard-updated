@@ -187,11 +187,17 @@ async function getFilteredData(filters, todayStr) {
   });
 }
 
-function computeGroups(filtered) {
+function computeGroups(filtered, allData) {
   const scGroupsMap = {};
-  filtered.forEach((row) => {
-    if (!scGroupsMap[row.sc]) scGroupsMap[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, _all: [] };
-    scGroupsMap[row.sc]._all.push(row);
+  const activeSCs = new Set(filtered.map(r => r.sc).filter(Boolean));
+  
+  const sourceData = (allData && allData.length > 0) ? allData : filtered;
+
+  sourceData.forEach((row) => {
+    if (row.sc && activeSCs.has(row.sc)) {
+      if (!scGroupsMap[row.sc]) scGroupsMap[row.sc] = { sc: row.sc, po: row.po, poDate: row.poDate, _all: [] };
+      scGroupsMap[row.sc]._all.push(row);
+    }
   });
   
   const scGroups = Object.values(scGroupsMap).map((sg) => {
