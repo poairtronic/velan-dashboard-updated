@@ -56,7 +56,7 @@ function DatabaseKPIs({ kpiStats, fromDate, toDate, dateType, setSelectedKPI }) 
       <div className="kpi-card" style={{ '--c1': '#ffd60a', '--c2': '#ff6b35' }}>
         <div className="kpi-label">SC {dateType === 'timestamp' ? 'UPDATED' : 'RECEIVED'}</div>
         <div className="kpi-value" style={{ color: 'var(--accent5)' }}>
-          {kpiStats.scReceived}
+          {kpiStats.scSetsReceived}
         </div>
         <div className="kpi-sub">
           SCs with {dateType === 'timestamp' ? 'timestamp' : 'PO date'} in range
