@@ -281,6 +281,32 @@ export function useDatabaseKPIs(
       })
     );
 
+    const scSetsCompletedPlusVASet = new Set(
+      allPrefixes.filter((prefix) => {
+        const prefixSCs = Object.keys(allScItems).filter((sc) => getScPrefix(sc) === prefix);
+        if (prefixSCs.length === 0) return false;
+        const allDone = prefixSCs.every((sc) => {
+          const latest = getLatestPerProductForVA(allScItems[sc] || []);
+          return latest.length > 0 && latest.every((i) => isDoneOrVAStage(i.currentStage));
+        });
+        if (!allDone) return false;
+        if (fromDate || toDate) {
+          const dateField = dateType === 'poDate' ? 'poDate' : 'timestamp';
+          return prefixSCs.every((sc) => {
+            const latest = getLatestPerProductForVA(allScItems[sc] || []);
+            return latest.every((i) => {
+              const d = (i[dateField] || '').slice(0, 10);
+              if (!d) return false;
+              if (fromDate && d < fromDate) return false;
+              if (toDate && d > toDate) return false;
+              return true;
+            });
+          });
+        }
+        return true;
+      })
+    );
+
     const vaBreakdown = (() => {
       const counts = { READY: 0, STOCK: 0, STORES: 0, EXSTOCK: 0, VA: 0 };
       scCompletedPlusVASet.forEach((sc) => {
@@ -324,6 +350,7 @@ export function useDatabaseKPIs(
       scSetsCompleted: scSetsCompletedSet.size,
       scSetsCompletedTotal: scSetsCompletedTotal.size,
       scCompletedPlusVA: scCompletedPlusVASet.size,
+      scSetsCompletedPlusVA: scSetsCompletedPlusVASet.size,
       scCompletedPlusVASet,
       vaBreakdown,
       isDoneStage

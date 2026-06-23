@@ -181,7 +181,7 @@ function DatabasePage() {
                     marginBottom: 4,
                   }}
                 >
-                  SC COMPLETED ({kpiStats.scCompleted})
+                  SC COMPLETED ({kpiStats.scSetsCompleted} sets / {kpiStats.scCompleted} items)
                 </div>
                 <div
                   style={{
@@ -543,7 +543,7 @@ function DatabasePage() {
                       >
                         <span style={{ color: 'var(--text-muted)' }}>SC COMPLETED: </span>
                         <span style={{ color: 'var(--success)', fontWeight: 700 }}>
-                          {kpiStats.scCompleted}
+                          {kpiStats.scSetsCompleted} sets
                         </span>
                       </span>
                       <span style={{ fontSize: 12, fontFamily: 'Share Tech Mono,monospace' }}>
@@ -562,7 +562,7 @@ function DatabasePage() {
                       >
                         <span style={{ color: 'var(--text-muted)' }}>SC COMPLETED + VA: </span>
                         <span style={{ color: 'var(--accent4)', fontWeight: 700 }}>
-                          {kpiStats.scCompletedPlusVA}
+                          {kpiStats.scSetsCompletedPlusVA || kpiStats.scCompletedPlusVA} sets
                         </span>
                       </span>
                     </div>

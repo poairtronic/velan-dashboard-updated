@@ -88,7 +88,7 @@ function DatabaseKPIs({ kpiStats, fromDate, toDate, dateType, setSelectedKPI }) 
       >
         <div className="kpi-label">SC COMPLETED</div>
         <div className="kpi-value" style={{ color: 'var(--success)' }}>
-          {kpiStats.scCompleted}
+          {kpiStats.scSetsCompleted}
         </div>
         <div className="kpi-sub">
           all items READY/STOCK/STORES/EXSTOCK
@@ -132,7 +132,7 @@ function DatabaseKPIs({ kpiStats, fromDate, toDate, dateType, setSelectedKPI }) 
           }}
           title="View SC Completed including VA stage"
         >
-          +VA View ({kpiStats.scCompletedPlusVA})
+          +VA View ({kpiStats.scSetsCompletedPlusVA || kpiStats.scCompletedPlusVA})
         </button>
       </div>
     </div>
