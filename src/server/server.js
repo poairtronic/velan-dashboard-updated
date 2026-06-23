@@ -18,7 +18,6 @@ const logger = require('./utils/logger');
 require('./workers/exportWorker');
 require('./workers/syncWorker');
 require('./workers/reportWorker');
-require('./workers/cronJobs');
 
 const PORT = env.PORT;
 const LIVE_URL = env.LIVE_URL || '';

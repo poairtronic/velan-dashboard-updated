@@ -187,38 +187,6 @@ async function initDB() {
       )
     `);
 
-    // 4.6 Create notification_logs table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS notification_logs (
-        id          SERIAL PRIMARY KEY,
-        type        VARCHAR(50) NOT NULL,
-        "poNumber"  VARCHAR(100),
-        recipient   VARCHAR(255) NOT NULL,
-        status      VARCHAR(20) NOT NULL,
-        "sentAt"    TIMESTAMPTZ,
-        "createdAt" TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-
-    // 4.7 Create notification_settings table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS notification_settings (
-        setting_key VARCHAR(50) PRIMARY KEY,
-        enabled     BOOLEAN DEFAULT FALSE,
-        recipients  TEXT,
-        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-
-    // Seed default settings
-    await client.query(`
-      INSERT INTO notification_settings (setting_key, enabled, recipients)
-      VALUES 
-        ('po_delay_alert', true, ''),
-        ('weekly_summary', true, '')
-      ON CONFLICT (setting_key) DO NOTHING
-    `);
-
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
     await client.query(
@@ -229,8 +197,6 @@ async function initDB() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_timeline_created_at ON operational_timeline (created_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_notification_logs_po ON notification_logs ("poNumber")');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_notification_logs_type ON notification_logs (type)');
 
     // Scalability Indices for fast searching, filtering, and sorting
     await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_stage ON velan_rows ((data->>'currentStage'))");

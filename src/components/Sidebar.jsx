@@ -20,7 +20,6 @@ const NAV_ITEMS = [
   { id: 'executive-war-room', label: 'Production Control', icon: '⚔' },
   { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
-  { id: 'settings', label: 'Settings', icon: '🛠' },
   { id: 'users', label: 'User Management', icon: '👥' },
   { id: 'audit-trail', label: 'Audit Trail', icon: '📜' },
   { id: 'upload', label: 'Upload Data', icon: '⬆' },
@@ -33,7 +32,7 @@ function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
 
   const filteredNavItems = NAV_ITEMS.filter(
-    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health' && n.id !== 'settings' && n.id !== 'executive-war-room' && n.id !== 'audit-trail') || isAdmin
+    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health' && n.id !== 'executive-war-room' && n.id !== 'audit-trail') || isAdmin
   );
 
   const fetchPendingCount = useCallback(async () => {
