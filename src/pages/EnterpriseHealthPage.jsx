@@ -538,7 +538,7 @@ export default function EnterpriseHealthPage() {
 
       {/* --- 4. Sync logs timeline --- */}
       <div className="chart-grid" style={{ gridTemplateColumns: '1fr' }}>
-        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', maxHeight: '500px' }}>
+        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', maxHeight: '350px' }}>
           <div className="chart-title" style={{ position: 'sticky', top: 0, background: 'var(--bg-secondary)', zIndex: 20 }}>
             Sync & Event Timeline
           </div>

@@ -47,10 +47,10 @@ export default function Timeline({ events = [] }) {
   return (
     <div className="relative space-y-8 py-4">
       {/* Center Vertical Line (Desktop) */}
-      <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-0.5 -translate-x-1/2 bg-gradient-to-b from-transparent via-gray-700 to-transparent"></div>
+      <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-0.5 -translate-x-1/2 bg-gray-700"></div>
       
       {/* Left Vertical Line (Mobile) */}
-      <div className="md:hidden absolute left-5 top-0 bottom-0 w-0.5 bg-gradient-to-b from-transparent via-gray-700 to-transparent"></div>
+      <div className="md:hidden absolute left-5 top-0 bottom-0 w-0.5 bg-gray-700"></div>
 
       {events.map((event, idx) => {
         const isEven = idx % 2 === 0;
