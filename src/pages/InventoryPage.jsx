@@ -353,7 +353,7 @@ export default function CuttingDashboard() {
               ) : history.map(log => (
                 <tr key={log.id} className="hover:bg-gray-700/30 transition-colors">
                   <td className="px-6 py-3 whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
-                  <td className="px-6 py-3">{log.longBar?.barType} (ID: {log.longBarId})</td>
+                  <td className="px-6 py-3">{log.longBar?.barType} (ID: {log.longBar?.id})</td>
                   <td className="px-6 py-3">{log.cutPiece?.cutPieceName}</td>
                   <td className="px-6 py-3">{log.cutDimension}mm</td>
                   <td className="px-6 py-3 text-right text-gray-300">{log.barLengthBefore}mm</td>
