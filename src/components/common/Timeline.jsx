@@ -45,15 +45,18 @@ export default function Timeline({ events = [] }) {
   };
 
   return (
-    <div className="relative pl-6 space-y-8 before:absolute before:inset-0 before:ml-8 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-700 before:to-transparent">
-      {events.map((event, idx) => (
-        <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-          {/* Timeline Node */}
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 bg-gray-900 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 ${getBorderColor(event.type)} relative z-10`}>
-            {getIconForType(event.type)}
-          </div>
-          {/* Content Card */}
-          <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded border border-gray-700 bg-gray-800/40 shadow-sm transition duration-300 hover:bg-gray-800/80">
+    <div className="relative space-y-8 py-4">
+      {/* Center Vertical Line (Desktop) */}
+      <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-0.5 -translate-x-1/2 bg-gradient-to-b from-transparent via-gray-700 to-transparent"></div>
+      
+      {/* Left Vertical Line (Mobile) */}
+      <div className="md:hidden absolute left-5 top-0 bottom-0 w-0.5 bg-gradient-to-b from-transparent via-gray-700 to-transparent"></div>
+
+      {events.map((event, idx) => {
+        const isEven = idx % 2 === 0;
+        
+        const Card = () => (
+          <div className="w-full p-4 rounded border border-gray-700 bg-gray-800/40 shadow-sm transition duration-300 hover:bg-gray-800/80 text-left">
             <div className="flex items-center justify-between space-x-2 mb-1">
               <div className="font-bold text-gray-200">{event.title}</div>
               <time className="font-mono text-xs text-gray-500">{event.timestamp}</time>
@@ -62,8 +65,37 @@ export default function Timeline({ events = [] }) {
               {event.description}
             </div>
           </div>
-        </div>
-      ))}
+        );
+
+        return (
+          <div key={idx} className="relative flex items-center md:justify-center group">
+            {/* Mobile Node */}
+            <div className={`md:hidden flex items-center justify-center w-10 h-10 rounded-full border-2 bg-gray-900 shadow shrink-0 z-10 ${getBorderColor(event.type)} relative`}>
+              {getIconForType(event.type)}
+            </div>
+
+            {/* Mobile Card */}
+            <div className="md:hidden flex-1 ml-4">
+              <Card />
+            </div>
+
+            {/* Desktop Left Side */}
+            <div className="hidden md:flex w-[calc(50%-2rem)] justify-end pr-4">
+              {!isEven && <Card />}
+            </div>
+
+            {/* Desktop Center Node */}
+            <div className={`hidden md:flex items-center justify-center w-10 h-10 rounded-full border-2 bg-gray-900 shadow shrink-0 z-10 ${getBorderColor(event.type)} relative mx-auto`}>
+              {getIconForType(event.type)}
+            </div>
+
+            {/* Desktop Right Side */}
+            <div className="hidden md:flex w-[calc(50%-2rem)] justify-start pl-4">
+              {isEven && <Card />}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
