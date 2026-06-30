@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import LoadingScreen from '../components/LoadingScreen';
 import Timeline from '../components/common/Timeline';
 import Modal from '../components/Modal';
 import useChart from '../utils/chartUtils';
 import { 
-  Shield, Database, Server, Clock, HardDrive, 
+  Shield, Database, HardDrive, 
   CheckCircle2, XCircle, Activity, Info, Zap, Cpu, RefreshCw, Terminal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -441,7 +441,7 @@ export default function EnterpriseHealthPage() {
                     <Zap size={14} /> Graceful Degradation simulation
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
-                    Temporarily toggle Redis Cache offline. Verify command calculations gracefully fall back to database queries without crashing the user's browser.
+                    Temporarily toggle Redis Cache offline. Verify command calculations gracefully fall back to database queries without crashing the user&apos;s browser.
                   </div>
                 </div>
                 <button
