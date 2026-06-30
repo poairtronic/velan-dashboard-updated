@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
   { id: 'executive-war-room', label: 'Production Control', icon: '⚔' },
   { id: 'forecast', label: 'Predictive Analytics', icon: '🔮' },
+  { id: 'inventory', label: 'Inventory', icon: '✂' },
   { id: 'health', label: 'Enterprise Health', icon: '🛡' },
   { id: 'users', label: 'User Management', icon: '👥' },
   { id: 'audit-trail', label: 'Audit Trail', icon: '📜' },

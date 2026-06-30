@@ -34,6 +34,7 @@ const VendorPage = React.lazy(() => import('./pages/VendorPage'));
 const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
 const PredictiveAnalyticsPage = React.lazy(() => import('./pages/PredictiveAnalyticsPage'));
+const InventoryPage = React.lazy(() => import('./pages/InventoryPage'));
 
 const AuditTrailViewer = React.lazy(() => import('./pages/AuditTrailViewer'));
 
@@ -143,6 +144,14 @@ function DashboardLayout() {
                 element={
                   <RouteWrapper>
                     <PredictiveAnalyticsPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route
+                path="/inventory"
+                element={
+                  <RouteWrapper>
+                    <InventoryPage />
                   </RouteWrapper>
                 }
               />

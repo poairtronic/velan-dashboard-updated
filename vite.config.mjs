@@ -12,6 +12,14 @@ export default defineConfig({
       brotliSize: true,
     }),
   ],
+  server: {
+    proxy: {
+      '/api/inventory': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,
