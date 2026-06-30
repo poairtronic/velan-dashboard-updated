@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { CheckCircle2, AlertTriangle, XCircle, Info, Activity } from 'lucide-react';
 
 export default function Timeline({ events = [] }) {
