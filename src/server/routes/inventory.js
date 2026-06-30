@@ -9,7 +9,17 @@ const asyncHandler = (fn) => (req, res, next) => {
 
 // GET all long bars
 router.get('/long-bars', asyncHandler(async (req, res) => {
-  const result = await pool.query('SELECT * FROM long_bars ORDER BY id DESC');
+  const result = await pool.query(`
+    SELECT 
+      id, 
+      bar_type as "barType", 
+      original_length as "originalLength", 
+      current_length as "currentLength", 
+      status, 
+      created_at as "createdAt", 
+      updated_at as "updatedAt"
+    FROM long_bars ORDER BY id DESC
+  `);
   res.json(result.rows);
 }));
 
@@ -22,7 +32,8 @@ router.post('/long-bars', asyncHandler(async (req, res) => {
   
   const result = await pool.query(
     `INSERT INTO long_bars (bar_type, original_length, current_length, status)
-     VALUES ($1, $2, $3, 'Active') RETURNING *`,
+     VALUES ($1, $2, $3, 'Active') 
+     RETURNING id, bar_type as "barType", original_length as "originalLength", current_length as "currentLength", status, created_at as "createdAt", updated_at as "updatedAt"`,
     [barType, originalLength, originalLength]
   );
   res.status(201).json(result.rows[0]);
@@ -110,7 +121,7 @@ router.get('/production-history', asyncHandler(async (req, res) => {
 }));
 
 // POST cut piece (Atomic Transaction)
-router.post('/cut-pieces/cut', asyncHandler(async (req, res) => {
+router.post('/cut-piece', asyncHandler(async (req, res) => {
   const { longBarId, cutPieceName, cutDimension, quantity, createdBy } = req.body;
   
   if (!longBarId || !cutPieceName || !cutDimension || !quantity) {
