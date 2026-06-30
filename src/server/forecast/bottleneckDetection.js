@@ -153,7 +153,7 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
   
   let daysUntil = PROJECTION_DAYS;
   if (predictedEntry) {
-    const [pStage, pData] = predictedEntry;
+    const [, pData] = predictedEntry;
     const relativeGrowth = pData.growthRate - currentBottleneckGrowth;
     
     if (pData.currentQueue >= currentBottleneckQueue) {
