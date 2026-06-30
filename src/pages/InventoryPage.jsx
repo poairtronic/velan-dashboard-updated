@@ -18,6 +18,13 @@ export default function CuttingDashboard() {
   const [newBarType, setNewBarType] = useState('');
   const [newBarLength, setNewBarLength] = useState('');
   
+  // Form State for Defining Cut Piece
+  const [newCutPieceName, setNewCutPieceName] = useState('');
+  const [newCutPieceBarType, setNewCutPieceBarType] = useState('');
+  const [newCutPieceDimension, setNewCutPieceDimension] = useState('');
+  const [defineError, setDefineError] = useState(null);
+  const [defineSuccess, setDefineSuccess] = useState(null);
+  
   // Search State
   const [barSearch, setBarSearch] = useState('');
   const [pieceSearch, setPieceSearch] = useState('');
@@ -102,6 +109,42 @@ export default function CuttingDashboard() {
     }
   };
 
+  const handleDefineCutPiece = async (e) => {
+    e.preventDefault();
+    setDefineError(null);
+    setDefineSuccess(null);
+    try {
+      const res = await fetch('/api/inventory/cut-pieces/define', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cutPieceName: newCutPieceName,
+          parentBarType: newCutPieceBarType,
+          cutDimension: Number(newCutPieceDimension),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to define cut piece');
+      
+      setDefineSuccess(data.message);
+      setNewCutPieceName('');
+      setNewCutPieceBarType('');
+      setNewCutPieceDimension('');
+      fetchData();
+    } catch (err) {
+      setDefineError(err.message);
+    }
+  };
+
+  const handleCutPieceSelect = (e) => {
+    const selectedName = e.target.value;
+    setCutPieceName(selectedName);
+    const piece = inventory.find(inv => inv.cutPiece.cutPieceName === selectedName);
+    if (piece) {
+      setCutDimension(piece.cutPiece.cutDimension);
+    }
+  };
+
   const getStatusColor = (status) => {
     if (status === 'Active') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
     if (status === 'Partial') return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
@@ -156,11 +199,20 @@ export default function CuttingDashboard() {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Cut Piece Name (e.g. 55 dia)</label>
-                <input 
-                  type="text" required value={cutPieceName} onChange={(e) => setCutPieceName(e.target.value)}
+                <label className="block text-sm font-medium text-gray-400 mb-1">Select Cut Piece</label>
+                <select 
+                  required
+                  value={cutPieceName}
+                  onChange={handleCutPieceSelect}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
-                />
+                >
+                  <option value="">-- Select Cut Piece --</option>
+                  {inventory.map(inv => (
+                    <option key={inv.id} value={inv.cutPiece.cutPieceName}>
+                      {inv.cutPiece.cutPieceName} ({inv.cutPiece.cutDimension}mm)
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Cut Dimension (mm)</label>
@@ -204,36 +256,95 @@ export default function CuttingDashboard() {
           </form>
         </div>
 
-        {/* Add Long Bar Utility */}
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl h-fit">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-500/10 rounded-lg"><Plus className="w-6 h-6 text-blue-400" /></div>
-            <h2 className="text-xl font-bold text-gray-100">Receive New Long Bar</h2>
+        <div className="flex flex-col gap-6">
+          {/* Add Long Bar Utility */}
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl h-fit">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-500/10 rounded-lg"><Plus className="w-6 h-6 text-blue-400" /></div>
+              <h2 className="text-xl font-bold text-gray-100">Receive New Long Bar</h2>
+            </div>
+            
+            <form onSubmit={handleAddLongBar} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Bar Type / Material</label>
+                <input 
+                  type="text" required value={newBarType} onChange={(e) => setNewBarType(e.target.value)}
+                  placeholder="e.g. Steel Bar Type A"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Initial Length (mm)</label>
+                <input 
+                  type="number" required min="0.01" step="any" value={newBarLength} onChange={(e) => setNewBarLength(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                />
+              </div>
+              <button 
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors"
+              >
+                Add Long Bar to Inventory
+              </button>
+            </form>
           </div>
-          
-          <form onSubmit={handleAddLongBar} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Bar Type / Material</label>
-              <input 
-                type="text" required value={newBarType} onChange={(e) => setNewBarType(e.target.value)}
-                placeholder="e.g. Steel Bar Type A"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
+
+          {/* Define New Cut Piece Utility */}
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl h-fit">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-emerald-500/10 rounded-lg"><PackageSearch className="w-6 h-6 text-emerald-400" /></div>
+              <h2 className="text-xl font-bold text-gray-100">Define New Cut Piece</h2>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Initial Length (mm)</label>
-              <input 
-                type="number" required min="0.01" step="any" value={newBarLength} onChange={(e) => setNewBarLength(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
-            </div>
-            <button 
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors"
-            >
-              Add Long Bar to Inventory
-            </button>
-          </form>
+            
+            <form onSubmit={handleDefineCutPiece} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Cut Piece Name</label>
+                <input 
+                  type="text" required value={newCutPieceName} onChange={(e) => setNewCutPieceName(e.target.value)}
+                  placeholder="e.g. 55 dia"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Parent Bar Type</label>
+                  <input 
+                    type="text" required value={newCutPieceBarType} onChange={(e) => setNewCutPieceBarType(e.target.value)}
+                    placeholder="e.g. Steel Bar Type A"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Dimension (mm)</label>
+                  <input 
+                    type="number" required min="0.01" step="any" value={newCutPieceDimension} onChange={(e) => setNewCutPieceDimension(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                  />
+                </div>
+              </div>
+
+              {defineError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <p className="text-sm">{defineError}</p>
+                </div>
+              )}
+              
+              {defineSuccess && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                  <p className="text-sm">{defineSuccess}</p>
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition-colors"
+              >
+                Save Cut Piece to Inventory (0 qty)
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 

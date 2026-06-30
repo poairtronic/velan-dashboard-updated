@@ -45,6 +45,43 @@ router.get('/cut-pieces', asyncHandler(async (req, res) => {
   res.json(result.rows);
 }));
 
+// POST define new cut piece
+router.post('/cut-pieces/define', asyncHandler(async (req, res) => {
+  const { cutPieceName, parentBarType, cutDimension } = req.body;
+  if (!cutPieceName || !parentBarType || !cutDimension) {
+    return res.status(400).json({ success: false, message: 'All fields are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const cpRes = await client.query('SELECT * FROM cut_pieces WHERE cut_piece_name = $1', [cutPieceName]);
+    if (cpRes.rows.length > 0) {
+      throw new Error(`Cut piece with name "${cutPieceName}" already exists.`);
+    }
+
+    const insertCp = await client.query(
+      'INSERT INTO cut_pieces (cut_piece_name, parent_bar_type, cut_dimension) VALUES ($1, $2, $3) RETURNING id',
+      [cutPieceName, parentBarType, cutDimension]
+    );
+    const cutPieceId = insertCp.rows[0].id;
+
+    await client.query(
+      'INSERT INTO cut_piece_inventory (cut_piece_id, quantity_available) VALUES ($1, 0)',
+      [cutPieceId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Cut piece defined successfully' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+}));
+
 // GET inventory stock
 router.get('/stock', asyncHandler(async (req, res) => {
   const query = `
