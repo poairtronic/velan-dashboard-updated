@@ -141,19 +141,25 @@ async function calculateBottleneckForecast({ liveRows, dbRows }) {
     if (activeDaysCount > 0) stagesWithData++;
   });
 
-  // Find predicted next bottleneck
+  // Find predicted next bottleneck (highest projected queue that is NOT the current bottleneck)
+  const currentBottleneckName = currentBottleneckStage ? currentBottleneckStage[0] : null;
   const predictedEntry = Object.entries(projections)
+    .filter(([stage]) => stage !== currentBottleneckName)
     .sort(([, a], [, b]) => b.projectedQueue - a.projectedQueue)[0];
 
   // Days until
   const currentBottleneckQueue = currentBottleneckStage ? currentBottleneckStage[1] : 0;
+  const currentBottleneckGrowth = currentBottleneckName && projections[currentBottleneckName] ? projections[currentBottleneckName].growthRate : 0;
+  
   let daysUntil = PROJECTION_DAYS;
   if (predictedEntry) {
     const [pStage, pData] = predictedEntry;
-    if (pData.growthRate > 0 && currentBottleneckQueue > pData.currentQueue) {
-      daysUntil = Math.round((currentBottleneckQueue - pData.currentQueue) / pData.growthRate);
-    } else if (currentBottleneckStage && pStage === currentBottleneckStage[0]) {
+    const relativeGrowth = pData.growthRate - currentBottleneckGrowth;
+    
+    if (pData.currentQueue >= currentBottleneckQueue) {
       daysUntil = 0;
+    } else if (relativeGrowth > 0) {
+      daysUntil = Math.round((currentBottleneckQueue - pData.currentQueue) / relativeGrowth);
     }
   }
 
