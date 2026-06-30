@@ -6,7 +6,7 @@ const { calculateVendors } = require('../services/vendorService');
 const { calculateBottlenecks } = require('../services/bottleneckService');
 const { getFilteredData, computeGroups } = require('../services/dataQueryService');
 const keys = require('../cache/cacheKeys');
-const { getOrSetCache, TTL } = require('../cache/cacheService');
+const { getOrSetCache } = require('../cache/cacheService');
 const { getFreshnessMetadata } = require('./meta');
 
 const router = express.Router();
