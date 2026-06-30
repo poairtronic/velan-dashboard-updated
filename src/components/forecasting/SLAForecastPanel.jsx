@@ -28,7 +28,6 @@ function SLAForecastPanel() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('forecast');
   const [expandedPo, setExpandedPo] = useState(null);
 
   useEffect(() => {
@@ -90,32 +89,7 @@ function SLAForecastPanel() {
         </div>
       </div>
 
-      {/* Sub-header Tabs */}
-      <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', padding: '0 10px' }}>
-        <button
-          onClick={() => setActiveTab('forecast')}
-          style={{
-            background: 'none', border: 'none', borderBottom: activeTab === 'forecast' ? '2px solid var(--accent1)' : '2px solid transparent',
-            color: activeTab === 'forecast' ? 'var(--text-primary)' : 'var(--text-muted)',
-            fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, padding: '10px 16px', cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}>
-          📊 SLA PROJECTIONS
-        </button>
-        <button
-          onClick={() => setActiveTab('comparison')}
-          style={{
-            background: 'none', border: 'none', borderBottom: activeTab === 'comparison' ? '2px solid var(--accent1)' : '2px solid transparent',
-            color: activeTab === 'comparison' ? 'var(--text-primary)' : 'var(--text-muted)',
-            fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, padding: '10px 16px', cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}>
-          🔍 MODEL COMPARISON & VALIDATION
-        </button>
-      </div>
-
-      {activeTab === 'forecast' ? (
-        /* Table View */
+        {/* Table View */}
         <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
@@ -165,11 +139,11 @@ function SLAForecastPanel() {
                       {isExpanded && (
                         <tr style={{ background: 'rgba(0, 201, 255, 0.02)' }}>
                           <td colSpan={8} style={{ padding: '16px 20px', borderBottom: '1px solid rgba(26,58,92,0.5)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
+                            <div>
                               {/* Parameters */}
                               <div style={{ background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                                 <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', letterSpacing: 1, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <span style={{ color: 'var(--accent1)' }}>⚙</span> CALCULATION METRICS (NEW MODEL)
+                                  <span style={{ color: 'var(--accent1)' }}>⚙</span> CALCULATION METRICS
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 11, fontFamily: 'Share Tech Mono, monospace' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted var(--border)', paddingBottom: 4 }}>
@@ -182,59 +156,21 @@ function SLAForecastPanel() {
                                   </div>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted var(--border)', paddingBottom: 4 }}>
                                     <span style={{ color: 'var(--text-muted)' }}>Queue Impact Factor:</span>
-                                    <span style={{ color: 'var(--warning)' }}>+{Math.round((f.newModel?.queueImpact || 0) * 100)}%</span>
+                                    <span style={{ color: 'var(--warning)' }}>+{Math.round((f.queueImpact || 0) * 100)}%</span>
                                   </div>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted var(--border)', paddingBottom: 4 }}>
                                     <span style={{ color: 'var(--text-muted)' }}>Adjusted Duration:</span>
-                                    <span style={{ color: 'var(--text-primary)' }}>{f.newModel?.adjustedDuration} days</span>
+                                    <span style={{ color: 'var(--text-primary)' }}>{f.adjustedDuration} days</span>
                                   </div>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted var(--border)', paddingBottom: 4 }}>
                                     <span style={{ color: 'var(--text-muted)' }}>Remaining Days:</span>
-                                    <span style={{ color: 'var(--text-primary)' }}>{f.newModel?.remainingDays} days</span>
+                                    <span style={{ color: 'var(--text-primary)' }}>{f.remainingDays} days</span>
                                   </div>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted var(--border)', paddingBottom: 4 }}>
                                     <span style={{ color: 'var(--text-muted)' }}>Forecast Confidence:</span>
                                     <span style={{ color: 'var(--success)' }}>{f.confidence}%</span>
                                   </div>
                                 </div>
-                              </div>
-
-                              {/* Old vs New Model Comparison */}
-                              <div style={{ background: 'var(--bg-card2)', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                                <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', letterSpacing: 1, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <span style={{ color: 'var(--accent1)' }}>🔄</span> MODEL COMPARISON
-                                </div>
-                                <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse', fontFamily: 'Share Tech Mono, monospace' }}>
-                                  <thead>
-                                    <tr>
-                                      <th style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>Metric</th>
-                                      <th style={{ textAlign: 'right', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>Old Model</th>
-                                      <th style={{ textAlign: 'right', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>New Refined</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <tr>
-                                      <td style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>Remaining</td>
-                                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{f.oldModel?.remainingDays}d</td>
-                                      <td style={{ textAlign: 'right', color: 'var(--success)', fontWeight: 'bold' }}>{f.newModel?.remainingDays}d</td>
-                                    </tr>
-                                    <tr>
-                                      <td style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>Completion</td>
-                                      <td style={{ textAlign: 'right', color: 'var(--text-secondary)', fontSize: 10 }}>{f.oldModel?.projectedCompletionDate}</td>
-                                      <td style={{ textAlign: 'right', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: 10 }}>{f.newModel?.projectedCompletionDate}</td>
-                                    </tr>
-                                    <tr>
-                                      <td style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>Delay</td>
-                                      <td style={{ textAlign: 'right', color: f.oldModel?.expectedDelay > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>+{f.oldModel?.expectedDelay}d</td>
-                                      <td style={{ textAlign: 'right', color: f.newModel?.expectedDelay > 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 'bold' }}>+{f.newModel?.expectedDelay}d</td>
-                                    </tr>
-                                    <tr>
-                                      <td style={{ padding: '6px 0' }}>Risk Level</td>
-                                      <td style={{ textAlign: 'right', color: riskColors[f.oldModel?.riskLevel]?.color }}>{f.oldModel?.riskLevel?.toUpperCase()}</td>
-                                      <td style={{ textAlign: 'right', color: riskColors[f.newModel?.riskLevel]?.color, fontWeight: 'bold' }}>{f.newModel?.riskLevel?.toUpperCase()}</td>
-                                    </tr>
-                                  </tbody>
-                                </table>
                               </div>
                             </div>
                           </td>
@@ -247,50 +183,7 @@ function SLAForecastPanel() {
             </tbody>
           </table>
         </div>
-      ) : (
-        /* Comparison View */
-        <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr>
-                {['PO', 'HIST VELOCITY', 'ELAPSED', 'OLD MODEL (REM / DELAY)', 'NEW REFINED (REM / DELAY)', 'REDUCTION'].map(h => (
-                  <th key={h} style={{
-                    background: 'var(--bg-secondary)', padding: '10px 12px', textAlign: 'left',
-                    fontSize: 10, letterSpacing: 1.5, color: 'var(--text-muted)',
-                    fontFamily: 'Share Tech Mono, monospace', borderBottom: '1px solid var(--border)',
-                    position: 'sticky', top: 0, zIndex: 2
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {forecasts.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No open POs to compare</td></tr>
-              ) : (
-                forecasts.map((f, i) => {
-                  const reduction = (f.oldModel?.remainingDays || 0) - (f.newModel?.remainingDays || 0);
-                  return (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(26,58,92,0.3)' }}>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 600 }}>{f.poNumber}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{f.projectedTotalDays}d</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>{f.elapsedDays}d</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
-                        {f.oldModel?.remainingDays}d / +{f.oldModel?.expectedDelay}d
-                      </td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>
-                        {f.newModel?.remainingDays}d / +{f.newModel?.expectedDelay}d
-                      </td>
-                      <td style={{ padding: '10px 12px', color: reduction > 0 ? 'var(--success)' : 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>
-                        {reduction > 0 ? `-${reduction}d (Refined)` : '0d (No Change)'}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+
 
       {/* Footer */}
       <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
