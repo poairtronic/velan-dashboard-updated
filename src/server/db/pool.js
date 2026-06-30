@@ -208,6 +208,52 @@ async function initDB() {
     // Additional GIN index on jsonb data for unstructured searches if needed
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_data_gin ON velan_rows USING GIN (data)');
 
+    // 6. Create Cutting Inventory Tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS long_bars (
+        id SERIAL PRIMARY KEY,
+        bar_type VARCHAR(50) NOT NULL,
+        original_length INT NOT NULL,
+        current_length INT NOT NULL,
+        status VARCHAR(20) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cut_pieces (
+        id SERIAL PRIMARY KEY,
+        cut_piece_name VARCHAR(100) UNIQUE NOT NULL,
+        parent_bar_type VARCHAR(50) NOT NULL,
+        cut_dimension INT NOT NULL,
+        unit VARCHAR(20) DEFAULT 'mm'
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cut_piece_inventory (
+        id SERIAL PRIMARY KEY,
+        cut_piece_id INT REFERENCES cut_pieces(id) ON DELETE CASCADE,
+        quantity_available INT DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(cut_piece_id)
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS production_log (
+        id SERIAL PRIMARY KEY,
+        long_bar_id INT REFERENCES long_bars(id) ON DELETE CASCADE,
+        cut_piece_id INT REFERENCES cut_pieces(id) ON DELETE CASCADE,
+        cut_dimension INT NOT NULL,
+        bar_length_before INT NOT NULL,
+        bar_length_after INT NOT NULL,
+        created_by VARCHAR(100) DEFAULT 'System',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
     await client.query('COMMIT');
     console.log('[DB] Neon tables and indices initialized successfully');
   } catch (err) {
