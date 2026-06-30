@@ -35,6 +35,7 @@ const intelligenceRouter = require('./routes/intelligence');
 const micRouter = require('./routes/mic');
 const forecastRouter = require('./routes/forecast');
 const performanceRouter = require('./routes/performance');
+const inventoryRouter = require('./routes/inventory');
 
 const app = express();
 
@@ -128,6 +129,7 @@ apiRouter.use('/sheets', requireAuth(['admin', 'user']), sheetsRouter);
 apiRouter.use('/config', requireAuth(['admin', 'user']), configRouter);
 apiRouter.use('/security-status', requireAuth(['admin', 'user']), securityRouter);
 apiRouter.use('/reports', requireAuth(['admin', 'user']), reportsRouter);
+apiRouter.use('/inventory', requireAuth(['admin', 'user']), inventoryRouter);
 apiRouter.use('/dashboard', dashboardLimiter, requireAuth(['admin', 'user']), dashboardRouter);
 apiRouter.use('/admin', requireAuth(['admin']), adminRouter);
 apiRouter.use('/alerts', dashboardLimiter, requireAuth(['admin', 'user']), alertsRouter);

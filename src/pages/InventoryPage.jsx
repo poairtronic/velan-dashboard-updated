@@ -25,12 +25,14 @@ export default function CuttingDashboard() {
         fetch('/api/inventory/stock'),
         fetch('/api/inventory/production-history'),
       ]);
-      const bars = await barsRes.json();
-      const inv = await invRes.json();
-      const hist = await histRes.json();
-      setLongBars(bars);
-      setInventory(inv);
-      setHistory(hist);
+      
+      const bars = barsRes.ok ? await barsRes.json() : [];
+      const inv = invRes.ok ? await invRes.json() : [];
+      const hist = histRes.ok ? await histRes.json() : [];
+      
+      setLongBars(Array.isArray(bars) ? bars : []);
+      setInventory(Array.isArray(inv) ? inv : []);
+      setHistory(Array.isArray(hist) ? hist : []);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     }
