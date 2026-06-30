@@ -213,8 +213,8 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS long_bars (
         id SERIAL PRIMARY KEY,
         bar_type VARCHAR(50) NOT NULL,
-        original_length INT NOT NULL,
-        current_length INT NOT NULL,
+        original_length NUMERIC(10,2) NOT NULL,
+        current_length NUMERIC(10,2) NOT NULL,
         status VARCHAR(20) DEFAULT 'Active',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -226,7 +226,7 @@ async function initDB() {
         id SERIAL PRIMARY KEY,
         cut_piece_name VARCHAR(100) UNIQUE NOT NULL,
         parent_bar_type VARCHAR(50) NOT NULL,
-        cut_dimension INT NOT NULL,
+        cut_dimension NUMERIC(10,2) NOT NULL,
         unit VARCHAR(20) DEFAULT 'mm'
       );
     `);
@@ -235,7 +235,7 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS cut_piece_inventory (
         id SERIAL PRIMARY KEY,
         cut_piece_id INT REFERENCES cut_pieces(id) ON DELETE CASCADE,
-        quantity_available INT DEFAULT 0,
+        quantity_available NUMERIC(10,2) DEFAULT 0,
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(cut_piece_id)
       );
@@ -246,12 +246,30 @@ async function initDB() {
         id SERIAL PRIMARY KEY,
         long_bar_id INT REFERENCES long_bars(id) ON DELETE CASCADE,
         cut_piece_id INT REFERENCES cut_pieces(id) ON DELETE CASCADE,
-        cut_dimension INT NOT NULL,
-        bar_length_before INT NOT NULL,
-        bar_length_after INT NOT NULL,
+        cut_dimension NUMERIC(10,2) NOT NULL,
+        bar_length_before NUMERIC(10,2) NOT NULL,
+        bar_length_after NUMERIC(10,2) NOT NULL,
         created_by VARCHAR(100) DEFAULT 'System',
         created_at TIMESTAMP DEFAULT NOW()
       );
+    `);
+    
+    // Migration for existing tables to support decimals
+    await client.query(`
+      ALTER TABLE long_bars 
+        ALTER COLUMN original_length TYPE NUMERIC(10,2),
+        ALTER COLUMN current_length TYPE NUMERIC(10,2);
+      
+      ALTER TABLE cut_pieces 
+        ALTER COLUMN cut_dimension TYPE NUMERIC(10,2);
+        
+      ALTER TABLE cut_piece_inventory
+        ALTER COLUMN quantity_available TYPE NUMERIC(10,2);
+        
+      ALTER TABLE production_log 
+        ALTER COLUMN cut_dimension TYPE NUMERIC(10,2),
+        ALTER COLUMN bar_length_before TYPE NUMERIC(10,2),
+        ALTER COLUMN bar_length_after TYPE NUMERIC(10,2);
     `);
 
     await client.query('COMMIT');

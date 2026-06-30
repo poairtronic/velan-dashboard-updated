@@ -151,7 +151,7 @@ export default function CuttingDashboard() {
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Cut Dimension (mm)</label>
                 <input 
-                  type="number" required min="1" value={cutDimension} onChange={(e) => setCutDimension(e.target.value)}
+                  type="number" required min="0.01" step="any" value={cutDimension} onChange={(e) => setCutDimension(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
                 />
               </div>
@@ -160,7 +160,7 @@ export default function CuttingDashboard() {
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">Quantity to Cut</label>
               <input 
-                type="number" required min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)}
+                type="number" required min="0.01" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
               />
             </div>
@@ -209,7 +209,7 @@ export default function CuttingDashboard() {
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">Initial Length (mm)</label>
               <input 
-                type="number" required min="1" value={newBarLength} onChange={(e) => setNewBarLength(e.target.value)}
+                type="number" required min="0.01" step="any" value={newBarLength} onChange={(e) => setNewBarLength(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
               />
             </div>
