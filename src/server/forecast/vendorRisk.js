@@ -3,7 +3,7 @@
  * Projects vendor risk and performance metrics using working days, weighted throughput, and stability scores.
  * Key tracking: SC + PO + Product.
  */
-const { workingDaysBetween5Day, addWorkingDays5Day } = require('../../utils/calculationUtils.cjs');
+const { workingDaysBetween5Day } = require('../../utils/calculationUtils.cjs');
 
 const TERMINAL_STAGES = ['READY', 'STORES', 'STOCK', 'EXSTOCK'];
 const VENDOR_SLA_DAYS = 2; // Target working days spent per vendor stage
@@ -157,6 +157,12 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       stabilityScore = Math.min(100, Math.max(0, Math.round((1 - cv) * 100)));
     }
 
+    // --- OLD MODEL (Immediate Saturation) ---
+    const oldBreachProbability = Math.min(100, Math.round((currentAvgDays / Math.max(VENDOR_SLA_DAYS, 0.1)) * 100));
+    let oldRiskLevel = 'low';
+    if (oldBreachProbability > 75) oldRiskLevel = 'high';
+    else if (oldBreachProbability >= 50) oldRiskLevel = 'medium';
+
     // --- REFINED MODEL (Normalized Risk Score) ---
     const scoreDenominator = currentAvgDays + historicalAvgDays + VENDOR_SLA_DAYS;
     const riskScoreVal = scoreDenominator > 0 ? (100 * (currentAvgDays / scoreDenominator)) : 0;
@@ -196,19 +202,35 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       confidenceLabel,
       maxAge: v.ages.length > 0 ? Math.max(...v.ages) : 0,
       riskTrend,
-      rank: 0 // Will compute below
+      oldModel: {
+        riskScore: oldBreachProbability,
+        riskLevel: oldRiskLevel,
+        rank: 0 // Will compute below
+      },
+      newModel: {
+        riskScore,
+        riskLevel,
+        rank: 0 // Will compute below
+      }
     });
   });
 
-  // Calculate ranks (sorted by risk score descending)
-  const sortedNew = [...results].sort((a, b) => b.breachProbability - a.breachProbability || a.vendor.localeCompare(b.vendor));
+  // Calculate Old ranks (sorted by old risk score descending)
+  const sortedOld = [...results].sort((a, b) => b.oldModel.riskScore - a.oldModel.riskScore || a.vendor.localeCompare(b.vendor));
+  sortedOld.forEach((v, index) => {
+    const original = results.find(o => o.vendor === v.vendor);
+    if (original) original.oldModel.rank = index + 1;
+  });
+
+  // Calculate New ranks (sorted by new risk score descending)
+  const sortedNew = [...results].sort((a, b) => b.newModel.riskScore - a.newModel.riskScore || a.vendor.localeCompare(b.vendor));
   sortedNew.forEach((v, index) => {
     const original = results.find(o => o.vendor === v.vendor);
-    if (original) original.rank = index + 1;
+    if (original) original.newModel.rank = index + 1;
   });
 
   // Sort final results by refined model risk score descending
-  results.sort((a, b) => b.breachProbability - a.breachProbability || a.vendor.localeCompare(b.vendor));
+  results.sort((a, b) => b.newModel.riskScore - a.newModel.riskScore || a.vendor.localeCompare(b.vendor));
 
   return {
     vendors: results,

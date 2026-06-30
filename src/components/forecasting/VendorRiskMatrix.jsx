@@ -11,6 +11,7 @@ function VendorRiskMatrix() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('risk_matrix');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -61,9 +62,33 @@ function VendorRiskMatrix() {
         </div>
       </div>
 
+      {/* Sub-header Tabs */}
+      <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', padding: '0 10px' }}>
+        <button
+          onClick={() => setActiveTab('risk_matrix')}
+          style={{
+            background: 'none', border: 'none', borderBottom: activeTab === 'risk_matrix' ? '2px solid var(--accent1)' : '2px solid transparent',
+            color: activeTab === 'risk_matrix' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, padding: '10px 16px', cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}>
+          📊 VENDOR RISK MATRIX
+        </button>
+        <button
+          onClick={() => setActiveTab('validation')}
+          style={{
+            background: 'none', border: 'none', borderBottom: activeTab === 'validation' ? '2px solid var(--accent1)' : '2px solid transparent',
+            color: activeTab === 'validation' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, padding: '10px 16px', cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}>
+          🔍 SATURATION & RANK VALIDATION
+        </button>
+      </div>
 
-      {/* Risk Matrix View */}
-      <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
+      {activeTab === 'risk_matrix' ? (
+        /* Risk Matrix View */
+        <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
@@ -121,7 +146,65 @@ function VendorRiskMatrix() {
             </tbody>
           </table>
         </div>
+      ) : (
+        /* Validation View */
+        <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                {['VENDOR', 'OLD SPECTRUM (SCORE / RISK / RANK)', 'NEW SPECTRUM (SCORE / RISK / RANK)', 'RANK SHIFT', 'ACCURACY GAIN'].map(h => (
+                  <th key={h} style={{
+                    background: 'var(--bg-secondary)', padding: '10px 12px', textAlign: 'left',
+                    fontSize: 10, letterSpacing: 1.5, color: 'var(--text-muted)',
+                    fontFamily: 'Share Tech Mono, monospace', borderBottom: '1px solid var(--border)',
+                    position: 'sticky', top: 0, zIndex: 2
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.vendors.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No vendor validation data</td></tr>
+              ) : (
+                data.vendors.map((v, i) => {
+                  const rankDiff = v.oldModel.rank - v.newModel.rank;
+                  let rankShiftText = 'Stable (—)';
+                  let rankShiftColor = 'var(--text-muted)';
+                  if (rankDiff > 0) {
+                    rankShiftText = `Escalated (↑${rankDiff})`;
+                    rankShiftColor = 'var(--danger)';
+                  } else if (rankDiff < 0) {
+                    rankShiftText = `Refined (↓${Math.abs(rankDiff)})`;
+                    rankShiftColor = 'var(--success)';
+                  }
 
+                  const isSaturated = v.oldModel.riskScore === 100;
+
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid rgba(26,58,92,0.3)' }}>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 600 }}>{v.vendor}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace' }}>
+                        {v.oldModel.riskScore}% / {v.oldModel.riskLevel.toUpperCase()} / #{v.oldModel.rank}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-primary)', fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>
+                        {v.newModel.riskScore}% / {v.newModel.riskLevel.toUpperCase()} / #{v.newModel.rank}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: rankShiftColor, fontFamily: 'Share Tech Mono, monospace', fontWeight: 700 }}>
+                        {rankShiftText}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: isSaturated ? 'var(--accent1)' : 'var(--text-secondary)', fontFamily: 'Share Tech Mono, monospace' }}>
+                        {isSaturated
+                          ? 'Resolved 100% Saturation Flaw'
+                          : 'Age-Ratio Curve Applied'}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Footer */}
       <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

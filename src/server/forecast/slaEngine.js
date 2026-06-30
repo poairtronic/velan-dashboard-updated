@@ -193,7 +193,20 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
     const queueDelay = activeStageQueue / activeStageThroughput;
 
     // Historical active stage remaining duration (default 3 days if no history)
+    const stageDuration = stageAvgDurations[currentStage] !== undefined ? stageAvgDurations[currentStage] : 3;
 
+    // --- OLD MODEL (Double Counting) ---
+    const baseRemaining = Math.max(0, projectedTotalDays - elapsedDays);
+    const oldRemainingDays = Math.round(Math.max(1, baseRemaining + queueDelay + stageDuration));
+    const oldProjectedCompletionDate = addWorkingDays5Day(todayStr, oldRemainingDays);
+    const oldTotalDuration = elapsedDays + oldRemainingDays;
+    const oldExpectedDelay = Math.max(0, oldTotalDuration - TARGET_DAYS);
+    let oldRiskLevel = 'low';
+    if (oldTotalDuration > TARGET_DAYS) oldRiskLevel = 'high';
+    else if (TARGET_DAYS - oldTotalDuration <= 3) oldRiskLevel = 'medium';
+
+    const oldSlaRatio = oldTotalDuration / TARGET_DAYS;
+    const oldDelayProbability = Math.min(99, Math.max(5, Math.round(Math.max(0, (oldSlaRatio - 0.6) * 200))));
 
     // --- NEW REFINED MODEL (No Double Counting) ---
     const queueImpact = Math.max(0.0, Math.min(0.5, projectedTotalDays > 0 ? (queueDelay / projectedTotalDays) : 0));
@@ -228,9 +241,22 @@ async function calculateSLAForecast({ liveRows, dbRows }) {
       riskLevel, // refined
       confidence,
       itemCount: po.items.length,
-      queueImpact: Math.round(queueImpact * 100) / 100,
-      adjustedDuration: Math.round(adjustedDuration * 10) / 10,
-      remainingDays: expectedRemainingDays
+      oldModel: {
+        remainingDays: oldRemainingDays,
+        projectedCompletionDate: oldProjectedCompletionDate,
+        expectedDelay: oldExpectedDelay,
+        riskLevel: oldRiskLevel,
+        delayProbability: oldDelayProbability
+      },
+      newModel: {
+        queueImpact: Math.round(queueImpact * 100) / 100,
+        adjustedDuration: Math.round(adjustedDuration * 10) / 10,
+        remainingDays: expectedRemainingDays,
+        projectedCompletionDate,
+        expectedDelay,
+        riskLevel,
+        delayProbability
+      }
     });
   });
 
