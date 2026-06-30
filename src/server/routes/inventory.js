@@ -151,7 +151,7 @@ router.post('/cut-piece', asyncHandler(async (req, res) => {
       cutPieceId = insertCp.rows[0].id;
     } else {
       const existingCp = cpRes.rows[0];
-      if (existingCp.cut_dimension !== cutDimension) {
+      if (Number(existingCp.cut_dimension) !== Number(cutDimension)) {
         throw new Error(`Existing cut piece "${cutPieceName}" has a different dimension (${existingCp.cut_dimension}mm) than requested (${cutDimension}mm).`);
       }
       cutPieceId = existingCp.id;
@@ -159,17 +159,20 @@ router.post('/cut-piece', asyncHandler(async (req, res) => {
     
     // 3. Validate Dimensions
     const totalReduction = cutDimension * quantity;
-    if (longBar.current_length < totalReduction) {
-      throw new Error(`Insufficient length. Bar has ${longBar.current_length}mm, but cut requires ${totalReduction}mm.`);
+    const currentLength = Number(longBar.current_length);
+    const originalLength = Number(longBar.original_length);
+
+    if (currentLength < totalReduction) {
+      throw new Error(`Insufficient length. Bar has ${currentLength}mm, but cut requires ${totalReduction}mm.`);
     }
     
-    const lengthBefore = longBar.current_length;
+    const lengthBefore = currentLength;
     const lengthAfter = lengthBefore - totalReduction;
     
     let newStatus = 'Active';
-    if (lengthAfter === 0) {
+    if (lengthAfter <= 0) {
       newStatus = 'Depleted';
-    } else if (lengthAfter < longBar.original_length) {
+    } else if (lengthAfter < originalLength) {
       newStatus = 'Partial';
     }
     
