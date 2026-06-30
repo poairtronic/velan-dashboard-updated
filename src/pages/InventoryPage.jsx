@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Scissors, Plus, History, PackageSearch, List } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Scissors, Plus, History, PackageSearch, List, Search } from 'lucide-react';
 
 export default function CuttingDashboard() {
   const [longBars, setLongBars] = useState([]);
@@ -17,6 +17,10 @@ export default function CuttingDashboard() {
   // Form State for Adding Long Bar
   const [newBarType, setNewBarType] = useState('');
   const [newBarLength, setNewBarLength] = useState('');
+  
+  // Search State
+  const [barSearch, setBarSearch] = useState('');
+  const [pieceSearch, setPieceSearch] = useState('');
 
   const fetchData = async () => {
     try {
@@ -109,6 +113,16 @@ export default function CuttingDashboard() {
     if (qty < minThreshold) return 'text-yellow-400';
     return 'text-emerald-400';
   };
+
+  const filteredLongBars = longBars.filter(bar => 
+    bar.barType?.toLowerCase().includes(barSearch.toLowerCase()) || 
+    String(bar.id).includes(barSearch)
+  );
+
+  const filteredInventory = inventory.filter(inv => 
+    inv.cutPiece?.cutPieceName?.toLowerCase().includes(pieceSearch.toLowerCase()) ||
+    inv.cutPiece?.parentBarType?.toLowerCase().includes(pieceSearch.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -227,15 +241,29 @@ export default function CuttingDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Long Bars Panel */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
-          <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center gap-2">
-            <List className="w-5 h-5 text-gray-400" />
-            <h3 className="font-semibold text-gray-200">Available Long Bars</h3>
+          <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <List className="w-5 h-5 text-gray-400" />
+              <h3 className="font-semibold text-gray-200">Available Long Bars</h3>
+            </div>
+          </div>
+          <div className="p-3 border-b border-gray-700 bg-gray-900/30">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Search by ID or Bar Type..." 
+                value={barSearch}
+                onChange={(e) => setBarSearch(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
+              />
+            </div>
           </div>
           <div className="p-4 max-h-[400px] overflow-y-auto">
             <div className="space-y-3">
-              {longBars.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-4">No long bars in inventory</p>
-              ) : longBars.map(bar => (
+              {filteredLongBars.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-4">No long bars match your search</p>
+              ) : filteredLongBars.map(bar => (
                 <div key={bar.id} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-700/50">
                   <div>
                     <div className="font-medium text-gray-200">{bar.barType}</div>
@@ -258,15 +286,29 @@ export default function CuttingDashboard() {
 
         {/* Cut Pieces Inventory Panel */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
-          <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center gap-2">
-            <PackageSearch className="w-5 h-5 text-gray-400" />
-            <h3 className="font-semibold text-gray-200">Cut Pieces Inventory</h3>
+          <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PackageSearch className="w-5 h-5 text-gray-400" />
+              <h3 className="font-semibold text-gray-200">Cut Pieces Inventory</h3>
+            </div>
+          </div>
+          <div className="p-3 border-b border-gray-700 bg-gray-900/30">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Search by Piece Name or Parent Bar..." 
+                value={pieceSearch}
+                onChange={(e) => setPieceSearch(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+              />
+            </div>
           </div>
           <div className="p-4 max-h-[400px] overflow-y-auto">
             <div className="space-y-3">
-              {inventory.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-4">No cut pieces in inventory</p>
-              ) : inventory.map(inv => (
+              {filteredInventory.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-4">No cut pieces match your search</p>
+              ) : filteredInventory.map(inv => (
                 <div key={inv.id} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-700/50">
                   <div>
                     <div className="font-medium text-gray-200">{inv.cutPiece.cutPieceName}</div>
