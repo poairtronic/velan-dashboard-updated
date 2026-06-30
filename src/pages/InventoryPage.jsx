@@ -146,15 +146,15 @@ export default function CuttingDashboard() {
   };
 
   const getStatusColor = (status) => {
-    if (status === 'Active') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-    if (status === 'Partial') return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-    return 'bg-red-500/10 text-red-400 border-red-500/20';
+    if (status === 'Active') return 'bg-[var(--glow2)] text-[var(--success)] border-[var(--success)]/20';
+    if (status === 'Partial') return 'bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20';
+    return 'bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/20';
   };
 
   const getInventoryStatusColor = (qty, minThreshold) => {
-    if (qty === 0) return 'text-red-400';
-    if (qty < minThreshold) return 'text-yellow-400';
-    return 'text-emerald-400';
+    if (qty === 0) return 'text-[var(--danger)]';
+    if (qty < minThreshold) return 'text-[var(--warning)]';
+    return 'text-[var(--success)]';
   };
 
   const filteredLongBars = longBars.filter(bar => 
@@ -173,20 +173,20 @@ export default function CuttingDashboard() {
       {/* Forms Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Execute Cut Form */}
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 shadow-xl">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-red-500/10 rounded-lg"><Scissors className="w-6 h-6 text-red-400" /></div>
-            <h2 className="text-xl font-bold text-gray-100">Execute Cut Operation</h2>
+            <div className="p-2 bg-[var(--danger)]/10 rounded-lg"><Scissors className="w-6 h-6 text-[var(--danger)]" /></div>
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">Execute Cut Operation</h2>
           </div>
           
           <form onSubmit={handleExecuteCut} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Select Long Bar to Cut</label>
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Select Long Bar to Cut</label>
               <select 
                 required
                 value={selectedBarId}
                 onChange={(e) => setSelectedBarId(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
+                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--danger)] outline-none"
               >
                 <option value="">-- Select Active/Partial Bar --</option>
                 {longBars.filter(b => b.status !== 'Depleted').map(bar => (
@@ -199,12 +199,12 @@ export default function CuttingDashboard() {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Select Cut Piece</label>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Select Cut Piece</label>
                 <select 
                   required
                   value={cutPieceName}
                   onChange={handleCutPieceSelect}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
+                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--danger)] outline-none"
                 >
                   <option value="">-- Select Cut Piece --</option>
                   {inventory.map(inv => (
@@ -215,31 +215,31 @@ export default function CuttingDashboard() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Cut Dimension (mm)</label>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Cut Dimension (mm)</label>
                 <input 
                   type="number" required min="0.01" step="any" value={cutDimension} onChange={(e) => setCutDimension(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
+                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--danger)] outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Quantity to Cut</label>
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Quantity to Cut</label>
               <input 
                 type="number" required min="0.01" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500/50 outline-none"
+                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--danger)] outline-none"
               />
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
+              <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)] px-4 py-3 rounded-lg flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 flex-shrink-0" />
                 <p className="text-sm">{error}</p>
               </div>
             )}
             
             {success && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg flex items-center gap-2">
+              <div className="bg-[var(--glow2)] border border-[var(--success)]/20 text-[var(--success)] px-4 py-3 rounded-lg flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
                 <p className="text-sm">{success}</p>
               </div>
@@ -248,7 +248,7 @@ export default function CuttingDashboard() {
             <button 
               type="submit"
               disabled={!selectedBarId || !cutPieceName || !cutDimension || !quantity}
-              className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center gap-2"
+              className="w-full bg-[var(--danger)] hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center gap-2"
             >
               <Scissors className="w-5 h-5" />
               EXECUTE CUT TRANSACTION
@@ -258,31 +258,31 @@ export default function CuttingDashboard() {
 
         <div className="flex flex-col gap-6">
           {/* Add Long Bar Utility */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl h-fit">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 shadow-xl h-fit">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-500/10 rounded-lg"><Plus className="w-6 h-6 text-blue-400" /></div>
-              <h2 className="text-xl font-bold text-gray-100">Receive New Long Bar</h2>
+              <div className="p-2 bg-[var(--glow1)] rounded-lg"><Plus className="w-6 h-6 text-[var(--accent1)]" /></div>
+              <h2 className="text-xl font-bold text-[var(--text-primary)]">Receive New Long Bar</h2>
             </div>
             
             <form onSubmit={handleAddLongBar} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Bar Type / Material</label>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Bar Type / Material</label>
                 <input 
                   type="text" required value={newBarType} onChange={(e) => setNewBarType(e.target.value)}
                   placeholder="e.g. Steel Bar Type A"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--accent1)] outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Initial Length (mm)</label>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Initial Length (mm)</label>
                 <input 
                   type="number" required min="0.01" step="any" value={newBarLength} onChange={(e) => setNewBarLength(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--accent1)] outline-none"
                 />
               </div>
               <button 
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors"
+                className="w-full bg-[var(--accent1)] hover:bg-[var(--accent2)] text-white font-bold py-2.5 rounded-lg transition-colors"
               >
                 Add Long Bar to Inventory
               </button>
@@ -290,48 +290,48 @@ export default function CuttingDashboard() {
           </div>
 
           {/* Define New Cut Piece Utility */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl h-fit">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 shadow-xl h-fit">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-emerald-500/10 rounded-lg"><PackageSearch className="w-6 h-6 text-emerald-400" /></div>
-              <h2 className="text-xl font-bold text-gray-100">Define New Cut Piece</h2>
+              <div className="p-2 bg-[var(--glow2)] rounded-lg"><PackageSearch className="w-6 h-6 text-[var(--success)]" /></div>
+              <h2 className="text-xl font-bold text-[var(--text-primary)]">Define New Cut Piece</h2>
             </div>
             
             <form onSubmit={handleDefineCutPiece} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Cut Piece Name</label>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Cut Piece Name</label>
                 <input 
                   type="text" required value={newCutPieceName} onChange={(e) => setNewCutPieceName(e.target.value)}
                   placeholder="e.g. 55 dia"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                  className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Parent Bar Type</label>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Parent Bar Type</label>
                   <input 
                     type="text" required value={newCutPieceBarType} onChange={(e) => setNewCutPieceBarType(e.target.value)}
                     placeholder="e.g. Steel Bar Type A"
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Dimension (mm)</label>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Dimension (mm)</label>
                   <input 
                     type="number" required min="0.01" step="any" value={newCutPieceDimension} onChange={(e) => setNewCutPieceDimension(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
                   />
                 </div>
               </div>
 
               {defineError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)] px-4 py-3 rounded-lg flex items-center gap-2">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
                   <p className="text-sm">{defineError}</p>
                 </div>
               )}
               
               {defineSuccess && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                <div className="bg-[var(--glow2)] border border-[var(--success)]/20 text-[var(--success)] px-4 py-3 rounded-lg flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
                   <p className="text-sm">{defineSuccess}</p>
                 </div>
@@ -339,7 +339,7 @@ export default function CuttingDashboard() {
 
               <button 
                 type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition-colors"
+                className="w-full bg-[var(--success)] hover:opacity-80 text-white font-bold py-2.5 rounded-lg transition-colors"
               >
                 Save Cut Piece to Inventory (0 qty)
               </button>
@@ -351,39 +351,39 @@ export default function CuttingDashboard() {
       {/* Dynamic Data Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Long Bars Panel */}
-        <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
-          <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center justify-between">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-xl">
+          <div className="bg-[var(--bg-card2)] border-b border-[var(--border)] p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <List className="w-5 h-5 text-gray-400" />
-              <h3 className="font-semibold text-gray-200">Available Long Bars</h3>
+              <List className="w-5 h-5 text-[var(--text-muted)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Available Long Bars</h3>
             </div>
           </div>
-          <div className="p-3 border-b border-gray-700 bg-gray-900/30">
+          <div className="p-3 border-b border-[var(--border)] bg-[var(--bg-bar-empty)]">
             <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input 
                 type="text" 
                 placeholder="Search by ID or Bar Type..." 
                 value={barSearch}
                 onChange={(e) => setBarSearch(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none"
+                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg pl-9 pr-4 py-2 text-sm text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--accent1)] outline-none"
               />
             </div>
           </div>
           <div className="p-4 max-h-[400px] overflow-y-auto">
             <div className="space-y-3">
               {filteredLongBars.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-4">No long bars match your search</p>
+                <p className="text-[var(--text-muted)] text-sm text-center py-4">No long bars match your search</p>
               ) : filteredLongBars.map(bar => (
-                <div key={bar.id} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                <div key={bar.id} className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border)]">
                   <div>
-                    <div className="font-medium text-gray-200">{bar.barType}</div>
-                    <div className="text-sm text-gray-500">ID: {bar.id} | Origin: {bar.originalLength}mm</div>
+                    <div className="font-medium text-[var(--text-primary)]">{bar.barType}</div>
+                    <div className="text-sm text-[var(--text-muted)]">ID: {bar.id} | Origin: {bar.originalLength}mm</div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <div className="font-bold text-gray-200">{bar.currentLength}mm</div>
-                      <div className="text-xs text-gray-500">remaining</div>
+                      <div className="font-bold text-[var(--text-primary)]">{bar.currentLength}mm</div>
+                      <div className="text-xs text-[var(--text-muted)]">remaining</div>
                     </div>
                     <span className={`px-2.5 py-1 text-xs font-medium rounded-full border ${getStatusColor(bar.status)}`}>
                       {bar.status}
@@ -396,40 +396,40 @@ export default function CuttingDashboard() {
         </div>
 
         {/* Cut Pieces Inventory Panel */}
-        <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
-          <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center justify-between">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-xl">
+          <div className="bg-[var(--bg-card2)] border-b border-[var(--border)] p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <PackageSearch className="w-5 h-5 text-gray-400" />
-              <h3 className="font-semibold text-gray-200">Cut Pieces Inventory</h3>
+              <PackageSearch className="w-5 h-5 text-[var(--text-muted)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Cut Pieces Inventory</h3>
             </div>
           </div>
-          <div className="p-3 border-b border-gray-700 bg-gray-900/30">
+          <div className="p-3 border-b border-[var(--border)] bg-[var(--bg-bar-empty)]">
             <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input 
                 type="text" 
                 placeholder="Search by Piece Name or Parent Bar..." 
                 value={pieceSearch}
                 onChange={(e) => setPieceSearch(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg pl-9 pr-4 py-2 text-sm text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
               />
             </div>
           </div>
           <div className="p-4 max-h-[400px] overflow-y-auto">
             <div className="space-y-3">
               {filteredInventory.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-4">No cut pieces match your search</p>
+                <p className="text-[var(--text-muted)] text-sm text-center py-4">No cut pieces match your search</p>
               ) : filteredInventory.map(inv => (
-                <div key={inv.id} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                <div key={inv.id} className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border)]">
                   <div>
-                    <div className="font-medium text-gray-200">{inv.cutPiece.cutPieceName}</div>
-                    <div className="text-sm text-gray-500">Dimension: {inv.cutPiece.cutDimension}mm | From: {inv.cutPiece.parentBarType}</div>
+                    <div className="font-medium text-[var(--text-primary)]">{inv.cutPiece.cutPieceName}</div>
+                    <div className="text-sm text-[var(--text-muted)]">Dimension: {inv.cutPiece.cutDimension}mm | From: {inv.cutPiece.parentBarType}</div>
                   </div>
                   <div className="text-right">
                     <div className={`font-bold text-xl ${getInventoryStatusColor(inv.quantityAvailable, inv.cutPiece.minStockThreshold)}`}>
                       {inv.quantityAvailable}
                     </div>
-                    <div className="text-xs text-gray-500">in stock</div>
+                    <div className="text-xs text-[var(--text-muted)]">in stock</div>
                   </div>
                 </div>
               ))}
@@ -439,14 +439,14 @@ export default function CuttingDashboard() {
       </div>
 
       {/* Production History Table */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
-        <div className="bg-gray-800/50 border-b border-gray-700 p-4 flex items-center gap-2">
-          <History className="w-5 h-5 text-gray-400" />
-          <h3 className="font-semibold text-gray-200">Recent Production History</h3>
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-xl">
+        <div className="bg-[var(--bg-card2)] border-b border-[var(--border)] p-4 flex items-center gap-2">
+          <History className="w-5 h-5 text-[var(--text-muted)]" />
+          <h3 className="font-semibold text-[var(--text-primary)]">Recent Production History</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-400">
-            <thead className="bg-gray-900/50 text-gray-400 uppercase">
+          <table className="w-full text-left text-sm text-[var(--text-muted)]">
+            <thead className="bg-[var(--bg-secondary)] text-[var(--text-muted)] uppercase">
               <tr>
                 <th className="px-6 py-3 font-medium">Time</th>
                 <th className="px-6 py-3 font-medium">Long Bar</th>
@@ -456,19 +456,19 @@ export default function CuttingDashboard() {
                 <th className="px-6 py-3 font-medium text-right">Length After</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700/50">
+            <tbody className="divide-y divide-[var(--border)]">
               {history.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">No production logs found</td>
+                  <td colSpan="6" className="px-6 py-4 text-center text-[var(--text-muted)]">No production logs found</td>
                 </tr>
               ) : history.map(log => (
-                <tr key={log.id} className="hover:bg-gray-700/30 transition-colors">
+                <tr key={log.id} className="hover:bg-[var(--bg-bar-empty)] transition-colors">
                   <td className="px-6 py-3 whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
                   <td className="px-6 py-3">{log.longBar?.barType} (ID: {log.longBar?.id})</td>
                   <td className="px-6 py-3">{log.cutPiece?.cutPieceName}</td>
                   <td className="px-6 py-3">{log.cutDimension}mm</td>
-                  <td className="px-6 py-3 text-right text-gray-300">{log.barLengthBefore}mm</td>
-                  <td className="px-6 py-3 text-right text-red-400 font-medium">{log.barLengthAfter}mm</td>
+                  <td className="px-6 py-3 text-right text-[var(--text-secondary)]">{log.barLengthBefore}mm</td>
+                  <td className="px-6 py-3 text-right text-[var(--danger)] font-medium">{log.barLengthAfter}mm</td>
                 </tr>
               ))}
             </tbody>
