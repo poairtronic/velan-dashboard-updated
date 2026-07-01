@@ -23,7 +23,7 @@ function VirtualizedTable({
         className="table-wrap"
         style={{
           width: '100%',
-          background: 'rgba(10,25,47,0.4)',
+          background: 'var(--bg-secondary)',
           borderRadius: 8,
           border: '1px solid var(--border)',
           padding: '40px 0',
@@ -58,7 +58,7 @@ function VirtualizedTable({
       className="table-wrap virt-table-wrap"
       style={{
         width: '100%',
-        background: 'rgba(10,25,47,0.4)',
+        background: 'var(--bg-secondary)',
         borderRadius: 8,
         border: '1px solid var(--border)',
         overflow: 'hidden',
@@ -70,10 +70,10 @@ function VirtualizedTable({
           className="virt-header"
           style={{
             display: 'flex',
-            background: 'rgba(2, 12, 27, 0.7)',
+            background: 'var(--bg-card)',
             borderBottom: '1px solid var(--border)',
             fontWeight: '600',
-            color: 'var(--textSecondary)',
+            color: 'var(--text-muted)',
             padding: '12px 0',
           }}
         >
