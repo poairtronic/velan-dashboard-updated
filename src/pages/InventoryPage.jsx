@@ -631,14 +631,7 @@ export default function CuttingDashboard() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Notes (Optional)</label>
-              <input 
-                type="text" value={fbProdNotes} onChange={(e) => setFbProdNotes(e.target.value)}
-                placeholder="Optional remarks"
-                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--danger)] outline-none"
-              />
-            </div>
+
 
             {fbProdError && (
               <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)] px-4 py-3 rounded-lg flex items-center gap-2">
@@ -699,23 +692,7 @@ export default function CuttingDashboard() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Material</label>
-                  <input 
-                    type="text" required value={newFbMat} onChange={(e) => setNewFbMat(e.target.value)}
-                    placeholder="e.g. Steel"
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Description</label>
-                  <input 
-                    type="text" value={newFbDesc} onChange={(e) => setNewFbDesc(e.target.value)}
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
-                  />
-                </div>
-              </div>
+
 
               {fbDefineError && (
                 <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 text-[var(--danger)] px-4 py-3 rounded-lg flex items-center gap-2">
