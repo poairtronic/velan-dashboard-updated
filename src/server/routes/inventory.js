@@ -259,4 +259,198 @@ router.post('/cut-piece', asyncHandler(async (req, res) => {
   }
 }));
 
+// GET all fine blanks defined
+router.get('/fine-blanks', asyncHandler(async (req, res) => {
+  const result = await pool.query('SELECT * FROM fine_blanks ORDER BY id DESC');
+  res.json(result.rows);
+}));
+
+// POST define new fine blank
+router.post('/fine-blanks/define', asyncHandler(async (req, res) => {
+  const { fineBlankName, parentCutPieceType, dimension, material, description } = req.body;
+  if (!fineBlankName || !parentCutPieceType || !dimension) {
+    return res.status(400).json({ success: false, message: 'Name, Parent Cut Piece, and Dimension are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const fbRes = await client.query('SELECT * FROM fine_blanks WHERE fine_blank_name = $1', [fineBlankName]);
+    if (fbRes.rows.length > 0) {
+      throw new Error(`Fine blank with name "${fineBlankName}" already exists.`);
+    }
+
+    const insertFb = await client.query(
+      'INSERT INTO fine_blanks (fine_blank_name, parent_cut_piece_type, dimension, material, description) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [fineBlankName, parentCutPieceType, dimension, material || '', description || '']
+    );
+    const fineBlankId = insertFb.rows[0].id;
+
+    await client.query(
+      'INSERT INTO fine_blank_inventory (fine_blank_id, quantity_available) VALUES ($1, 0)',
+      [fineBlankId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Fine blank defined successfully' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+}));
+
+// GET fine blank inventory stock
+router.get('/fine-blank-stock', asyncHandler(async (req, res) => {
+  const query = `
+    SELECT 
+      inv.id,
+      inv.quantity_available as "quantityAvailable",
+      inv.updated_at as "updatedAt",
+      fb.id as "fineBlankId",
+      fb.fine_blank_name as "fineBlankName",
+      fb.parent_cut_piece_type as "parentCutPieceType",
+      fb.dimension,
+      fb.material
+    FROM fine_blank_inventory inv
+    JOIN fine_blanks fb ON inv.fine_blank_id = fb.id
+    ORDER BY inv.id DESC
+  `;
+  const result = await pool.query(query);
+  
+  const formatted = result.rows.map(row => ({
+    id: row.id,
+    quantityAvailable: row.quantityAvailable,
+    updatedAt: row.updatedAt,
+    fineBlank: {
+      id: row.fineBlankId,
+      fineBlankName: row.fineBlankName,
+      parentCutPieceType: row.parentCutPieceType,
+      dimension: row.dimension,
+      material: row.material
+    }
+  }));
+  
+  res.json(formatted);
+}));
+
+// GET fine blank production history
+router.get('/fine-blank-history', asyncHandler(async (req, res) => {
+  const query = `
+    SELECT 
+      log.id,
+      log.consumed_qty as "consumedQty",
+      log.produced_qty as "producedQty",
+      log.remarks,
+      log.created_by as "createdBy",
+      log.created_at as "createdAt",
+      cp.id as "cutPieceId",
+      cp.cut_piece_name as "cutPieceName",
+      fb.id as "fineBlankId",
+      fb.fine_blank_name as "fineBlankName"
+    FROM fine_blank_production_log log
+    JOIN cut_pieces cp ON log.cut_piece_id = cp.id
+    JOIN fine_blanks fb ON log.fine_blank_id = fb.id
+    ORDER BY log.created_at DESC
+    LIMIT 20
+  `;
+  const result = await pool.query(query);
+  
+  const formatted = result.rows.map(row => ({
+    id: row.id,
+    consumedQty: row.consumedQty,
+    producedQty: row.producedQty,
+    remarks: row.remarks,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt,
+    cutPiece: {
+      id: row.cutPieceId,
+      cutPieceName: row.cutPieceName
+    },
+    fineBlank: {
+      id: row.fineBlankId,
+      fineBlankName: row.fineBlankName
+    }
+  }));
+  
+  res.json(formatted);
+}));
+
+// POST fine blank produce (Atomic Transaction)
+router.post('/fine-blank/produce', asyncHandler(async (req, res) => {
+  const { cutPieceId, fineBlankName, consumedQty, producedQty, remarks, createdBy } = req.body;
+  
+  if (!cutPieceId || !fineBlankName || !consumedQty || !producedQty) {
+    return res.status(400).json({ success: false, message: 'Missing required fields' });
+  }
+
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // 1. Fetch Cut Piece Inventory (Pessimistic write lock)
+    const cpInvRes = await client.query('SELECT * FROM cut_piece_inventory WHERE cut_piece_id = $1 FOR UPDATE', [cutPieceId]);
+    if (cpInvRes.rows.length === 0) {
+      throw new Error(`Cut piece inventory not found`);
+    }
+    const cpInv = cpInvRes.rows[0];
+    
+    const availableQty = Number(cpInv.quantity_available);
+    if (availableQty < Number(consumedQty)) {
+      throw new Error(`Insufficient cut pieces. Have ${availableQty}, requested ${consumedQty}.`);
+    }
+    
+    // 2. Find Fine Blank Definition
+    const fbRes = await client.query('SELECT * FROM fine_blanks WHERE fine_blank_name = $1', [fineBlankName]);
+    if (fbRes.rows.length === 0) {
+      throw new Error(`Fine Blank "${fineBlankName}" not defined.`);
+    }
+    const fineBlank = fbRes.rows[0];
+    
+    // 3. Deduct from Cut Piece Inventory
+    await client.query(
+      'UPDATE cut_piece_inventory SET quantity_available = quantity_available - $1, updated_at = NOW() WHERE cut_piece_id = $2',
+      [consumedQty, cutPieceId]
+    );
+    
+    // 4. Update Fine Blank Inventory
+    const fbInvRes = await client.query('SELECT * FROM fine_blank_inventory WHERE fine_blank_id = $1 FOR UPDATE', [fineBlank.id]);
+    if (fbInvRes.rows.length === 0) {
+      // Should exist from definition step, but fallback just in case
+      await client.query(
+        'INSERT INTO fine_blank_inventory (fine_blank_id, quantity_available) VALUES ($1, $2)',
+        [fineBlank.id, producedQty]
+      );
+    } else {
+      await client.query(
+        'UPDATE fine_blank_inventory SET quantity_available = quantity_available + $1, updated_at = NOW() WHERE fine_blank_id = $2',
+        [producedQty, fineBlank.id]
+      );
+    }
+    
+    // 5. Log Production
+    await client.query(
+      `INSERT INTO fine_blank_production_log 
+        (cut_piece_id, fine_blank_id, consumed_qty, produced_qty, remarks, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [cutPieceId, fineBlank.id, consumedQty, producedQty, remarks || '', createdBy || 'Operator']
+    );
+
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      message: `Produced ${producedQty} "${fineBlankName}" from ${consumedQty} cut pieces.`,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+}));
+
 module.exports = router;

@@ -272,6 +272,42 @@ async function initDB() {
         ALTER COLUMN bar_length_after TYPE NUMERIC(10,2);
     `);
 
+    // 7. Create Fine Blank Tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fine_blanks (
+        id SERIAL PRIMARY KEY,
+        fine_blank_name VARCHAR(100) UNIQUE NOT NULL,
+        parent_cut_piece_type VARCHAR(100) NOT NULL,
+        dimension NUMERIC(10,2) NOT NULL,
+        material VARCHAR(50),
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fine_blank_inventory (
+        id SERIAL PRIMARY KEY,
+        fine_blank_id INT REFERENCES fine_blanks(id) ON DELETE CASCADE,
+        quantity_available NUMERIC(10,2) DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(fine_blank_id)
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fine_blank_production_log (
+        id SERIAL PRIMARY KEY,
+        cut_piece_id INT REFERENCES cut_pieces(id) ON DELETE CASCADE,
+        fine_blank_id INT REFERENCES fine_blanks(id) ON DELETE CASCADE,
+        consumed_qty NUMERIC(10,2) NOT NULL,
+        produced_qty NUMERIC(10,2) NOT NULL,
+        remarks TEXT,
+        created_by VARCHAR(50) DEFAULT 'System',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
     await client.query('COMMIT');
     console.log('[DB] Neon tables and indices initialized successfully');
   } catch (err) {
