@@ -18,19 +18,6 @@ function DrilldownCard({ kpiType, title, children, style = {} }) {
         onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
         onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
       >
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px',
-          background: 'var(--bg-tertiary)',
-          color: 'var(--text-muted)',
-          fontSize: '10px',
-          padding: '2px 6px',
-          borderRadius: '10px',
-          fontFamily: 'Share Tech Mono'
-        }}>
-          DRILLDOWN
-        </div>
         {children}
       </div>
 
