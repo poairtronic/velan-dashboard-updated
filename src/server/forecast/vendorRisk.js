@@ -33,9 +33,8 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
   // 2. Identify active vendor items from live data
   const vendorItems = {};
   liveRows.forEach(row => {
-    if (row.inhouse !== 'VENDOR') return;
     const stage = row.currentStage || '';
-    if (TERMINAL_STAGES.includes(stage) || !stage) return;
+    if (!stage.toUpperCase().endsWith('V') || TERMINAL_STAGES.includes(stage)) return;
 
     const vendorCode = stage;
     if (!vendorItems[vendorCode]) {
@@ -82,7 +81,7 @@ async function calculateVendorRiskForecast({ liveRows, dbRows }) {
       const curr = history[i];
       const next = history[i + 1];
 
-      if (curr.inhouse === 'VENDOR' && !TERMINAL_STAGES.includes(curr.stage) && curr.stage !== next.stage) {
+      if (curr.stage.toUpperCase().endsWith('V') && !TERMINAL_STAGES.includes(curr.stage) && curr.stage !== next.stage) {
         const vendorCode = curr.stage;
         const days = workingDaysBetween5Day(curr.timestamp, next.timestamp);
         

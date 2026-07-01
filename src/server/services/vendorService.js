@@ -3,7 +3,7 @@ const { dateDiff, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
 function calculateVendors({ filtered, todayStr }) {
   const vendorStageData = [];
   filtered.forEach((r) => {
-    if (r.inhouse !== 'VENDOR' || !r.timestamp) return;
+    if (!r.currentStage || !r.currentStage.toUpperCase().endsWith('V') || !r.timestamp) return;
     const daysFromPO = r.poDate ? dateDiff(r.poDate, r.timestamp) : null;
     const pendingDays = dateDiff(r.timestamp, todayStr);
     if (pendingDays !== null)
@@ -84,8 +84,8 @@ function calculateVendors({ filtered, todayStr }) {
 
   const vendorTimeMap = {};
   filtered.forEach((r) => {
-    if (r.inhouse !== 'VENDOR') return;
-    const vcode = r.currentStage || 'UNKNOWN';
+    if (!r.currentStage || !r.currentStage.toUpperCase().endsWith('V')) return;
+    const vcode = r.currentStage;
     if (!vendorTimeMap[vcode])
       vendorTimeMap[vcode] = { code: vcode, count: 0, items: [], days: [] };
     vendorTimeMap[vcode].count++;
