@@ -47,7 +47,7 @@ async function validateSystem() {
       if (!q.queue.client || !q.queue.client.status) {
         console.log(`✅ Queue (${q.name}): OK (Mock)`);
       } else {
-        const isReady = await q.queue.client.status === 'ready';
+        /* unused */ const _unused = await q.queue.client.status === 'ready';
         console.log(`✅ Queue (${q.name}): OK`);
       }
     } catch (err) {

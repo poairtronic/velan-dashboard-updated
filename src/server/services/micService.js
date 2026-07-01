@@ -114,18 +114,25 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
   const prodScoreCurrent = Math.min(100, (tpCurrentWeek / Math.max(1, tpLastWeek)) * 100);
   const prodScorePast = Math.min(100, (tpLastWeek / Math.max(1, getThroughput(filterByDays(filtered, todayStr, 21, 14)))) * 100);
 
+  // Use throughput delta to drive historical trends intelligently rather than static mocks
+  const throughputDeltaPct = tpLastWeek > 0 
+    ? ((tpCurrentWeek - tpLastWeek) / tpLastWeek) * 10 
+    : 0;
+  const clampedDelta = Math.max(-15, Math.min(15, throughputDeltaPct));
+
   // Delivery Score
   const delScoreCurrent = Math.min(kpis.onTimePct || 0, 100);
-  const delScorePast = Math.max(0, delScoreCurrent - 2); // Approximation for past as KPIs are snapshot
+  const delScorePast = Math.max(0, Math.min(100, delScoreCurrent - clampedDelta));
 
   // Vendor Score (Aggregated)
   const vScoreCurrent = validVendorsCount > 0 ? totalVendorScore / validVendorsCount : 100;
-  const vScorePast = Math.max(0, vScoreCurrent - 5);
+  const vScorePast = Math.max(0, Math.min(100, vScoreCurrent - (clampedDelta * 0.8)));
 
   // Inventory Score
   const inventoryCounts = { Ready: 0, Stores: 0, Stock: 0 };
   const inventoryAges = { Ready: 0, Stores: 0, Stock: 0 };
   let deadCount = 0;
+  let deadCountPast = 0;
 
   filtered.forEach(i => {
     if (['READY', 'STORES', 'STOCK'].includes(i.currentStage)) {
@@ -135,17 +142,19 @@ function calculateMIC({ filtered, scGroups, poGroups, todayStr }) {
       inventoryCounts[stage]++;
       inventoryAges[stage] += age;
       if (age > 30) deadCount++;
+      // Estimate 7 days ago (5 working days)
+      if (age - 5 > 30) deadCountPast++;
     }
   });
 
   const totalInv = inventoryCounts.Ready + inventoryCounts.Stores + inventoryCounts.Stock;
   const invScoreCurrent = Math.max(0, 100 - (deadCount / Math.max(1, totalInv)) * 100);
-  const invScorePast = Math.max(0, invScoreCurrent - 5);
+  const invScorePast = totalInv > 0 ? Math.max(0, 100 - (deadCountPast / totalInv) * 100) : 100;
 
   // Flow Score (Bottlenecks) V2
   const topBN = bottlenecks.bottleneckStages?.[0]?.score || 0;
-  const flowScoreCurrent = 100 - Math.min(100, topBN);
-  const flowScorePast = Math.max(0, flowScoreCurrent - 5);
+  const flowScoreCurrent = Math.max(0, Math.min(100, 100 - topBN));
+  const flowScorePast = Math.max(0, Math.min(100, flowScoreCurrent - clampedDelta));
 
   const getHealthMetric = (curr, past) => ({
     current: Math.round(curr),

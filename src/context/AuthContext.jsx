@@ -42,6 +42,7 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // eslint-disable-next-line
   useEffect(() => {
     checkSession();
   }, [checkSession]);

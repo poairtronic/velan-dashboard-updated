@@ -35,6 +35,8 @@ export function TableSkeleton() {
 }
 
 export function ChartSkeleton() {
+  const heights = [35, 85, 45, 95, 25, 75, 55, 65, 80, 40, 90, 30];
+  
   return (
     <div className="skeleton-card" style={{ height: '250px', width: '100%' }}>
       <div className="skeleton skeleton-title" style={{ width: '120px' }}></div>
@@ -46,7 +48,7 @@ export function ChartSkeleton() {
             className="skeleton" 
             style={{ 
               flex: 1, 
-              height: `${Math.random() * 80 + 20}%`, 
+              height: `${heights[i % heights.length]}%`, 
               borderRadius: '4px 4px 0 0' 
             }}
           ></div>

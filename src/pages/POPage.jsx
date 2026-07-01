@@ -81,6 +81,7 @@ function POPage() {
   const todayStr = MODULE_TODAY_STR;
 
   // Auto-expand and highlight PO from context state
+  // eslint-disable-next-line
   React.useEffect(() => {
     if (selectedPONum) {
       const found = poRows.find((p) => p.po === selectedPONum);

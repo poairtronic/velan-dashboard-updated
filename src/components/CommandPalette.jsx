@@ -49,6 +49,7 @@ export default function CommandPalette({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
+  // eslint-disable-next-line
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);

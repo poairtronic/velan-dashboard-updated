@@ -74,7 +74,7 @@ async function getOrSetCache(key, ttlSeconds, fetchFn) {
         const perfLocalStorage = require('../utils/perfContext');
         const store = perfLocalStorage.getStore();
         if (store) store.cacheHit = true;
-      } catch (_) {}
+      } catch (_) { console.error('Failed to parse cached value'); }
       const parsed = typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
       return parsed;
     }

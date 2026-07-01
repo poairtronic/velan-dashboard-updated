@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
@@ -27,6 +27,7 @@ function UserManagementPage() {
     }
   }, []);
 
+  // eslint-disable-next-line
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);

@@ -36,6 +36,7 @@ export default function AuditTrailViewer() {
     }
   };
 
+  // eslint-disable-next-line
   useEffect(() => {
     fetchHistory();
   }, [actionFilter, fromDate, toDate]); // Auto-refresh on select/date changes

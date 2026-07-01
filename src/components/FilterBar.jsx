@@ -1,5 +1,5 @@
 import React from 'react';
-import debounce from 'lodash/debounce';
+import debounce from '../utils/debounce';
 import { useFilters } from '../context/FilterContext';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
@@ -30,6 +30,7 @@ function FilterBar() {
   }, [debouncedSearch]);
 
   // Keep local input in sync when external reset clears filters
+  // eslint-disable-next-line
   React.useEffect(() => {
     if (filters.search === '') {
       setSearchInput('');

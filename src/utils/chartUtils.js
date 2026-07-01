@@ -53,7 +53,7 @@ function useChart(ref, config, deps) {
         if (existing) {
           try {
             existing.destroy();
-          } catch (_) {}
+          } catch (_) { console.error('Chart cleanup/render error'); }
           chartRef.current = null;
         }
         const ctx = ref.current.getContext('2d');
@@ -91,7 +91,7 @@ function useChart(ref, config, deps) {
       if (existing) {
         try {
           existing.destroy();
-        } catch (_) {}
+        } catch (_) { console.error('Chart cleanup/render error'); }
         chartRef.current = null;
       }
 
@@ -108,7 +108,7 @@ function useChart(ref, config, deps) {
       if (chartRef.current) {
         try {
           chartRef.current.destroy();
-        } catch (_) {}
+        } catch (_) { console.error('Chart cleanup/render error'); }
         chartRef.current = null;
       }
     };

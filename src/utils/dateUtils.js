@@ -71,7 +71,7 @@ function toIsoDateString(value) {
       return _resolveSlashDate(p0, p1, year, false);
   }
   // DD-MM-YYYY or DD/MM/YYYY with time suffix — e.g. "09-05-2026 13:40:43"
-  const dmyTime = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T ]/);
+  const dmyTime = text.match(/^(\d{1,2})[/ \-](\d{1,2})[/ \-](\d{4})[T ]/);
   if (dmyTime) {
     const p0 = parseInt(dmyTime[1], 10);
     const p1 = parseInt(dmyTime[2], 10);

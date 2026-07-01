@@ -104,7 +104,7 @@ function parseVelanExcel(rows) {
 function parseGenericRows(rows) {
   const norm = (s) =>
     String(s || '')
-      .replace(/[\s\/\-_]+/g, '')
+      .replace(/[\s/\-_]+/g, '')
       .toLowerCase();
   const pickField = (r, candidates) => {
     for (const c of candidates) {
@@ -190,7 +190,7 @@ function parseRowsFromHeaderAoA(rawAoA) {
 
   const norm = (s) =>
     String(s || '')
-      .replace(/[\s\/\-_]+/g, '')
+      .replace(/[\s/\-_]+/g, '')
       .toLowerCase();
 
   const findColumn = (row, exactAliases, containsAliases = []) => {

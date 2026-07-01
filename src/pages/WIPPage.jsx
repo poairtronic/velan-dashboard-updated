@@ -4,25 +4,16 @@ import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import calculationUtils from '../utils/calculationUtils';
-const { workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
- } = calculationUtils;
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+const { getProductCategory } = calculationUtils;
+import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 // ─── WORK IN PROGRESS (WIP) PAGE COMPONENT ────────────────────────────────────
 
 function WIPPage() {
   const { kpis } = useData();
   const { filters } = useFilters();
-  const { rows: filtered, isLoading } = useProductionDataQuery(filters, 1, 200);
-  const [selectedStage, setSelectedStage] = React.useState(null);
+  const { rows: filtered } = useProductionDataQuery(filters, 1, 200);
   const [expandedItem, setExpandedItem] = React.useState(null);
   const wipRef = React.useRef();
   const stages = Object.entries(kpis.stageCounts).sort((a, b) => b[1] - a[1]);

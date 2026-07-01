@@ -7,7 +7,7 @@ const { env } = require('../config/env');
 // Initialize global error counter
 global.errorMetrics = global.errorMetrics || { total: 0, byRoute: {} };
 
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res) => {
   const isProd = (process.env.NODE_ENV === 'production' || (env && env.NODE_ENV === 'production'));
   const status = err.status || 500;
   

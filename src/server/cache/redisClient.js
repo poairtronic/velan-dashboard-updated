@@ -1,5 +1,5 @@
 const { Redis } = require('@upstash/redis');
-const { env } = require('../config/env');
+
 
 const isMock = !process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL === 'mock';
 
