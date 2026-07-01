@@ -24,6 +24,8 @@ export default function CuttingDashboard() {
   const [newCutPieceDimension, setNewCutPieceDimension] = useState('');
   const [defineError, setDefineError] = useState(null);
   const [defineSuccess, setDefineSuccess] = useState(null);
+  const [isBarTypeDropdownOpen, setIsBarTypeDropdownOpen] = useState(false);
+  const [isCutPieceDropdownOpen, setIsCutPieceDropdownOpen] = useState(false);
   
   // Search State
   const [barSearch, setBarSearch] = useState('');
@@ -167,6 +169,15 @@ export default function CuttingDashboard() {
     inv.cutPiece?.parentBarType?.toLowerCase().includes(pieceSearch.toLowerCase())
   );
 
+  const uniqueBarTypes = [...new Set(longBars.map(b => b.barType).filter(Boolean))];
+  const filteredBarTypesForDropdown = uniqueBarTypes.filter(type => 
+    type.toLowerCase().includes(newCutPieceBarType.toLowerCase())
+  );
+
+  const filteredCutPiecesForDropdown = inventory.filter(inv => 
+    (inv.cutPiece?.cutPieceName || '').toLowerCase().includes((cutPieceName || '').toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       
@@ -198,21 +209,50 @@ export default function CuttingDashboard() {
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Select Cut Piece</label>
-                <select 
-                  required
+                <input 
+                  type="text" 
+                  required 
                   value={cutPieceName}
-                  onChange={handleCutPieceSelect}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCutPieceName(val);
+                    setIsCutPieceDropdownOpen(true);
+                    const piece = inventory.find(inv => inv.cutPiece.cutPieceName === val);
+                    if (piece) {
+                      setCutDimension(piece.cutPiece.cutDimension);
+                    } else {
+                      setCutDimension('');
+                    }
+                  }}
+                  onFocus={() => setIsCutPieceDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setIsCutPieceDropdownOpen(false), 200)}
+                  placeholder="Search or select cut piece..."
                   className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--danger)] outline-none"
-                >
-                  <option value="">-- Select Cut Piece --</option>
-                  {inventory.map(inv => (
-                    <option key={inv.id} value={inv.cutPiece.cutPieceName}>
-                      {inv.cutPiece.cutPieceName} ({inv.cutPiece.cutDimension}mm)
-                    </option>
-                  ))}
-                </select>
+                />
+                {isCutPieceDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredCutPiecesForDropdown.map(inv => (
+                      <div 
+                        key={inv.id}
+                        className="px-4 py-2 hover:bg-[var(--bg-bar-empty)] cursor-pointer text-[var(--text-primary)]"
+                        onClick={() => {
+                          setCutPieceName(inv.cutPiece.cutPieceName);
+                          setCutDimension(inv.cutPiece.cutDimension);
+                          setIsCutPieceDropdownOpen(false);
+                        }}
+                      >
+                        {inv.cutPiece.cutPieceName} ({inv.cutPiece.cutDimension}mm)
+                      </div>
+                    ))}
+                    {filteredCutPiecesForDropdown.length === 0 && (
+                      <div className="px-4 py-2 text-[var(--text-muted)] text-sm">
+                        No cut pieces found
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Cut Dimension (mm)</label>
@@ -306,13 +346,40 @@ export default function CuttingDashboard() {
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Parent Bar Type</label>
                   <input 
-                    type="text" required value={newCutPieceBarType} onChange={(e) => setNewCutPieceBarType(e.target.value)}
-                    placeholder="e.g. Steel Bar Type A"
+                    type="text" required value={newCutPieceBarType} 
+                    onChange={(e) => {
+                      setNewCutPieceBarType(e.target.value);
+                      setIsBarTypeDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsBarTypeDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsBarTypeDropdownOpen(false), 200)}
+                    placeholder="Search or enter bar type..."
                     className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--success)] outline-none"
                   />
+                  {isBarTypeDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredBarTypesForDropdown.map((type, idx) => (
+                        <div 
+                          key={idx}
+                          className="px-4 py-2 hover:bg-[var(--bg-bar-empty)] cursor-pointer text-[var(--text-primary)]"
+                          onClick={() => {
+                            setNewCutPieceBarType(type);
+                            setIsBarTypeDropdownOpen(false);
+                          }}
+                        >
+                          {type}
+                        </div>
+                      ))}
+                      {filteredBarTypesForDropdown.length === 0 && (
+                        <div className="px-4 py-2 text-[var(--text-muted)] text-sm">
+                          {newCutPieceBarType ? 'Press enter to use custom type' : 'No types found'}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Dimension (mm)</label>
