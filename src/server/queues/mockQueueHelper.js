@@ -66,6 +66,17 @@ class MockQueue {
   async add(name, data) {
     const jobId = `mock-job-${this.name}-${this.counter++}`;
     const job = new MockJob(jobId, name, data, this.name);
+    
+    // Evict old completed/failed jobs if map exceeds max capacity (200)
+    if (this.jobs.size >= 200) {
+      for (const [key, item] of this.jobs.entries()) {
+        if (item.state === 'completed' || item.state === 'failed') {
+          this.jobs.delete(key);
+          if (this.jobs.size < 200) break;
+        }
+      }
+    }
+    
     this.jobs.set(jobId, job);
 
     // Run processing asynchronously on next tick to simulate queue behavior

@@ -28,6 +28,16 @@ if (!isMock) {
       return item.value;
     }
     async set(key, value, options) {
+      // Evict expired entries if store exceeds capacity (1000 items)
+      if (this.store.size >= 1000) {
+        const now = Date.now();
+        for (const [k, item] of this.store.entries()) {
+          if (item.expiresAt && now > item.expiresAt) {
+            this.store.delete(k);
+          }
+        }
+      }
+
       // @upstash/redis options can be passed as third argument e.g. { ex: 300 }
       let duration = null;
       if (options && options.ex) {

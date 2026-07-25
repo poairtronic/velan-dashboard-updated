@@ -29,8 +29,11 @@ export default function EnterpriseHealthPage() {
 
   const { theme } = useTheme();
   const memoryChartRef = useRef(null);
+  const isFetchingRef = useRef(false);
 
   const fetchAllDiagnostics = async (showLoading = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     if (showLoading) setLoading(true);
     try {
       const [healthRes, fullRes, syncRes, perfRes] = await Promise.all([
@@ -56,6 +59,7 @@ export default function EnterpriseHealthPage() {
       setError(err.message || 'Failed to gather diagnostic data');
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 

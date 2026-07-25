@@ -60,7 +60,11 @@ export default function CuttingDashboard() {
   const [fbSearch, setFbSearch] = useState('');
 
 
+  const isFetchingRef = useRef(false);
+
   const fetchData = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       
       const [barsRes, invRes, histRes, fbDefRes, fbInvRes, fbHistRes] = await Promise.all([
@@ -88,6 +92,8 @@ export default function CuttingDashboard() {
 
     } catch (err) {
       console.error('Failed to fetch data:', err);
+    } finally {
+      isFetchingRef.current = false;
     }
   };
 

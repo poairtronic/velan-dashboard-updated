@@ -12,7 +12,16 @@ export async function apiClient(url, options = {}) {
   const timeoutMs = options.timeoutMs || 60000; // default to 60 seconds
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const callerSignal = options.signal;
   options.signal = controller.signal;
+
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
 
   try {
     const res = await fetch(url, options);

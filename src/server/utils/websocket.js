@@ -2,8 +2,20 @@ const ws = require('ws');
 const logger = require('./logger');
 
 let wss = null;
+let heartbeatInterval = null;
 
 function initWebSocket(server) {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+  if (wss) {
+    try {
+      wss.close();
+    } catch (_) {}
+    wss = null;
+  }
+
   wss = new ws.WebSocketServer({ server });
   logger.info(logger.categories.STARTUP, 'WebSocket Server initialized');
 
@@ -37,7 +49,7 @@ function initWebSocket(server) {
   });
 
   // Heartbeat interval to clear stale connections
-  const interval = setInterval(() => {
+  heartbeatInterval = setInterval(() => {
     if (!wss) return;
     wss.clients.forEach((socket) => {
       if (socket.isAlive === false) {
@@ -50,7 +62,10 @@ function initWebSocket(server) {
   }, 30000);
 
   wss.on('close', () => {
-    clearInterval(interval);
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
   });
 
   return wss;

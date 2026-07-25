@@ -32,6 +32,7 @@ export function useWebSocket() {
       socket.onopen = () => {
         // console.log('[WebSocket] Connection established');
         retryDelay.current = 1000; // Reset retry delay
+        retryCount.current = 0; // Reset retry count
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
@@ -99,6 +100,8 @@ export function useWebSocket() {
 
     return () => {
       if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
         wsRef.current.close();
       }
       if (reconnectTimeoutRef.current) {

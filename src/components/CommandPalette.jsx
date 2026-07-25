@@ -54,36 +54,52 @@ export default function CommandPalette({ isOpen, onClose }) {
     setSelectedIndex(0);
   }, [query]);
 
-  // Handle keyboard navigation
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const handleKeyDown = (e) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % results.length);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + results.length) % results.length);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (results[selectedIndex]) {
-          executeCommand(results[selectedIndex]);
-        }
-      } else if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, results, selectedIndex, onClose]);
+  const resultsRef = useRef(results);
+  const selectedIndexRef = useRef(selectedIndex);
+  resultsRef.current = results;
+  selectedIndexRef.current = selectedIndex;
 
   const executeCommand = (item) => {
     setActiveNav(item.nav);
     navigate(item.path);
     onClose();
   };
+  const executeCommandRef = useRef(executeCommand);
+  executeCommandRef.current = executeCommand;
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleKeyDown = (e) => {
+      const currentResults = resultsRef.current;
+      const currentIdx = selectedIndexRef.current;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentResults.length > 0) {
+          setSelectedIndex(prev => (prev + 1) % currentResults.length);
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentResults.length > 0) {
+          setSelectedIndex(prev => (prev - 1 + currentResults.length) % currentResults.length);
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (currentResults[currentIdx]) {
+          executeCommandRef.current(currentResults[currentIdx]);
+        }
+      } else if (e.key === 'Escape') {
+        onCloseRef.current();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

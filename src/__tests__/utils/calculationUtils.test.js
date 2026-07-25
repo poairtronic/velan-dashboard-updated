@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import calculationUtils from '../../utils/calculationUtils';
+import calculationUtils from '../../utils/calculationUtils.cjs';
 const { workingDaysBetween, 
   getProductCategory, 
   parseDateTime,
