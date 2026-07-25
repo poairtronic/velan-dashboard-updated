@@ -72,17 +72,12 @@ const allowedOrigin = env.ALLOWED_ORIGIN || '';
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
+    if (!allowedOrigin) return callback(null, true);
     const isLocal = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-    if (allowedOrigin && (origin === allowedOrigin || isLocal)) {
+    if (origin === allowedOrigin || isLocal) {
       return callback(null, true);
     }
-    if (!allowedOrigin && isLocal) {
-      return callback(null, true);
-    }
-    if (env.NODE_ENV !== 'production' && !allowedOrigin) {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'), false);
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS', 'DELETE', 'PUT'],
