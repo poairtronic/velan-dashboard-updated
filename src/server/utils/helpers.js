@@ -124,7 +124,7 @@ function parseCSV(text) {
     String(h)
       .trim()
       .toLowerCase()
-      .replace(/[\s\/\-]+/g, '_')
+      .replace(/[\s/-]+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
 
   let hIdx = 0;

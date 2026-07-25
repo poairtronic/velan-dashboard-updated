@@ -9,8 +9,6 @@ import { logger } from '../utils/logger';
 function useUploadHandlers(options) {
   const {
     setLiveRows,
-    setData,
-    setLastSync,
     setUploadStatus,
     setImportState,
     saveRowsToServer,

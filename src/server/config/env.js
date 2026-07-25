@@ -36,13 +36,17 @@ const env = _env.data;
 
 const isProd = env.NODE_ENV === 'production';
 
-// Configuration warning for unsafe defaults in production
+const crypto = require('crypto');
+
+// Configuration warning and random key generation for unsafe defaults in production
 if (isProd) {
   if (env.JWT_SECRET === 'default_jwt_secret_change_me_in_production') {
-    console.warn('[CONFIG WARNING] JWT_SECRET uses unsafe default value in production!');
+    console.warn('[SECURITY WARNING] JWT_SECRET is unset in production! Generating temporary random secret for session security.');
+    env.JWT_SECRET = crypto.randomBytes(32).toString('hex');
   }
   if (env.JWT_REFRESH_SECRET === 'default_jwt_refresh_secret_change_me_in_production') {
-    console.warn('[CONFIG WARNING] JWT_REFRESH_SECRET uses unsafe default value in production!');
+    console.warn('[SECURITY WARNING] JWT_REFRESH_SECRET is unset in production! Generating temporary random secret.');
+    env.JWT_REFRESH_SECRET = crypto.randomBytes(32).toString('hex');
   }
   if (env.DATABASE_URL === 'mock' || !env.DATABASE_URL) {
     console.warn('[CONFIG WARNING] DATABASE_URL is set to mock or missing in production!');

@@ -46,8 +46,13 @@ app.set('trust proxy', 1);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   res.setHeader(
     'Content-Security-Policy',
       "default-src 'self'; " +
@@ -67,14 +72,17 @@ const allowedOrigin = env.ALLOWED_ORIGIN || '';
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigin) {
-      const isLocal = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-      if (origin === allowedOrigin || isLocal) {
-        return callback(null, true);
-      }
-      return callback(null, false);
+    const isLocal = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+    if (allowedOrigin && (origin === allowedOrigin || isLocal)) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    if (!allowedOrigin && isLocal) {
+      return callback(null, true);
+    }
+    if (env.NODE_ENV !== 'production' && !allowedOrigin) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS', 'DELETE', 'PUT'],
@@ -87,7 +95,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(authenticate); // Set req.user for all routes
-// Rate limiters removed from here as they are imported above
 
 // ── API Routing with Route Protection ─────────────────────────────────────
 const apiRouter = express.Router();
@@ -140,11 +147,10 @@ apiRouter.use('/forecast', dashboardLimiter, requireAuth(['admin', 'user']), for
 apiRouter.use('/audit', auditRouter);
 apiRouter.use('/perf', requireAuth(['admin', 'user']), performanceRouter);
 apiRouter.use('/meta', requireAuth(['admin', 'user']), metaRouter);
+apiRouter.use('/drilldown', dashboardLimiter, requireAuth(['admin', 'user']), drilldownRouter);
+apiRouter.use('/executive', dashboardLimiter, requireAuth(['admin', 'user']), executiveRouter);
 
 app.use('/api', apiRouter);
-
-app.use('/api/drilldown', drilldownRouter);
-app.use('/api/executive', executiveRouter);
 
 
 // ── Static files ──────────────────────────────────────────────────────────

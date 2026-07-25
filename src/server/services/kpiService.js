@@ -149,12 +149,12 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
     }));
   }
 
-  const dailySetPOsRaw = Object.entries(poGroupsLive).filter(([po, items]) => {
+  const dailySetPOsRaw = Object.values(poGroupsLive).filter((items) => {
     const allDone = items.every((i) => terminalStages.has(i.currentStage));
     const completedToday = items.some((i) => i.timestamp && i.timestamp.slice(0, 10) === todayStr);
     return allDone && completedToday;
   });
-  const dailySetItems = dailySetPOsRaw.flatMap(([_, items]) => items);
+  const dailySetItems = dailySetPOsRaw.flat();
 
   const delayedPOItems = [];
   const inProgressItems = [];

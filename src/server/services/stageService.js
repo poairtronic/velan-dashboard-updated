@@ -1,6 +1,4 @@
-const { getSCLastTimestamp, daysBetween, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
-
-function calculateStages({ filtered, poGroups, todayStr }) {
+function calculateStages({ filtered }) {
   const stageWIP = {};
   filtered.forEach((row) => {
     const stage = row.currentStage;

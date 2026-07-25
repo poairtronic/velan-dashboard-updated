@@ -5,8 +5,7 @@ const { calculateCycleTimes } = require('../services/cycleTimeService');
 const { calculateVendors } = require('../services/vendorService');
 const { calculateBottlenecks } = require('../services/bottleneckService');
 const { getFilteredData, computeGroups } = require('../services/dataQueryService');
-const cacheKeys = require('../cache/cacheKeys');
-const { getOrSetCache, TTL } = require('../cache/cacheService');
+const { getOrSetCache } = require('../cache/cacheService');
 
 const router = express.Router();
 
@@ -88,7 +87,6 @@ router.get('/', async (req, res) => {
 
       // 4. Production Risk Analysis
       const totalDelayed = kpis.delayed;
-      const totalInProgress = kpis.overviewStats?.inProgressItemsCount || 0;
       const delayedRisk = totalDelayed > 20 ? 'CRITICAL' : (totalDelayed > 5 ? 'ELEVATED' : 'NORMAL');
       
       const productionRisks = {

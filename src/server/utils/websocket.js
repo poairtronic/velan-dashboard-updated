@@ -12,7 +12,9 @@ function initWebSocket(server) {
   if (wss) {
     try {
       wss.close();
-    } catch (_) {}
+    } catch (_) {
+      /* ignore close errors on shutdown */
+    }
     wss = null;
   }
 

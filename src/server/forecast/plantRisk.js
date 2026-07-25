@@ -17,11 +17,6 @@ const { calculateSLAForecast } = require('./slaEngine');
 /**
  * Normalize a value to 0-100 risk scale
  */
-function normalizeRisk(value, max) {
-  if (max <= 0) return 0;
-  return Math.min(100, Math.max(0, Math.round((value / max) * 100)));
-}
-
 async function calculatePlantRisk({ liveRows, dbRows }) {
   // Run all forecast engines in parallel
   const [bottleneckData, capacityData, queueData, vendorData, slaData] = await Promise.all([
@@ -40,7 +35,6 @@ async function calculatePlantRisk({ liveRows, dbRows }) {
   let bottleneckRisk = 0;
   if (bottleneckData && bottleneckData.currentBottleneck) {
     const bn = bottleneckData.currentBottleneck;
-    const pn = bottleneckData.predictedNextBottleneck;
     // Growth rate > 0 = growing bottleneck = higher risk
     const growthFactor = Math.min(50, Math.max(0, (bn.growthRate || 0) * 10));
     // Queue size relative to all stages

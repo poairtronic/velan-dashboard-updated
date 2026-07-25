@@ -198,7 +198,9 @@ router.get('/full', asyncHandler(async (req, res) => {
           memoryUsedMB = (info.memory.used_memory / 1024 / 1024).toFixed(2);
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      /* ignore redis memory parsing errors */
+    }
     redisStatus.memoryUsedMB = parseFloat(memoryUsedMB);
   } catch (redisErr) {
     redisStatus.status = 'unhealthy';

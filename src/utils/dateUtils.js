@@ -3,7 +3,7 @@
 // Resolution rule for ambiguous A/B/YYYY or A/B/YY where A<=12 and B<=12:
 //   → Default to DD/MM/YYYY (Indian / Velan Excel standard)
 //   Date objects from XLSX (cellDates:true) are always correct and handled first.
-function _resolveSlashDate(p0, p1, year, slashSep) {
+function _resolveSlashDate(p0, p1, year) {
   // Unambiguous: only one interpretation is valid
   if (p0 > 12 && p1 <= 12)
     return `${year}-${String(p1).padStart(2, '0')}-${String(p0).padStart(2, '0')}`; // DD/MM
@@ -59,7 +59,7 @@ function toIsoDateString(value) {
     const p1 = parseInt(slashFull[2], 10);
     const year = parseInt(slashFull[3], 10);
     if (p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 31 && year > 1900)
-      return _resolveSlashDate(p0, p1, year, true);
+      return _resolveSlashDate(p0, p1, year);
   }
   // DD-MM-YYYY (dash, 4-digit year, no time)
   const dashFull = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
@@ -68,15 +68,15 @@ function toIsoDateString(value) {
     const p1 = parseInt(dashFull[2], 10);
     const year = parseInt(dashFull[3], 10);
     if (p0 >= 1 && p0 <= 31 && p1 >= 1 && p1 <= 31 && year > 1900)
-      return _resolveSlashDate(p0, p1, year, false);
+      return _resolveSlashDate(p0, p1, year);
   }
   // DD-MM-YYYY or DD/MM/YYYY with time suffix — e.g. "09-05-2026 13:40:43"
-  const dmyTime = text.match(/^(\d{1,2})[/ \-](\d{1,2})[/ \-](\d{4})[T ]/);
+  const dmyTime = text.match(/^(\d{1,2})[/ -](\d{1,2})[/ -](\d{4})[T ]/);
   if (dmyTime) {
     const p0 = parseInt(dmyTime[1], 10);
     const p1 = parseInt(dmyTime[2], 10);
     const year = parseInt(dmyTime[3], 10);
-    return _resolveSlashDate(p0, p1, year, dmyTime[0].includes('/'));
+    return _resolveSlashDate(p0, p1, year);
   }
   // DD MM YYYY (space-separated) — e.g. "07 05 2026"
   const dSpace = text.match(/^(\d{1,2})\s+(\d{1,2})\s+(\d{4})(?:\s|$)/);

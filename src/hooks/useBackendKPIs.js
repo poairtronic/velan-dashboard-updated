@@ -20,7 +20,7 @@ export function useBackendKPIs(filters) {
 
   const queryString = buildQueryString(filters);
 
-  const { data: kpis, isLoading, isError } = useQuery({
+  const { data: kpis } = useQuery({
     queryKey: ['backendKPIs', filters],
     queryFn: async () => {
       const res = await apiClient(`${apiBase}/api/dashboard/calculations?${queryString}`, {

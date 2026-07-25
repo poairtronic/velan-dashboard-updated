@@ -110,8 +110,7 @@ const workerHandler = async (job) => {
     base64Data = Buffer.from(csvStr).toString('base64');
     filename += '.csv';
   } else if (type === 'pdf') {
-    // 2. Perform KPI calculations for PDF header
-    const { liveRows, dbRows } = await getAllRawData();
+    await getAllRawData();
     
     // We get all merged rows (unfiltered) to find allScItems
     const data = await getMergedData(todayStr);

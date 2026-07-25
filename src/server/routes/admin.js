@@ -69,7 +69,9 @@ router.get('/ops', async (req, res) => {
       if (logsRes.rows.length > 0) {
         lastSyncLog = logsRes.rows[0];
       }
-    } catch (_) {}
+    } catch (_) {
+      /* ignore sync_logs table lookup errors */
+    }
 
     // 5. Memory and Uptime
     const uptime = process.uptime();

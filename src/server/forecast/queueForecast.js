@@ -77,14 +77,11 @@ async function calculateQueueForecast({ liveRows, dbRows, stage }) {
       dailyThroughput[ds] = 0;
     });
 
-    let totalTransitionEvents = 0;
-
     Object.values(itemHistory).forEach(history => {
       history.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
       for (let i = 0; i < history.length - 1; i++) {
         if (history[i].stage === targetStage && history[i + 1].stage !== targetStage) {
-          totalTransitionEvents++;
           const exitDate = history[i + 1].dateStr;
           if (dailyThroughput[exitDate] !== undefined) {
             dailyThroughput[exitDate]++;

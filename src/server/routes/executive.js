@@ -50,7 +50,7 @@ router.get('/war-room', requireAuth(), async (req, res) => {
     // Format Critical Issues (threshold > 20)
     const THRESHOLD = 20;
     const criticalIssues = Object.entries(stageCounts)
-      .filter(([stage, count]) => count >= THRESHOLD)
+      .filter(([, count]) => count >= THRESHOLD)
       .map(([stage, count]) => ({
         stage,
         queueSize: count,

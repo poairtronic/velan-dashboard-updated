@@ -33,7 +33,7 @@ function normalizeStage(stage) {
   const s = String(stage)
     .trim()
     .toUpperCase()
-    .replace(/[\.\s]/g, '');
+    .replace(/[.\s]/g, '');
   if (!s) return '';
   const aliases = {
     STORE: 'STORES',

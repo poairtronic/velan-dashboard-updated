@@ -44,6 +44,7 @@ async function runBenchmark(numClients) {
               const elapsed = Date.now() - broadcastStart;
               
               console.log(`📈 Metrics for ${numClients} users:`);
+              console.log(`   - Broadcast Latency: ${elapsed} ms`);
               console.log(`   - Connected: ${connectedCount}/${numClients}`);
               console.log(`   - Messages Processed: ${messageReceivedCount}`);
               console.log(`   - RSS Memory Delta: ${((endMemory.rss - startMemory.rss) / 1024 / 1024).toFixed(2)} MB`);

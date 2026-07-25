@@ -85,13 +85,12 @@ function requireAuth(roles = []) {
 }
 
 function requireApiKey(req, res, next) {
-  if (!env.API_SECRET) return next();
   const key = req.headers['x-api-key'];
-  if (key === env.API_SECRET) return next();
+  if (env.API_SECRET && key && key === env.API_SECRET) return next();
 
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
-  logger.warn(logger.categories.AUTH, '[AUTH FAILURE] Unauthorized: Invalid API Key', { ip, url: req.originalUrl });
-  return res.status(401).json({ success: false, error: 'Unauthorized: Invalid API Key' });
+  logger.warn(logger.categories.AUTH, '[AUTH FAILURE] Unauthorized: Invalid or missing API Key', { ip, url: req.originalUrl });
+  return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing API Key' });
 }
 
 module.exports = {

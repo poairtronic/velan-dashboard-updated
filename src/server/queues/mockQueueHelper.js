@@ -24,6 +24,7 @@ class MockJob {
     return this.state === 'failed';
   }
 
+  // eslint-disable-next-line no-unused-vars
   async waitUntilFinished(queueEvents) {
     return new Promise((resolve, reject) => {
       if (this.state === 'completed') {
@@ -129,6 +130,7 @@ class MockWorker {
     console.log(`[MockWorker] Registered worker for queue: ${name}`);
   }
 
+  // eslint-disable-next-line no-unused-vars
   on(event, callback) {
     // Mock event registration
     return this;

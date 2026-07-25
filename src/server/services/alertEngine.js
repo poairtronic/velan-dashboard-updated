@@ -132,8 +132,6 @@ async function createAlertIfNew(params) {
     category,
     message,
     itemKey,
-    recipients,
-    ruleName,
     eventType,
     eventTitle,
     eventDesc
