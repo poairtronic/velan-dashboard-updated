@@ -7,6 +7,8 @@ export function useWebSocket() {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const retryDelay = useRef(1000);
+  const retryCount = useRef(0);
+  const MAX_RETRIES = 10;
 
   useEffect(() => {
     function connect() {
@@ -76,9 +78,13 @@ export function useWebSocket() {
       };
 
       socket.onclose = () => {
-        // console.log(`[WebSocket] Connection closed. Retrying in ${retryDelay.current}ms...`);
+        retryCount.current += 1;
+        if (retryCount.current > MAX_RETRIES) {
+          console.warn(`[WebSocket] Max retries (${MAX_RETRIES}) reached. Giving up.`);
+          return;
+        }
         reconnectTimeoutRef.current = setTimeout(() => {
-          retryDelay.current = Math.min(retryDelay.current * 2, 16000); // Exponential backoff max 16s
+          retryDelay.current = Math.min(retryDelay.current * 2, 16000);
           connect();
         }, retryDelay.current);
       };

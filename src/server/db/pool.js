@@ -187,6 +187,11 @@ async function initDB() {
       )
     `);
 
+    // Ensure action column exists for tables created by older schema versions
+    await client.query(`
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT ''
+    `);
+
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
     await client.query(
