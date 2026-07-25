@@ -156,20 +156,24 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   });
   const dailySetItems = dailySetPOsRaw.flatMap(([_, items]) => items);
 
-  const delayedPOItems = filtered.filter((i) => {
-    if (terminalStages.has(i.currentStage)) return false;
-    if (!i.poDate) return false;
-    const days = require('../../utils/calculationUtils.cjs').workingDaysBetween(i.poDate, todayStr);
-    return days !== null && days > 21;
-  });
+  const delayedPOItems = [];
+  const inProgressItems = [];
+  const readyItemsRaw = [];
+  const { workingDaysBetween } = require('../../utils/calculationUtils.cjs');
 
-  const inProgressItems = filtered.filter((i) => {
-    if (terminalStages.has(i.currentStage)) return false;
-    const days = i.poDate ? require('../../utils/calculationUtils.cjs').workingDaysBetween(i.poDate, todayStr) : null;
-    return days === null || days <= 21;
+  filtered.forEach((i) => {
+    if (i.currentStage === 'READY') {
+      readyItemsRaw.push(i);
+    }
+    if (!terminalStages.has(i.currentStage)) {
+      const days = i.poDate ? workingDaysBetween(i.poDate, todayStr) : null;
+      if (days !== null && days > 21) {
+        delayedPOItems.push(i);
+      } else {
+        inProgressItems.push(i);
+      }
+    }
   });
-
-  const readyItemsRaw = filtered.filter((i) => i.currentStage === 'READY');
 
   const overviewStats = {
     dailySetItemsCount: dailySetItems.length,

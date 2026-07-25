@@ -36,6 +36,12 @@ export default defineConfig({
             ) {
               return 'vendor-react';
             }
+            if (id.includes('@tanstack/react-query')) {
+              return 'vendor-query';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
             if (id.includes('chart.js')) {
               return 'vendor-chart';
             }

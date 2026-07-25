@@ -3,6 +3,26 @@ import { FixedSizeList } from 'react-window';
 import { TableSkeleton } from './skeletons/Skeletons';
 import EmptyState from './EmptyState';
 
+// Row Renderer for react-window
+const RowRenderer = React.memo(({ index, style, data: itemData }) => {
+  const { data, RowComponent } = itemData;
+  const row = data[index];
+  return (
+    <div
+      style={{
+        ...style,
+        display: 'flex',
+        borderBottom: '1px solid var(--border)',
+        alignItems: 'center',
+        boxSizing: 'border-box',
+      }}
+      className="virt-row"
+    >
+      <RowComponent row={row} index={index} />
+    </div>
+  );
+});
+
 function VirtualizedTable({
   headers,
   data,
@@ -33,25 +53,6 @@ function VirtualizedTable({
       </div>
     );
   }
-
-  // Row Renderer for react-window
-  const RowRenderer = ({ index, style }) => {
-    const row = data[index];
-    return (
-      <div
-        style={{
-          ...style,
-          display: 'flex',
-          borderBottom: '1px solid var(--border)',
-          alignItems: 'center',
-          boxSizing: 'border-box',
-        }}
-        className="virt-row"
-      >
-        <RowComponent row={row} index={index} />
-      </div>
-    );
-  };
 
   return (
     <div
@@ -90,6 +91,7 @@ function VirtualizedTable({
         height={height}
         itemCount={data.length}
         itemSize={itemSize}
+        itemData={{ data, RowComponent }}
         width="100%"
       >
         {RowRenderer}

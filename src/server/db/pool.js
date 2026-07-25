@@ -199,6 +199,7 @@ async function initDB() {
     );
     await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts (created_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_alerts_rule_item_status ON alerts (rule_key, item_key, status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_timeline_created_at ON operational_timeline (created_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action)');
@@ -209,6 +210,11 @@ async function initDB() {
     await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_po ON velan_rows ((data->>'po'))");
     await client.query("CREATE INDEX IF NOT EXISTS idx_velan_rows_product ON velan_rows ((data->>'product'))");
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_added_at ON velan_rows (added_at DESC)');
+    
+    // Expression indexes on velan_live_rows for fast operational queries
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_live_rows_stage ON velan_live_rows ((data->>'currentStage'))");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_live_rows_inhouse ON velan_live_rows ((data->>'inhouse'))");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_velan_live_rows_podate ON velan_live_rows ((data->>'poDate'))");
     
     // Additional GIN index on jsonb data for unstructured searches if needed
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_data_gin ON velan_rows USING GIN (data)');

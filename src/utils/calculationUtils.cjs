@@ -104,7 +104,13 @@ function workingDaysBetween(d1Str, d2Str) {
       if (dow !== 0 && !COMPANY_HOLIDAYS.has(ds)) count++;
       cur.setDate(cur.getDate() + 1);
     }
-    return d2 < d1 ? -count : count;
+    const result = d2 < d1 ? -count : count;
+    if (workingDaysCache.size >= 10000) {
+      const firstKey = workingDaysCache.keys().next().value;
+      workingDaysCache.delete(firstKey);
+    }
+    workingDaysCache.set(cacheKey, result);
+    return result;
   } catch {
     return null;
   }
