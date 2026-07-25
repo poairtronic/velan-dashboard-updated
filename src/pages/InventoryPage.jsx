@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Scissors, Plus, History, PackageSearch, List, Search } from 'lucide-react';
 
 export default function CuttingDashboard() {
