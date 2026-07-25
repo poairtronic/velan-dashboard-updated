@@ -1,17 +1,19 @@
 const { z } = require('zod');
 
+const flexField = z.union([z.string(), z.number(), z.null()]).optional();
+
 const rowSchema = z
   .object({
-    sc: z.string().max(100).optional(),
-    po: z.string().max(100).optional(),
-    poDate: z.string().max(100).optional(),
-    product: z.string().max(500).optional(),
-    status1: z.string().max(200).optional(),
-    status2: z.string().max(200).optional(),
-    currentStage: z.string().max(200).optional(),
-    inhouse: z.string().max(200).optional(),
-    qty: z.union([z.string().max(50), z.number()]).optional(),
-    timestamp: z.string().max(100).optional(),
+    sc: flexField,
+    po: flexField,
+    poDate: flexField,
+    product: flexField,
+    status1: flexField,
+    status2: flexField,
+    currentStage: flexField,
+    inhouse: flexField,
+    qty: flexField,
+    timestamp: flexField,
   })
   .passthrough();
 
