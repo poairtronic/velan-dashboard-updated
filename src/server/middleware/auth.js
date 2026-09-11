@@ -34,7 +34,7 @@ function authenticate(req, res, next) {
       // Set new access token cookie
       res.cookie('vd_token', newAccessToken, {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'Lax',
         path: '/',
         maxAge: 15 * 60 * 1000, // 15 minutes in ms

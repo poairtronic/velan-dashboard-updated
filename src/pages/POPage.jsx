@@ -3,14 +3,17 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { useUI } from '../context/UIContext';
-import calculationUtils from '../utils/calculationUtils';
-const { workingDaysBetween,
+import calculationUtils from '../utils/calculationUtils.js';
+const {
+  workingDaysBetween,
   daysBetween,
   calculateProcessCycleTime,
   isSCComplete,
+  calculateEstimatedDelivery,
+  formatEstimatedDelivery,
   getSCLastTimestamp,
   getProductCategory,
- } = calculationUtils;
+} = calculationUtils;
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import { getStageColor } from '../services/dataNormalizer';
 import KPICard from '../components/KPICard';
@@ -267,6 +270,7 @@ function POPage() {
               <tr>
                 <th>PO</th>
                 <th>PO DATE</th>
+                <th>ESTIMATED DELIVERY</th>
                 <th>SCs COUNT</th>
                 <th>ITEMS COUNT</th>
                 <th>DELAYED COUNT</th>
@@ -279,6 +283,7 @@ function POPage() {
                 const isDelayed =
                   !p.done && (daysBetween(p.poDate, todayStr) > 21 || delayedItems.length > 0);
                 const isExpanded = selectedPO?.po === p.po;
+                const estDelivery = calculateEstimatedDelivery(p.poDate);
                 return (
                   <React.Fragment key={i}>
                     <tr
@@ -298,6 +303,15 @@ function POPage() {
                       </td>
                       <td className="mono" style={{ fontSize: 11 }}>
                         {fmtDate(p.poDate)}
+                      </td>
+                      <td
+                        className="mono"
+                        style={{
+                          fontSize: 11,
+                          color: estDelivery ? '#60a5fa' : 'var(--text-muted)',
+                        }}
+                      >
+                        {formatEstimatedDelivery(estDelivery)}
                       </td>
                       <td
                         style={{
@@ -332,7 +346,7 @@ function POPage() {
                     </tr>
                     {isExpanded && (
                       <tr style={{ backgroundColor: 'rgba(0,0,0,0.12)' }}>
-                        <td colSpan="6" style={{ padding: '12px 16px' }}>
+                        <td colSpan="7" style={{ padding: '12px 16px' }}>
                           <PODetailsExpandable poRow={p} todayStr={todayStr} />
                         </td>
                       </tr>

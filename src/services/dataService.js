@@ -12,6 +12,7 @@ export async function saveRows(rows, syncType = 'Manual Upload') {
   const res = await apiClient(`${apiBase}/api/data?sync_type=${encodeURIComponent(syncType)}`, {
     method: 'POST',
     headers,
+    timeoutMs: 120000,
     body: JSON.stringify({ rows }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -24,6 +25,7 @@ export async function importRows(rows) {
   const res = await apiClient(`${apiBase}/api/import`, {
     method: 'POST',
     headers,
+    timeoutMs: 120000,
     body: JSON.stringify({ rows }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

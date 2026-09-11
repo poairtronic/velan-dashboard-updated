@@ -8,8 +8,8 @@ import DataTable from '../components/DataTable';
 import InsightCard from '../components/common/InsightCard';
 import useChart from '../utils/chartUtils';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
-import calculationUtils from '../utils/calculationUtils';
-const { workingDaysBetween  } = calculationUtils;
+import calculationUtils from '../utils/calculationUtils.js';
+const { workingDaysBetween } = calculationUtils;
 import {
   TrendingUp,
   TrendingDown,

@@ -7,6 +7,7 @@ const rowSchema = z
     sc: flexField,
     po: flexField,
     poDate: flexField,
+    projectedDate: flexField,
     product: flexField,
     status1: flexField,
     status2: flexField,

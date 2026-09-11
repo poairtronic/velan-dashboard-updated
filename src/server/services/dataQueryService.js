@@ -1,6 +1,13 @@
 const { pool } = require('../db/pool');
 const { getOrSetCache, TTL } = require('../cache/cacheService');
-const { workingDaysBetween, normalizeProductsInGroup, getProductCategory } = require('../../utils/calculationUtils.cjs');
+const {
+  workingDaysBetween,
+  normalizeProductsInGroup,
+  getProductCategory,
+  calculateEstimatedDelivery,
+  calculateSCProductionDate,
+  getProductionDateStatus,
+} = require('../../utils/calculationUtils.cjs');
 
 async function getAllRawData() {
   // We fetch both live and history from Neon. 
@@ -158,12 +165,29 @@ function computeGroups(filtered, allData) {
       if (!r._isLive && ex._isLive) return;
       if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
     });
-    return { sc: sg.sc, po: sg.po, poDate: sg.poDate, items: Object.values(latestMap) };
+    const items = Object.values(latestMap);
+    const scProductionDate = calculateSCProductionDate(items);
+    return {
+      sc: sg.sc,
+      po: sg.po,
+      poDate: sg.poDate,
+      scProductionDate,
+      productionDateStatus: getProductionDateStatus(scProductionDate).code,
+      estimatedDelivery: calculateEstimatedDelivery(sg.poDate),
+      items,
+    };
   });
 
   const poGroupsMap = {};
   filtered.forEach((row) => {
-    if (!poGroupsMap[row.po]) poGroupsMap[row.po] = { po: row.po, poDate: row.poDate, items: [] };
+    if (!poGroupsMap[row.po]) {
+      poGroupsMap[row.po] = {
+        po: row.po,
+        poDate: row.poDate,
+        estimatedDelivery: calculateEstimatedDelivery(row.poDate),
+        items: [],
+      };
+    }
     poGroupsMap[row.po].items.push(row);
   });
   const poGroups = Object.values(poGroupsMap);

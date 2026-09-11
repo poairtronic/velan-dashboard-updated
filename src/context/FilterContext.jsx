@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import calculationUtils from '../utils/calculationUtils';
-const { getProductCategory  } = calculationUtils;
+import calculationUtils from '../utils/calculationUtils.js';
+const { getProductCategory } = calculationUtils;
 
 const FilterContext = createContext();
 

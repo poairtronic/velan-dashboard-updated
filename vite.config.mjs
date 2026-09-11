@@ -14,9 +14,13 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api/inventory': {
-        target: 'http://localhost:3001',
+      '/api': {
+        target: 'http://localhost:10000',
         changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://localhost:10000',
+        ws: true,
       },
     },
   },

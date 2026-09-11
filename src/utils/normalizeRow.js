@@ -11,6 +11,16 @@ export function normalizeRow(raw) {
   const poRaw = String(raw.po || '').trim();
   const poDate = toIsoDateString(raw.poDate);
   const po = toIsoDateString(poRaw) ? '' : poRaw;
+  const projectedDate = toIsoDateString(
+    raw.projectedDate ||
+      raw['PROJECTED DATE'] ||
+      raw['Projected Date'] ||
+      raw['projected_date'] ||
+      raw['targetDate'] ||
+      raw['TARGET DATE'] ||
+      raw['target_date'] ||
+      ''
+  );
   return {
     ...raw,
     sc: String(raw.sc || '')
@@ -18,6 +28,7 @@ export function normalizeRow(raw) {
       .trim(),
     po,
     poDate,
+    projectedDate,
     product,
     type:
       String(raw.type || '')

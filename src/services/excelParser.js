@@ -78,6 +78,8 @@ function parseVelanExcel(rows) {
     const stageRaw = v(10);
     const tsRaw = v(11) || '';
     const timestamp = normalizeTimestamp(tsRaw);
+    const projectedDateRaw = v(12) || v(13) || '';
+    const projectedDate = toIsoDateString(projectedDateRaw);
     const type = inferType(product);
     const latestStage = resolveLatestStage({ opStage: stageRaw, status1, status2 });
     if (latestStage) currentStage = latestStage;
@@ -87,6 +89,7 @@ function parseVelanExcel(rows) {
         sc: currentSC,
         po: currentPO,
         poDate: currentPODate,
+        projectedDate,
         product,
         type,
         status1,
@@ -164,12 +167,32 @@ function parseGenericRows(rows) {
         'current operation',
         'op',
       ]);
+      const projectedDate = toIsoDateString(
+        pickField(r, [
+          'projected date',
+          'projecteddate',
+          'projected',
+          'mfg due date',
+          'mfgduedate',
+          'target completion',
+          'targetcompletion',
+          'target date',
+          'targetdate',
+          'due date',
+          'duedate',
+          'expected completion',
+          'expected completion date',
+          'product projected date',
+          'productprojecteddate',
+        ])
+      );
       return {
         sc: pickField(r, ['sc', 'sc no', 'sc#', 'scno']).replace(/\s+/g, ''),
         po: pickField(r, ['po no', 'pono', 'purchase order', 'purchaseorder']),
         poDate: toIsoDateString(
           pickField(r, ['po recd date', 'porecddate', 'po date', 'podate', 'date received', 'date'])
         ),
+        projectedDate,
         product,
         type,
         status1,
@@ -234,6 +257,28 @@ function parseRowsFromHeaderAoA(rawAoA) {
         ['timestamp', 'lastupdated', 'optime', 'datetime'],
         ['timestamp', 'lastupdated']
       ),
+      projectedDate: findColumn(
+        row,
+        [
+          'projecteddate',
+          'projected date',
+          'projected',
+          'mfgduedate',
+          'mfg due date',
+          'targetcompletion',
+          'target completion',
+          'targetdate',
+          'target date',
+          'duedate',
+          'due date',
+          'expectedcompletion',
+          'expected completion',
+          'expected completion date',
+          'productprojecteddate',
+          'product projected date',
+        ],
+        ['projecteddate', 'projected', 'mfgdue', 'targetcompletion', 'expectedcompletion']
+      ),
     };
 
     if (
@@ -279,6 +324,7 @@ function parseRowsFromHeaderAoA(rawAoA) {
     const inhouse = normalizeInhouse(getVal(headerMap.inhouse));
     const opStage = getVal(headerMap.op);
     const timestamp = normalizeTimestamp(getVal(headerMap.timestamp));
+    const projectedDate = toIsoDateString(getVal(headerMap.projectedDate));
 
     if (!product && !status1 && !status2 && !opStage) continue;
     if (!currentSC && !currentPO) continue;
@@ -287,6 +333,7 @@ function parseRowsFromHeaderAoA(rawAoA) {
       sc: currentSC,
       po: currentPO,
       poDate: currentPODate,
+      projectedDate,
       product,
       type: inferType(product),
       status1,

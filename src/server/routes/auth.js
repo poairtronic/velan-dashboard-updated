@@ -30,8 +30,9 @@ router.post('/logout', authenticate, asyncHandler(async (req, res) => {
     const { logAudit } = require('../utils/auditLogger');
     await logAudit({ req, action: 'USER_LOGOUT' });
   }
-  res.clearCookie('vd_token', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/' });
-  res.clearCookie('vd_refresh_token', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie('vd_token', { httpOnly: true, secure: isProd, sameSite: 'Lax', path: '/' });
+  res.clearCookie('vd_refresh_token', { httpOnly: true, secure: isProd, sameSite: 'Lax', path: '/' });
   return res.json({ success: true });
 }));
 
@@ -131,9 +132,9 @@ router.get('/users', requireAuth(['admin']), dashboardLimiter, asyncHandler(asyn
 
 // PUT /api/auth/users/:id/status
 router.put('/users/:id/status', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id ? String(req.params.id).trim() : null;
   if (!id) return res.status(400).json({ error: 'Invalid user ID' });
-  if (req.user.id === id) return res.status(400).json({ error: 'Cannot change your own status' });
+  if (String(req.user.id) === id) return res.status(400).json({ error: 'Cannot change your own status' });
 
   const valResult = updateStatusSchema.safeParse(req.body);
   if (!valResult.success) {
@@ -142,7 +143,7 @@ router.put('/users/:id/status', requireAuth(['admin']), dashboardLimiter, asyncH
   const { status } = valResult.data;
 
   const result = await pool.query(
-    'UPDATE users SET status = $1 WHERE id = $2 RETURNING id, username, role, status',
+    'UPDATE users SET status = $1 WHERE id::text = $2 RETURNING id, username, role, status',
     [status, id]
   );
   if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
@@ -151,22 +152,23 @@ router.put('/users/:id/status', requireAuth(['admin']), dashboardLimiter, asyncH
 
 // DELETE /api/auth/users/:id
 router.delete('/users/:id', requireAuth(['admin']), dashboardLimiter, asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id ? String(req.params.id).trim() : null;
   if (!id) return res.status(400).json({ error: 'Invalid user ID' });
-  if (req.user.id === id) return res.status(400).json({ error: 'Cannot delete your own account' });
+  if (String(req.user.id) === id) return res.status(400).json({ error: 'Cannot delete your own account' });
 
-  const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+  const result = await pool.query('DELETE FROM users WHERE id::text = $1 RETURNING id', [id]);
   if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
   return res.json({ message: 'User deleted' });
 }));
 
 // Helpers
 function setAuthCookies(res, user) {
+  const isProd = process.env.NODE_ENV === 'production';
   const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
   const refreshToken = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
-  res.cookie('vd_token', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 15 * 60 * 1000 });
-  res.cookie('vd_refresh_token', refreshToken, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 7 * 24 * 60 * 60 * 1000 });
+  res.cookie('vd_token', token, { httpOnly: true, secure: isProd, sameSite: 'Lax', path: '/', maxAge: 15 * 60 * 1000 });
+  res.cookie('vd_refresh_token', refreshToken, { httpOnly: true, secure: isProd, sameSite: 'Lax', path: '/', maxAge: 7 * 24 * 60 * 60 * 1000 });
 }
 
 async function handleLegacyLogin(req, res, role, username) {

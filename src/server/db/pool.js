@@ -102,16 +102,41 @@ async function initDB() {
         id            SERIAL PRIMARY KEY,
         username      VARCHAR(50) UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        role          VARCHAR(10) NOT NULL DEFAULT 'user',
+        role          VARCHAR(50) NOT NULL DEFAULT 'user',
         status        VARCHAR(15) NOT NULL DEFAULT 'approved',
         created_at    TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // Ensure status column exists for users migrating from older versions
+    // Ensure all required columns exist for users migrating from older versions
     await client.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(15) NOT NULL DEFAULT 'approved'
+      ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS username VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS password_hash TEXT,
+        ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user',
+        ADD COLUMN IF NOT EXISTS status VARCHAR(15) DEFAULT 'approved',
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()
     `);
+
+    // Backfill legacy users table columns if present
+    try {
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'name') THEN
+            UPDATE users SET username = COALESCE(username, name, email, 'user_' || SUBSTRING(id::text, 1, 8)) WHERE username IS NULL OR username = '';
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'passwordHash') THEN
+            UPDATE users SET password_hash = COALESCE(password_hash, "passwordHash", '') WHERE password_hash IS NULL OR password_hash = '';
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'createdAt') THEN
+            UPDATE users SET created_at = COALESCE(created_at, "createdAt", NOW()) WHERE created_at IS NULL;
+          END IF;
+        END $$;
+      `);
+    } catch (migErr) {
+      console.warn('[DB] User migration notice:', migErr.message);
+    }
 
     // 4.1 Create alert_rules table
     await client.query(`
@@ -462,7 +487,7 @@ async function insertRows(rows) {
   let upserted = 0;
   try {
     await client.query('BEGIN');
-    const chunkSize = 500;
+    const chunkSize = 1000;
     for (let i = 0; i < uniqueRows.length; i += chunkSize) {
       const chunk = uniqueRows.slice(i, i + chunkSize);
       const valueStrings = [];
@@ -514,7 +539,7 @@ async function saveLiveRows(rows) {
       });
       const uniqueRows = Array.from(uniqueMap.values());
 
-      const chunkSize = 500;
+      const chunkSize = 1000;
       for (let i = 0; i < uniqueRows.length; i += chunkSize) {
         const chunk = uniqueRows.slice(i, i + chunkSize);
         const valueStrings = [];

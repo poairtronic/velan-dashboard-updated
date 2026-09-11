@@ -1,7 +1,7 @@
 import React from 'react';
 import { fmtDate, fmtTs } from '../../utils/dateUtils';
-import calculationUtils from '../../utils/calculationUtils';
-const { normalizeProductsInGroup  } = calculationUtils;
+import calculationUtils from '../../utils/calculationUtils.js';
+const { normalizeProductsInGroup } = calculationUtils;
 import VirtualizedTable from '../ui/VirtualizedTable';
 
 function DatabaseTable({ filtered, isDoneStage }) {

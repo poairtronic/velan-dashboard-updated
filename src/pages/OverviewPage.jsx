@@ -2,7 +2,7 @@ import React from 'react';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { getStageColor } from '../services/dataNormalizer';
-import calculationUtils from '../utils/calculationUtils';
+import calculationUtils from '../utils/calculationUtils.js';
 const { workingDaysBetween,
   daysBetween,
   calculateProcessCycleTime,

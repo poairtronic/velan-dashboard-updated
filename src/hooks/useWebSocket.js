@@ -19,10 +19,10 @@ export function useWebSocket() {
         // Convert HTTP/HTTPS to WS/WSS
         const url = new URL(apiBase, window.location.href);
         const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${protocol}//${url.host}`;
+        wsUrl = `${protocol}//${url.host}/ws`;
       } else {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${protocol}//${window.location.host}`;
+        wsUrl = `${protocol}//${window.location.host}/ws`;
       }
 
       // console.log(`[WebSocket] Connecting to ${wsUrl}...`);

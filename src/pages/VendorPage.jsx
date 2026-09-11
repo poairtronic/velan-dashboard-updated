@@ -4,7 +4,7 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { useUI } from '../context/UIContext';
-import calculationUtils from '../utils/calculationUtils';
+import calculationUtils from '../utils/calculationUtils.js';
 const { calculateProcessCycleTime,
   daysBetween,
  } = calculationUtils;

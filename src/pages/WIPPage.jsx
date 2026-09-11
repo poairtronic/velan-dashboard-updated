@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
-import calculationUtils from '../utils/calculationUtils';
+import calculationUtils from '../utils/calculationUtils.js';
 const { getProductCategory } = calculationUtils;
 import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';

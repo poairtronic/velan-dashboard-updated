@@ -1,13 +1,10 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../hooks/useAuth';
 import { useFilters } from './FilterContext';
 import { useUI } from './UIContext';
-import { fetchData, saveRows, importRows, resetDB } from '../services/dataService';
+import { saveRows, importRows, resetDB } from '../services/dataService';
 import { fetchDataUrl } from '../services/sheetsService';
 import { normalizeRow } from '../utils/normalizeRow';
-import calculationUtils from '../utils/calculationUtils';
-const { workingDaysBetween, normalizeProductsInGroup  } = calculationUtils;
 import { useBackendKPIs } from '../hooks/useBackendKPIs';
 import useDashboardData from '../hooks/useDashboardData';
 import useLiveSync from '../hooks/useLiveSync';
@@ -18,8 +15,6 @@ import { logger } from '../utils/logger';
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
-  const { user, isAdmin } = useAuth();
-  const { filterRows } = useFilters();
   const {
     setServerStatus,
     setIsLoading,
@@ -64,18 +59,7 @@ export function DataProvider({ children }) {
     [historyConfig]
   );
 
-  const [todayStr, setTodayStr] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const d = new Date();
-      const current = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      setTodayStr((prev) => (prev !== current ? current : prev));
-    }, 60000);
-    return () => clearInterval(timer);
-  }, []);
+
 
   // Use dashboard data fetcher
   useDashboardData({
@@ -91,7 +75,7 @@ export function DataProvider({ children }) {
   const queryClient = useQueryClient();
 
   const saveRowsMutation = useMutation({
-    mutationFn: ({ rows, syncType, options }) => saveRows(rows, syncType),
+    mutationFn: ({ rows, syncType }) => saveRows(rows, syncType),
     onSuccess: (result, variables) => {
       if (result && result.success) {
         if (result.lastSync) setLastSync(result.lastSync);
@@ -363,6 +347,7 @@ export function DataProvider({ children }) {
       uniquePOs,
       uniqueStages,
       uniqueTypes,
+      setLiveState,
     ]
   );
 

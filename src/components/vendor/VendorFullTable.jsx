@@ -1,6 +1,6 @@
 import React from 'react';
-import calculationUtils from '../../utils/calculationUtils';
-const { TARGET_DAYS  } = calculationUtils;
+import calculationUtils from '../../utils/calculationUtils.js';
+const { TARGET_DAYS } = calculationUtils;
 import { fmtTs } from '../../utils/dateUtils';
 
 import VirtualizedTable from '../ui/VirtualizedTable';
