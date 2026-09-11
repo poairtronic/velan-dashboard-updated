@@ -5,6 +5,7 @@ const {
   normalizeProductsInGroup,
   getProductCategory,
   calculateEstimatedDelivery,
+  formatEstimatedDelivery,
   calculateSCProductionDate,
   getProductionDateStatus,
 } = require('../../utils/calculationUtils.cjs');
@@ -167,13 +168,32 @@ function computeGroups(filtered, allData) {
     });
     const items = Object.values(latestMap);
     const scProductionDate = calculateSCProductionDate(items);
+
+    const has8Week = items.some((i) => {
+      const fam = String(i.family || i.type || '').toUpperCase();
+      return (
+        fam.includes('ARG') ||
+        fam.includes('SPG') ||
+        fam.includes('ACG') ||
+        fam.includes('CARBIDE') ||
+        fam.includes('SD') ||
+        fam.includes('SETTING DISK')
+      );
+    });
+    const scFamily = has8Week ? 'ARG' : items[0]?.family || items[0]?.type || 'APG';
+    const directDelivery = items.map((i) => i.estimatedDelivery).filter(Boolean).sort().pop();
+    const calculatedEstDelivery = calculateEstimatedDelivery(sg.poDate, scFamily);
+    const estimatedDelivery = directDelivery
+      ? { date: directDelivery, formatted: formatEstimatedDelivery(directDelivery) }
+      : calculatedEstDelivery;
+
     return {
       sc: sg.sc,
       po: sg.po,
       poDate: sg.poDate,
       scProductionDate,
       productionDateStatus: getProductionDateStatus(scProductionDate).code,
-      estimatedDelivery: calculateEstimatedDelivery(sg.poDate),
+      estimatedDelivery,
       items,
     };
   });
@@ -184,13 +204,30 @@ function computeGroups(filtered, allData) {
       poGroupsMap[row.po] = {
         po: row.po,
         poDate: row.poDate,
-        estimatedDelivery: calculateEstimatedDelivery(row.poDate),
         items: [],
       };
     }
     poGroupsMap[row.po].items.push(row);
   });
-  const poGroups = Object.values(poGroupsMap);
+  const poGroups = Object.values(poGroupsMap).map((pg) => {
+    const has8Week = pg.items.some((i) => {
+      const fam = String(i.family || i.type || '').toUpperCase();
+      return (
+        fam.includes('ARG') ||
+        fam.includes('SPG') ||
+        fam.includes('ACG') ||
+        fam.includes('CARBIDE') ||
+        fam.includes('SD') ||
+        fam.includes('SETTING DISK')
+      );
+    });
+    const poFamily = has8Week ? 'ARG' : pg.items[0]?.family || pg.items[0]?.type || 'APG';
+    const calculatedEstDelivery = calculateEstimatedDelivery(pg.poDate, poFamily);
+    return {
+      ...pg,
+      estimatedDelivery: calculatedEstDelivery,
+    };
+  });
 
   return { scGroups, poGroups };
 }

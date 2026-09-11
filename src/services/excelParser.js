@@ -35,7 +35,7 @@ function parseRawCsv(text) {
   return rows;
 }
 
-// Parse Velan-specific Excel format (merged cells / PO groups / no type column)
+// Parse Velan-specific Excel format (merged cells / PO groups / stdtrack sheet)
 function parseVelanExcel(rows) {
   const result = [];
   let currentPO = '',
@@ -60,14 +60,17 @@ function parseVelanExcel(rows) {
 
     // Update running PO and date if present in this row
     if (col1 && col1 !== 'NaN' && !col1.includes('SETS') && !col1.match(/^\d{4}/)) currentPO = col1;
-    const col2 = v(2);
-    const parsedPODate = toIsoDateString(col2);
+    const col3Date = v(3);
+    const col2Date = v(2);
+    const parsedPODate = toIsoDateString(col3Date) || toIsoDateString(col2Date);
     if (parsedPODate) currentPODate = parsedPODate;
 
     // SC normalization
+    const col4 = v(4);
     const col3 = v(3);
-    if (col3 && !col3.toUpperCase().includes('SET')) {
-      currentSC = col3.replace(/\s+/g, '');
+    const scCandidate = col4 || col3;
+    if (scCandidate && !String(scCandidate).toUpperCase().includes('SET') && !toIsoDateString(scCandidate)) {
+      currentSC = String(scCandidate).replace(/\s+/g, '');
     }
 
     const product = col5;
@@ -78,9 +81,14 @@ function parseVelanExcel(rows) {
     const stageRaw = v(10);
     const tsRaw = v(11) || '';
     const timestamp = normalizeTimestamp(tsRaw);
-    const projectedDateRaw = v(12) || v(13) || '';
+    const familyRaw = v(12) || '';
+    const templateRaw = v(13) || '';
+    const projectedDateRaw = v(14) || v(15) || '';
     const projectedDate = toIsoDateString(projectedDateRaw);
-    const type = inferType(product);
+    const estimatedDeliveryRaw = v(16) || v(17) || '';
+    const estimatedDelivery = toIsoDateString(estimatedDeliveryRaw);
+
+    const type = familyRaw ? String(familyRaw).trim().toUpperCase() : inferType(product);
     const latestStage = resolveLatestStage({ opStage: stageRaw, status1, status2 });
     if (latestStage) currentStage = latestStage;
 
@@ -89,7 +97,10 @@ function parseVelanExcel(rows) {
         sc: currentSC,
         po: currentPO,
         poDate: currentPODate,
+        family: familyRaw ? String(familyRaw).trim().toUpperCase() : type,
+        template: templateRaw ? String(templateRaw).trim() : '',
         projectedDate,
+        estimatedDelivery,
         product,
         type,
         status1,
@@ -186,13 +197,36 @@ function parseGenericRows(rows) {
           'productprojecteddate',
         ])
       );
+      const familyRaw = pickField(r, ['family', 'product family', 'productfamily', 'family name']);
+      const templateRaw = pickField(r, [
+        'process template',
+        'processtemplate',
+        'template',
+        'process type',
+        'processtype',
+      ]);
+      const estimatedDelivery = toIsoDateString(
+        pickField(r, [
+          'estimated delivery date',
+          'estimateddeliverydate',
+          'estimated delivery',
+          'estimateddelivery',
+          'est delivery',
+          'estdelivery',
+          'delivery date',
+          'deliverydate',
+        ])
+      );
       return {
         sc: pickField(r, ['sc', 'sc no', 'sc#', 'scno']).replace(/\s+/g, ''),
         po: pickField(r, ['po no', 'pono', 'purchase order', 'purchaseorder']),
         poDate: toIsoDateString(
           pickField(r, ['po recd date', 'porecddate', 'po date', 'podate', 'date received', 'date'])
         ),
+        family: familyRaw ? familyRaw.toUpperCase() : type,
+        template: templateRaw,
         projectedDate,
+        estimatedDelivery,
         product,
         type,
         status1,
@@ -257,6 +291,8 @@ function parseRowsFromHeaderAoA(rawAoA) {
         ['timestamp', 'lastupdated', 'optime', 'datetime'],
         ['timestamp', 'lastupdated']
       ),
+      family: findColumn(row, ['family', 'productfamily', 'familyname']),
+      template: findColumn(row, ['processtemplate', 'template', 'processtype']),
       projectedDate: findColumn(
         row,
         [
@@ -278,6 +314,20 @@ function parseRowsFromHeaderAoA(rawAoA) {
           'product projected date',
         ],
         ['projecteddate', 'projected', 'mfgdue', 'targetcompletion', 'expectedcompletion']
+      ),
+      estimatedDelivery: findColumn(
+        row,
+        [
+          'estimateddeliverydate',
+          'estimated delivery date',
+          'estimateddelivery',
+          'estimated delivery',
+          'estdelivery',
+          'est delivery',
+          'deliverydate',
+          'delivery date',
+        ],
+        ['estimateddelivery', 'estdelivery']
       ),
     };
 
@@ -324,18 +374,26 @@ function parseRowsFromHeaderAoA(rawAoA) {
     const inhouse = normalizeInhouse(getVal(headerMap.inhouse));
     const opStage = getVal(headerMap.op);
     const timestamp = normalizeTimestamp(getVal(headerMap.timestamp));
+    const familyRaw = getVal(headerMap.family);
+    const templateRaw = getVal(headerMap.template);
     const projectedDate = toIsoDateString(getVal(headerMap.projectedDate));
+    const estimatedDelivery = toIsoDateString(getVal(headerMap.estimatedDelivery));
 
     if (!product && !status1 && !status2 && !opStage) continue;
     if (!currentSC && !currentPO) continue;
+
+    const type = familyRaw ? String(familyRaw).trim().toUpperCase() : inferType(product);
 
     result.push({
       sc: currentSC,
       po: currentPO,
       poDate: currentPODate,
+      family: familyRaw ? String(familyRaw).trim().toUpperCase() : type,
+      template: templateRaw ? String(templateRaw).trim() : '',
       projectedDate,
+      estimatedDelivery,
       product,
-      type: inferType(product),
+      type,
       status1,
       status2,
       inhouse,

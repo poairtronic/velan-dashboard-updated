@@ -139,7 +139,8 @@ function SCPage() {
           sc: r.sc,
           po: r.po,
           poDate: r.poDate,
-          estimatedDelivery: calculateEstimatedDelivery(r.poDate),
+          family: r.family || r.type,
+          estimatedDelivery: r.estimatedDelivery || calculateEstimatedDelivery(r.poDate, r.family || r.type),
           items: [],
         };
       }
@@ -163,9 +164,17 @@ function SCPage() {
         if (r.timestamp && (!ex.timestamp || r.timestamp > ex.timestamp)) latestMap[key] = r;
       });
       const effectiveItems = Object.values(latestMap);
-      const scProductionDate = calculateSCProductionDate(effectiveItems);
+      const scFamily =
+        effectiveItems.find((it) => it.family || it.type)?.family ||
+        effectiveItems.find((it) => it.family || it.type)?.type ||
+        sg.family;
+      const scProductionDate = calculateSCProductionDate(effectiveItems, todayStr);
+      const estimatedDelivery =
+        sg.estimatedDelivery || calculateEstimatedDelivery(sg.poDate, scFamily);
       return {
         ...sg,
+        family: scFamily,
+        estimatedDelivery,
         items: effectiveItems,
         scProductionDate,
         productionDateStatus: getProductionDateStatus(scProductionDate, todayStr),
@@ -327,12 +336,15 @@ function SCPage() {
         const rankB = statusOrder[b.productionDateStatus?.code] || 99;
         cmp = rankA - rankB;
       } else if (sortField === 'estDelivery') {
-        const da = a.estimatedDelivery?.startDate
-          ? new Date(a.estimatedDelivery.startDate).getTime()
-          : null;
-        const db = b.estimatedDelivery?.startDate
-          ? new Date(b.estimatedDelivery.startDate).getTime()
-          : null;
+        const parseEstDate = (val) => {
+          if (!val) return null;
+          if (typeof val === 'string') return new Date(val).getTime();
+          if (val.startDate) return new Date(val.startDate).getTime();
+          if (val.date) return new Date(val.date).getTime();
+          return null;
+        };
+        const da = parseEstDate(a.estimatedDelivery);
+        const db = parseEstDate(b.estimatedDelivery);
         if (da === null && db === null) cmp = 0;
         else if (da === null) return 1;
         else if (db === null) return -1;
@@ -557,7 +569,7 @@ function SCPage() {
                 const lastTs = getSCLastTimestamp(sg.items);
                 const scProdDate = sg.scProductionDate;
                 const dateStatus = sg.productionDateStatus;
-                const estDelivery = sg.estimatedDelivery || calculateEstimatedDelivery(sg.poDate);
+                const estDelivery = sg.estimatedDelivery || calculateEstimatedDelivery(sg.poDate, sg.family);
                 const days = daysBetween(sg.poDate, lastTs);
                 return (
                   <tr key={i}>
@@ -687,7 +699,12 @@ function SCPage() {
               </thead>
               <tbody>
                 {selectedSC.items.map((item, idx) => {
-                  const estDeliv = calculateEstimatedDelivery(selectedSC.poDate || item.poDate);
+                  const estDeliv =
+                    item.estimatedDelivery ||
+                    calculateEstimatedDelivery(
+                      selectedSC.poDate || item.poDate,
+                      item.family || item.type || selectedSC.family
+                    );
                   const prodDateStatus = getProductionDateStatus(item.projectedDate, todayStr);
                   return (
                     <tr key={`${selectedSC.sc}-${idx}`}>

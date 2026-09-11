@@ -9,6 +9,8 @@ const { workingDaysBetween,
   calculateEstimatedDelivery,
   formatEstimatedDelivery,
   calculateSCProductionDate,
+  calculateProductProjectedDate,
+  canonicalProcess,
   toIsoDate,
   getTodayIso,
   getProductionDateStatus,
@@ -86,69 +88,78 @@ describe('calculationUtils', () => {
   });
 
   describe('calculateEstimatedDelivery', () => {
-    it('calculates 6-week (+42 calendar days) and 8-week (+56 calendar days) window correctly', () => {
-      const result = calculateEstimatedDelivery('2026-09-01');
-      expect(result).not.toBeNull();
-      expect(result.startDate).toBe('2026-10-13');
-      expect(result.endDate).toBe('2026-10-27');
-      expect(result.formatted).toBe('13/10/2026 – 27/10/2026');
+    it('calculates 6-week (+42 calendar days) for APG/SRG/ACCESSORIES and 8-week (+56 calendar days) for ARG/SPG/ACG/Carbide', () => {
+      const apgRes = calculateEstimatedDelivery('2026-09-01', 'APG');
+      expect(apgRes).not.toBeNull();
+      expect(apgRes.startDate).toBe('2026-10-13');
+      expect(apgRes.endDate).toBe('2026-10-13');
+      expect(apgRes.formatted).toBe('13/10/2026');
+      expect(apgRes.weeks).toBe(6);
+
+      const argRes = calculateEstimatedDelivery('2026-09-01', 'ARG');
+      expect(argRes).not.toBeNull();
+      expect(argRes.startDate).toBe('2026-10-27');
+      expect(argRes.endDate).toBe('2026-10-27');
+      expect(argRes.formatted).toBe('27/10/2026');
+      expect(argRes.weeks).toBe(8);
     });
 
-    it('handles prompt Example 1: 01/09/2026 -> 13/10/2026 – 27/10/2026', () => {
-      const resIso = calculateEstimatedDelivery('2026-09-01');
+    it('handles APG (6 weeks): 01/09/2026 -> 13/10/2026', () => {
+      const resIso = calculateEstimatedDelivery('2026-09-01', 'APG');
       expect(resIso.startDate).toBe('2026-10-13');
-      expect(resIso.endDate).toBe('2026-10-27');
-      expect(resIso.formatted).toBe('13/10/2026 – 27/10/2026');
+      expect(resIso.endDate).toBe('2026-10-13');
+      expect(resIso.formatted).toBe('13/10/2026');
 
-      const resSlash = calculateEstimatedDelivery('01/09/2026');
+      const resSlash = calculateEstimatedDelivery('01/09/2026', 'APG');
       expect(resSlash.startDate).toBe('2026-10-13');
-      expect(resSlash.endDate).toBe('2026-10-27');
-      expect(resSlash.formatted).toBe('13/10/2026 – 27/10/2026');
+      expect(resSlash.endDate).toBe('2026-10-13');
+      expect(resSlash.formatted).toBe('13/10/2026');
     });
 
-    it('handles prompt Example 2: 10/09/2026 -> 22/10/2026 – 05/11/2026', () => {
-      const resIso = calculateEstimatedDelivery('2026-09-10');
-      expect(resIso.startDate).toBe('2026-10-22');
+    it('handles ARG (8 weeks): 10/09/2026 -> 05/11/2026', () => {
+      const resIso = calculateEstimatedDelivery('2026-09-10', 'ARG');
+      expect(resIso.startDate).toBe('2026-11-05');
       expect(resIso.endDate).toBe('2026-11-05');
-      expect(resIso.formatted).toBe('22/10/2026 – 05/11/2026');
+      expect(resIso.formatted).toBe('05/11/2026');
 
-      const resSlash = calculateEstimatedDelivery('10/09/2026');
-      expect(resSlash.startDate).toBe('2026-10-22');
+      const resSlash = calculateEstimatedDelivery('10/09/2026', 'ARG');
+      expect(resSlash.startDate).toBe('2026-11-05');
       expect(resSlash.endDate).toBe('2026-11-05');
-      expect(resSlash.formatted).toBe('22/10/2026 – 05/11/2026');
+      expect(resSlash.formatted).toBe('05/11/2026');
     });
 
-    it('calculates exact 42-day and 56-day difference from PO date', () => {
+    it('calculates exact 42-day difference for APG and 56-day difference for ARG', () => {
       const poDate = '2026-05-01';
-      const res = calculateEstimatedDelivery(poDate);
-      const startDiff = (new Date(res.startDate) - new Date(poDate)) / (1000 * 60 * 60 * 24);
-      const endDiff = (new Date(res.endDate) - new Date(poDate)) / (1000 * 60 * 60 * 24);
-      expect(startDiff).toBe(42);
-      expect(endDiff).toBe(56);
+      const apgRes = calculateEstimatedDelivery(poDate, 'APG');
+      const argRes = calculateEstimatedDelivery(poDate, 'ARG');
+      const apgDiff = (new Date(apgRes.startDate) - new Date(poDate)) / (1000 * 60 * 60 * 24);
+      const argDiff = (new Date(argRes.startDate) - new Date(poDate)) / (1000 * 60 * 60 * 24);
+      expect(apgDiff).toBe(42);
+      expect(argDiff).toBe(56);
     });
 
     it('handles month rollover correctly', () => {
-      const res = calculateEstimatedDelivery('2026-01-31');
-      expect(res.startDate).toBe('2026-03-14');
-      expect(res.endDate).toBe('2026-03-28');
+      const apgRes = calculateEstimatedDelivery('2026-01-31', 'APG');
+      expect(apgRes.startDate).toBe('2026-03-14');
+      const argRes = calculateEstimatedDelivery('2026-01-31', 'ARG');
+      expect(argRes.startDate).toBe('2026-03-28');
     });
 
     it('handles year rollover correctly', () => {
-      const res = calculateEstimatedDelivery('2026-12-15');
-      expect(res.startDate).toBe('2027-01-26');
-      expect(res.endDate).toBe('2027-02-09');
+      const apgRes = calculateEstimatedDelivery('2026-12-15', 'APG');
+      expect(apgRes.startDate).toBe('2027-01-26');
+      const argRes = calculateEstimatedDelivery('2026-12-15', 'ARG');
+      expect(argRes.startDate).toBe('2027-02-09');
     });
 
     it('handles leap-year vs non-leap-year arithmetic correctly', () => {
       // 2024 is a leap year (Feb has 29 days)
-      const resLeap = calculateEstimatedDelivery('2024-02-01');
+      const resLeap = calculateEstimatedDelivery('2024-02-01', 'APG');
       expect(resLeap.startDate).toBe('2024-03-14');
-      expect(resLeap.endDate).toBe('2024-03-28');
 
       // 2026 is a standard year (Feb has 28 days)
-      const resStd = calculateEstimatedDelivery('2026-02-01');
+      const resStd = calculateEstimatedDelivery('2026-02-01', 'APG');
       expect(resStd.startDate).toBe('2026-03-15');
-      expect(resStd.endDate).toBe('2026-03-29');
     });
 
     it('returns null for missing, empty, or placeholder PO dates', () => {
@@ -168,11 +179,9 @@ describe('calculationUtils', () => {
 
     it('does NOT skip weekends (uses calendar days, not working days)', () => {
       // Starting from a Saturday:
-      const res = calculateEstimatedDelivery('2026-01-03');
+      const res = calculateEstimatedDelivery('2026-01-03', 'APG');
       // 42 calendar days later
       expect(res.startDate).toBe('2026-02-14');
-      // 56 calendar days later
-      expect(res.endDate).toBe('2026-02-28');
     });
 
     it('is completely independent of Projected Date', () => {
@@ -180,18 +189,18 @@ describe('calculationUtils', () => {
       const item1 = { poDate, projectedDate: '2026-09-15' };
       const item2 = { poDate, projectedDate: '2026-11-30' };
 
-      const est1 = calculateEstimatedDelivery(item1.poDate);
-      const est2 = calculateEstimatedDelivery(item2.poDate);
+      const est1 = calculateEstimatedDelivery(item1.poDate, 'APG');
+      const est2 = calculateEstimatedDelivery(item2.poDate, 'APG');
 
       expect(est1).toEqual(est2);
       expect(est1.startDate).toBe('2026-10-13');
-      expect(est1.endDate).toBe('2026-10-27');
     });
 
     it('supports custom start/end week parameters if needed', () => {
       const res = calculateEstimatedDelivery('2026-01-01', 4, 10);
       expect(res.startDate).toBe('2026-01-29'); // +28 days
       expect(res.endDate).toBe('2026-03-12');   // +70 days
+      expect(res.formatted).toBe('29/01/2026 – 12/03/2026');
     });
   });
 
@@ -322,9 +331,9 @@ describe('calculationUtils', () => {
 
     it('Test 10 — Changing Projected Dates does not modify Estimated Delivery', () => {
       const poDate = '2026-09-01';
-      const est1 = calculateEstimatedDelivery(poDate);
+      const est1 = calculateEstimatedDelivery(poDate, 'APG');
       expect(est1.startDate).toBe('2026-10-13');
-      expect(est1.endDate).toBe('2026-10-27');
+      expect(est1.endDate).toBe('2026-10-13');
 
       // Projected Dates changed from Sep to Nov
       const items = [
@@ -333,8 +342,8 @@ describe('calculationUtils', () => {
       ];
       expect(calculateSCProductionDate(items)).toBe('2026-11-30');
 
-      // Estimated Delivery from PO date is still strictly Oct 13 - Oct 27
-      const est2 = calculateEstimatedDelivery(poDate);
+      // Estimated Delivery from PO date is still strictly Oct 13
+      const est2 = calculateEstimatedDelivery(poDate, 'APG');
       expect(est2).toEqual(est1);
     });
 
@@ -437,11 +446,11 @@ describe('calculationUtils', () => {
       const scProdDate = calculateSCProductionDate(items);
       expect(scProdDate).toBe('2026-09-22');
 
-      // Tier 3: Estimated Delivery (from PO Date, 6-8 weeks)
-      const estDelivery = calculateEstimatedDelivery(poDate);
+      // Tier 3: Estimated Delivery (from PO Date, family APG = 6 weeks)
+      const estDelivery = calculateEstimatedDelivery(poDate, 'APG');
       expect(estDelivery.startDate).toBe('2026-10-13');
-      expect(estDelivery.endDate).toBe('2026-10-27');
-      expect(formatEstimatedDelivery(estDelivery)).toBe('13/10/2026 – 27/10/2026');
+      expect(estDelivery.endDate).toBe('2026-10-13');
+      expect(formatEstimatedDelivery(estDelivery)).toBe('13/10/2026');
 
       // Assert semantic separation: scProdDate is September, Estimated Delivery is October
       expect(new Date(scProdDate).getTime()).toBeLessThan(new Date(estDelivery.startDate).getTime());
@@ -955,6 +964,45 @@ describe('calculationUtils', () => {
         // SC status is now OVERDUE
         expect(getProductionDateStatus(overdueScProdDate, currentDate).code).toBe('OVERDUE');
       });
+    });
+  });
+
+  describe('calculateProductProjectedDate & canonicalProcess', () => {
+    it('normalizes stage aliases correctly', () => {
+      expect(canonicalProcess('CGV-V8')).toBe('CG');
+      expect(canonicalProcess('FBV-V2')).toBe('TURNING');
+      expect(canonicalProcess('BRV-V13')).toBe('BRASSING');
+      expect(canonicalProcess('M1I')).toBe('M1');
+      expect(canonicalProcess('M1-1')).toBe('M1');
+      expect(canonicalProcess('READY')).toBe('DONE');
+      expect(canonicalProcess('STORES')).toBe('DONE');
+    });
+
+    it('returns timestamp date for completed stages', () => {
+      const res = calculateProductProjectedDate({
+        product: 'ARG 10mm',
+        currentStage: 'READY',
+        timestamp: '2026-09-11 10:00:00',
+      });
+      expect(res.isDone).toBe(true);
+      expect(res.projectedDate).toBe('2026-09-11');
+      expect(res.remainingDays).toBe(0);
+      expect(res.formatted).toBe('11/09/2026');
+    });
+
+    it('calculates dynamic projected date from template with elapsed days', () => {
+      const res = calculateProductProjectedDate({
+        product: 'ARG 10mm',
+        family: 'ARG',
+        template: 'ARG_6_To_20_VBM_HBM',
+        currentStage: 'M1',
+        timestamp: '2026-09-01 00:00:00',
+        todayStr: '2026-09-11',
+      });
+      expect(res).not.toBeNull();
+      expect(res.isDone).toBe(false);
+      expect(res.projectedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(res.remainingDays).toBeGreaterThan(0);
     });
   });
 });

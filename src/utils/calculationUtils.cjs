@@ -242,16 +242,135 @@ function isSCComplete(items) {
   return items.every((i) => ['READY', 'STORES', 'STOCK', 'EXSTOCK', 'VA'].includes(i.currentStage));
 }
 
+const PROCESS_TEMPLATES_SUMMARY = {
+  'ACG': { family: 'ACG', totalProcesses: 10, totalDays: 26, weeks: 8, daysPerProcess: 2.6 },
+  'APG 10 TO 15 OUTSOURCE': { family: 'APG', totalProcesses: 12, totalDays: 27, weeks: 6, daysPerProcess: 2.25 },
+  'APG 15 TO 20 SD': { family: 'APG', totalProcesses: 12, totalDays: 27, weeks: 6, daysPerProcess: 2.25 },
+  'APG 20 TO 35 SD': { family: 'APG', totalProcesses: 12, totalDays: 28, weeks: 6, daysPerProcess: 2.33 },
+  'APG 35 TO 60 SD': { family: 'APG', totalProcesses: 12, totalDays: 28, weeks: 6, daysPerProcess: 2.33 },
+  'APG 6 TO 10 OUTSOURCE': { family: 'APG', totalProcesses: 12, totalDays: 27, weeks: 6, daysPerProcess: 2.25 },
+  'APG ABOVE 60 SD': { family: 'APG', totalProcesses: 13, totalDays: 31, weeks: 6, daysPerProcess: 2.38 },
+  'APG DIA 6 TO 10 INHOUSE': { family: 'APG', totalProcesses: 13, totalDays: 29, weeks: 6, daysPerProcess: 2.23 },
+  'APG LESS THAN 6': { family: 'APG', totalProcesses: 6, totalDays: 18, weeks: 6, daysPerProcess: 3.0 },
+  'APG_10 TO 15_OUTSOURCE_SD_CARBIDE': { family: 'APG_CARBIDE', totalProcesses: 14, totalDays: 42, weeks: 8, daysPerProcess: 3.0 },
+  'APG_10_15 INHOUSE': { family: 'APG', totalProcesses: 13, totalDays: 29, weeks: 6, daysPerProcess: 2.23 },
+  'APG_15_20 JP': { family: 'APG', totalProcesses: 14, totalDays: 34, weeks: 6, daysPerProcess: 2.43 },
+  'APG_20-35 JP': { family: 'APG', totalProcesses: 14, totalDays: 31, weeks: 6, daysPerProcess: 2.21 },
+  'APG_35-60 JP': { family: 'APG', totalProcesses: 14, totalDays: 35, weeks: 6, daysPerProcess: 2.5 },
+  'APG_ABOVE 60 JP': { family: 'APG', totalProcesses: 15, totalDays: 38, weeks: 6, daysPerProcess: 2.53 },
+  'APG_VBM_JP': { family: 'APG', totalProcesses: 15, totalDays: 38, weeks: 6, daysPerProcess: 2.53 },
+  'APG_VBM_SD': { family: 'APG', totalProcesses: 14, totalDays: 37, weeks: 6, daysPerProcess: 2.64 },
+  'APG_VBM_SD_CARBIDE': { family: 'APG_CARBIDE', totalProcesses: 15, totalDays: 43, weeks: 8, daysPerProcess: 2.87 },
+  'ARG_20_To_130_VBM_HBM': { family: 'ARG', totalProcesses: 17, totalDays: 45, weeks: 8, daysPerProcess: 2.65 },
+  'ARG_6_To_20_VBM_HBM': { family: 'ARG', totalProcesses: 18, totalDays: 47, weeks: 8, daysPerProcess: 2.61 },
+  'ARG_ALUMINIM_HOSUING_TYPE': { family: 'ACCESSORIES', totalProcesses: 5, totalDays: 15, weeks: 6, daysPerProcess: 3.0 },
+  'ARG_CARBIDE': { family: 'ARG', totalProcesses: 16, totalDays: 47, weeks: 8, daysPerProcess: 2.94 },
+  'ARG_CARBIDE_002': { family: 'ARG', totalProcesses: 18, totalDays: 50, weeks: 8, daysPerProcess: 2.78 },
+  'ARG_DIA_15 TO 20_JP': { family: 'ARG', totalProcesses: 18, totalDays: 47, weeks: 8, daysPerProcess: 2.61 },
+  'ARG_DIA_15 TO 20_SD': { family: 'ARG', totalProcesses: 18, totalDays: 48, weeks: 8, daysPerProcess: 2.67 },
+  'ARG_DIA_15 TO 25_HBM_SD': { family: 'ARG', totalProcesses: 18, totalDays: 48, weeks: 8, daysPerProcess: 2.67 },
+  'ARG_DIA_15_TO_20_SD_VBM': { family: 'ARG', totalProcesses: 18, totalDays: 48, weeks: 8, daysPerProcess: 2.67 },
+  'ARG_DIA_20 TO 130_HBM_JP': { family: 'ARG', totalProcesses: 17, totalDays: 44, weeks: 8, daysPerProcess: 2.59 },
+  'ARG_DIA_20 TO 130_HBM_SD': { family: 'ARG', totalProcesses: 17, totalDays: 45, weeks: 8, daysPerProcess: 2.65 },
+  'ARG_DIA_20 TO 130_JP': { family: 'ARG', totalProcesses: 18, totalDays: 47, weeks: 8, daysPerProcess: 2.61 },
+  'ARG_DIA_20 TO 130_SD': { family: 'ARG', totalProcesses: 17, totalDays: 45, weeks: 8, daysPerProcess: 2.65 },
+  'ARG_DIA_20_TO_130_SD_VBM': { family: 'ARG', totalProcesses: 17, totalDays: 45, weeks: 8, daysPerProcess: 2.65 },
+  'ARG_DIA_6 TO 20_HBM_JP': { family: 'ARG', totalProcesses: 18, totalDays: 47, weeks: 8, daysPerProcess: 2.61 },
+  'ARG_DIA_6 TO 20_HBM_SD': { family: 'ARG', totalProcesses: 18, totalDays: 48, weeks: 8, daysPerProcess: 2.67 },
+  'ARG_HOUSING_TYPE_ADAPTER HANDLE_JP': { family: 'ARG', totalProcesses: 19, totalDays: 50, weeks: 8, daysPerProcess: 2.63 },
+  'ARG_HOUSING_TYPE_ADAPTER HANDLE_SD': { family: 'ARG', totalProcesses: 20, totalDays: 55, weeks: 8, daysPerProcess: 2.75 },
+  'BASE_PLATE': { family: 'ACCESSORIES', totalProcesses: 5, totalDays: 15, weeks: 6, daysPerProcess: 3.0 },
+  'BUTTING STOPPER': { family: 'ACCESSORIES', totalProcesses: 8, totalDays: 23, weeks: 6, daysPerProcess: 2.88 },
+  'CARBIDE_BUSH': { family: 'ACCESSORIES', totalProcesses: 2, totalDays: 6, weeks: 6, daysPerProcess: 3.0 },
+  'DEPTH COLLAR': { family: 'ACCESSORIES', totalProcesses: 5, totalDays: 15, weeks: 6, daysPerProcess: 3.0 },
+  'EXTENION': { family: 'ACCESSORIES', totalProcesses: 4, totalDays: 12, weeks: 6, daysPerProcess: 3.0 },
+  'FEET PLATE': { family: 'ACCESSORIES', totalProcesses: 6, totalDays: 18, weeks: 6, daysPerProcess: 3.0 },
+  'HORIZONTAL BENCH MOUNT PLATE': { family: 'ACCESSORIES', totalProcesses: 6, totalDays: 18, weeks: 6, daysPerProcess: 3.0 },
+  'JIG - FEET': { family: 'ACCESSORIES', totalProcesses: 5, totalDays: 15, weeks: 6, daysPerProcess: 3.0 },
+  'SD': { family: 'SETTING DISK', totalProcesses: 8, totalDays: 21, weeks: 8, daysPerProcess: 2.63 },
+  'SPG_DIA_ABOVE _40': { family: 'SPG', totalProcesses: 10, totalDays: 26, weeks: 8, daysPerProcess: 2.6 },
+  'SPG_DIA_BELOW 40': { family: 'SPG', totalProcesses: 11, totalDays: 29, weeks: 8, daysPerProcess: 2.64 },
+  'SRG 20 AND ABOVE DIRECT FINISH': { family: 'SRG', totalProcesses: 12, totalDays: 33, weeks: 6, daysPerProcess: 2.75 },
+  'SRG 20 AND ABOVE DIRECT FINISH DC': { family: 'SRG', totalProcesses: 11, totalDays: 30, weeks: 6, daysPerProcess: 2.73 },
+  'SRG DIA 3 TO 6': { family: 'SRG', totalProcesses: 12, totalDays: 33, weeks: 6, daysPerProcess: 2.75 },
+  'SRG DIA 3 TO 6 DC': { family: 'SRG', totalProcesses: 11, totalDays: 30, weeks: 6, daysPerProcess: 2.73 },
+  'SRG DIA 6 TO 20': { family: 'SRG', totalProcesses: 12, totalDays: 33, weeks: 6, daysPerProcess: 2.75 },
+  'SRG DIA 6 TO 20 DC': { family: 'SRG', totalProcesses: 11, totalDays: 30, weeks: 6, daysPerProcess: 2.73 },
+  'VERTICAL BENCH MOUNT PLATE': { family: 'ACCESSORIES', totalProcesses: 6, totalDays: 18, weeks: 6, daysPerProcess: 3.0 },
+};
+
+function canonicalProcess(value) {
+  if (value === null || value === undefined) return 'DESIGN';
+  let code = String(value).trim().toUpperCase().replace(/\s+/g, ' ').replace(/_/g, ' ');
+  code = code.replace(/^OP\s*\d+\s*/, '').replace(/^OP\s+/, '');
+
+  if (['STORES', 'EXSTOCK', 'READY', 'STOCK', 'DONE'].includes(code)) return 'DONE';
+  if (code === '') return 'DESIGN';
+  if (code === 'M1TR' || code.startsWith('M1TR ')) return 'M1TR';
+  if (['FB', 'FBI', 'FBV', 'LATHE', 'TUR', 'TURNING'].includes(code) || code.startsWith('TURNING ')) return 'TURNING';
+  if (['M1', 'M1I', 'M1V'].includes(code) || code.startsWith('M1 ')) return 'M1';
+  if (['CG', 'CGV', 'CGI'].includes(code) || code.startsWith('CG ')) return 'CG';
+  if (code === 'SG JET RECESS' || code.startsWith('SG JET RECESS ')) return 'SG JET RECESS';
+  if (['SG', 'SGI', 'SGV'].includes(code) || code.startsWith('SG ')) return 'SG';
+  if (['SD', 'SDI', 'SDV'].includes(code) || code.startsWith('SD ')) return 'SD';
+  if (['SZ', 'SZI', 'SZV'].includes(code) || code.startsWith('SZ ')) return 'SZ';
+  if (['HT', 'HTI', 'HTV'].includes(code) || code.startsWith('HT ')) return 'HT';
+  if (['PT', 'PTI', 'PTV', 'PRE TOOLING'].includes(code)) return 'PRE TOOLING';
+  if (['WC', 'WCI', 'WCV'].includes(code) || code.startsWith('WC ')) return 'WC';
+  if (['JC', 'JCI', 'JCV'].includes(code) || code.startsWith('JC ')) return 'JC';
+  if (['JS', 'JP', 'JPI', 'JPV', 'JET PRESS'].includes(code) || code.startsWith('JET PRESS ')) return 'JET PRESS';
+  if (['BR', 'BRI', 'BRV', 'BRASSING', 'BRAZZING'].includes(code) || code.startsWith('BRASSING ') || code.startsWith('BRAZZING ')) return 'BRASSING';
+  if (['HO', 'HOI', 'HOV'].includes(code) || code.startsWith('HO ')) return 'HO';
+  if (['CH', 'CHI', 'CHV'].includes(code) || code.startsWith('CH ')) return 'CH';
+  if (['BLK', 'BLI', 'BLV'].includes(code) || code.startsWith('BLK ')) return 'BLK';
+  if (['DESIGN', 'DSG'].includes(code) || code.startsWith('DESIGN ')) return 'DESIGN';
+  if (code === 'RM' || code.startsWith('RM ')) return 'RM';
+  if (['DCPL', 'DCPLI', 'DCPLV', 'DULL CHROME', 'DULLCHROME'].includes(code) || code.startsWith('DULL CHROME ')) return 'DULL CHROME';
+  if (code === 'JET RECESS' || code.startsWith('JET RECESS ')) return 'JET RECESS';
+
+  const simpleProcesses = [
+    'VA', 'CA', 'QC', 'MARKING', 'BAZZING', 'MILLING', 'BORING',
+    'SUPER DRILL', 'STRING FIT', 'TAPER SHANK GRINDING', 'TOP BOTTOM SG'
+  ];
+  for (const p of simpleProcesses) {
+    if (code === p || code.startsWith(p + ' ')) return p;
+  }
+
+  // Sub-stage or sequence suffix stripping (e.g. M1-1 -> M1, HT-1 -> HT)
+  const dashMatch = code.match(/^([A-Z0-9]+)[-_]\d+$/);
+  if (dashMatch) {
+    const base = canonicalProcess(dashMatch[1]);
+    if (base) return base;
+  }
+
+  // Generic Vendor I / V suffix stripping (e.g. CGV-V8 -> CG, FBV-V2 -> TURNING, BRV-V13 -> BRASSING)
+  const vendorMatch = code.match(/^([A-Z0-9]+)[VI](?:-[A-Z0-9]+)?$/);
+  if (vendorMatch) {
+    const base = canonicalProcess(vendorMatch[1]);
+    if (base) return base;
+  }
+
+  return code;
+}
+
+const STANDARD_PROCESS_ORDER = [
+  'DESIGN', 'RM', 'TURNING', 'M1', 'HT', 'CG', 'SG', 'BRASSING', 'SD', 'SZ',
+  'JET PRESS', 'WC', 'JC', 'PRE TOOLING', 'HO', 'CH', 'BLK', 'DULL CHROME', 'QC', 'CA', 'MARKING', 'DONE'
+];
+
 /**
- * Calculates Estimated Delivery date window (6–8 weeks = 42–56 calendar days from PO date).
- * Commercial / Sales customer-facing delivery estimate.
- *
+ * Calculates Estimated Delivery date based on PO Received Date and Product/Family rules from Google Apps Script.
+ * 
+ * Rules:
+ * - APG, SRG, ACCESSORIES (and variants ACCESSORY, ACC) -> 6 WEEKS = 42 CALENDAR DAYS
+ * - ARG, SPG, ACG, ARG CARBIDE, APG CARBIDE, SETTING DISK, SD -> 8 WEEKS = 56 CALENDAR DAYS
+ * 
  * @param {string|Date} poDateStr - Canonical PO received date (e.g. YYYY-MM-DD or DD/MM/YYYY)
- * @param {number} [startWeeks=6] - Start of delivery window in weeks (default: 6 weeks = 42 days)
- * @param {number} [endWeeks=8] - End of delivery window in weeks (default: 8 weeks = 56 days)
- * @returns {{ startDate: string, endDate: string, formatted: string }|null}
+ * @param {string|number} [familyOrWeeks] - Family string (e.g. 'ARG', 'APG') or startWeeks number
+ * @param {number} [endWeeks] - Optional endWeeks if called with numbers
+ * @returns {{ date: string, startDate: string, endDate: string, formatted: string, days: number, weeks: number }|null}
  */
-function calculateEstimatedDelivery(poDateStr, startWeeks = 6, endWeeks = 8) {
+function calculateEstimatedDelivery(poDateStr, familyOrWeeks, endWeeks) {
   if (!poDateStr) return null;
   const s = String(poDateStr).trim();
   if (!s || s === '—' || s === '-' || s === 'null' || s === 'undefined') return null;
@@ -284,7 +403,7 @@ function calculateEstimatedDelivery(poDateStr, startWeeks = 6, endWeeks = 8) {
       } else {
         day = p0;
         month = p1;
-      } // DD/MM default
+      }
     }
   } else if (clean.includes('-')) {
     const parts = clean.split('-');
@@ -316,7 +435,6 @@ function calculateEstimatedDelivery(poDateStr, startWeeks = 6, endWeeks = 8) {
   if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
   if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) return null;
 
-  // Timezone-safe calendar day arithmetic using local date components
   const addDays = (numDays) => {
     const target = new Date(year, month - 1, day + numDays);
     const ty = target.getFullYear();
@@ -325,47 +443,190 @@ function calculateEstimatedDelivery(poDateStr, startWeeks = 6, endWeeks = 8) {
     return `${ty}-${tm}-${td}`;
   };
 
-  const startDate = addDays(startWeeks * 7);
-  const endDate = addDays(endWeeks * 7);
-
   const formatDisplay = (iso) => {
     if (!iso) return '—';
     const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
   };
 
-  const formatted = `${formatDisplay(startDate)} – ${formatDisplay(endDate)}`;
+  if (typeof familyOrWeeks === 'number') {
+    const startW = familyOrWeeks;
+    const endW = typeof endWeeks === 'number' ? endWeeks : startW + 2;
+    const startDate = addDays(startW * 7);
+    const endDate = addDays(endW * 7);
+    return {
+      date: endDate,
+      startDate,
+      endDate,
+      formatted: `${formatDisplay(startDate)} – ${formatDisplay(endDate)}`,
+      days: endW * 7,
+      weeks: endW,
+    };
+  }
+
+  let deliveryDays = 56;
+  let weeks = 8;
+  const fam = String(familyOrWeeks || '').trim().toUpperCase().replace(/[\s\-_]+/g, ' ');
+
+  if (
+    fam === 'APG' ||
+    fam === 'SRG' ||
+    fam === 'ACCESSORIES' ||
+    fam === 'ACCESSORY' ||
+    fam === 'ACC' ||
+    fam.startsWith('APG ') ||
+    fam.startsWith('SRG ') ||
+    fam.startsWith('ACCESSORIES ')
+  ) {
+    if (fam.includes('CARBIDE')) {
+      deliveryDays = 56;
+      weeks = 8;
+    } else {
+      deliveryDays = 42;
+      weeks = 6;
+    }
+  } else if (
+    fam === 'ARG' ||
+    fam === 'SPG' ||
+    fam === 'ACG' ||
+    fam.includes('CARBIDE') ||
+    fam === 'SETTING DISK' ||
+    fam === 'SD' ||
+    fam.startsWith('ARG ') ||
+    fam.startsWith('SPG ') ||
+    fam.startsWith('ACG ')
+  ) {
+    deliveryDays = 56;
+    weeks = 8;
+  } else {
+    deliveryDays = 56;
+    weeks = 8;
+  }
+
+  const targetDate = addDays(deliveryDays);
 
   return {
-    startDate,
-    endDate,
-    formatted,
+    date: targetDate,
+    startDate: targetDate,
+    endDate: targetDate,
+    formatted: formatDisplay(targetDate),
+    days: deliveryDays,
+    weeks,
   };
 }
 
 function formatEstimatedDelivery(estDelivery) {
   if (!estDelivery) return '—';
-  if (typeof estDelivery === 'string') return estDelivery;
+  if (typeof estDelivery === 'string') {
+    const s = estDelivery.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const [y, m, d] = s.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    return s || '—';
+  }
   if (estDelivery.formatted) return estDelivery.formatted;
+  if (estDelivery.date) {
+    const [y, m, d] = estDelivery.date.split('-');
+    return `${d}/${m}/${y}`;
+  }
   if (estDelivery.startDate && estDelivery.endDate) {
     const fmt = (iso) => {
       const [y, m, d] = iso.split('-');
       return `${d}/${m}/${y}`;
     };
-    return `${fmt(estDelivery.startDate)} – ${fmt(estDelivery.endDate)}`;
+    return estDelivery.startDate === estDelivery.endDate
+      ? fmt(estDelivery.startDate)
+      : `${fmt(estDelivery.startDate)} – ${fmt(estDelivery.endDate)}`;
   }
   return '—';
 }
 
-function calculateSCProductionDate(items) {
+/**
+ * Calculates dynamic Product-level Projected Date according to the Google Apps Script formula.
+ */
+function calculateProductProjectedDate(params) {
+  if (!params || typeof params !== 'object') return null;
+  const { product, type, family, template, currentStage, timestamp, poDate, todayStr } = params;
+  if (!currentStage && !template && !timestamp && !poDate) return null;
+
+  const normStage = canonicalProcess(currentStage);
+  if (normStage === 'DONE' || ['READY', 'STORES', 'STOCK', 'EXSTOCK', 'VA'].includes(currentStage)) {
+    const d = timestamp ? timestamp.slice(0, 10) : (todayStr || getTodayIso());
+    const [y, m, day] = d.split('-');
+    return { projectedDate: d, isDone: true, remainingDays: 0, formatted: `${day}/${m}/${y}` };
+  }
+
+  const effectiveFamily = family || (type ? String(type).trim().toUpperCase() : 'ARG');
+  const templateInfo = (template && PROCESS_TEMPLATES_SUMMARY[template]) || null;
+  const totalDays = templateInfo ? templateInfo.totalDays : (effectiveFamily.includes('ARG') ? 45 : (effectiveFamily.includes('APG') ? 29 : 30));
+  const totalProcesses = templateInfo ? templateInfo.totalProcesses : (effectiveFamily.includes('ARG') ? 17 : (effectiveFamily.includes('APG') ? 13 : 12));
+  const daysPerProcess = templateInfo ? templateInfo.daysPerProcess : 3;
+
+  let currentIndex = STANDARD_PROCESS_ORDER.indexOf(normStage);
+  if (currentIndex === -1) {
+    currentIndex = Math.floor(totalProcesses * 0.4);
+  }
+  const remainingProcesses = Math.max(1, totalProcesses - Math.min(currentIndex, totalProcesses - 1));
+  const remainingPlannedDays = Math.round(remainingProcesses * daysPerProcess);
+  const currentProcessDays = Math.round(daysPerProcess);
+
+  const today = todayStr ? parseDateTime(todayStr + ' 00:00:00') : new Date();
+  if (today) today.setHours(0, 0, 0, 0);
+
+  const startDateStr = timestamp || poDate || todayStr;
+  const startDate = startDateStr ? parseDateTime(startDateStr.substring(0, 10) + ' 00:00:00') : new Date(today);
+  if (startDate) startDate.setHours(0, 0, 0, 0);
+
+  let elapsedDays = (today && startDate) ? Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+  if (elapsedDays < 0 || isNaN(elapsedDays)) elapsedDays = 0;
+
+  let remainingFromToday;
+  if (elapsedDays <= currentProcessDays) {
+    remainingFromToday = remainingPlannedDays - elapsedDays;
+  } else {
+    remainingFromToday = remainingPlannedDays - currentProcessDays;
+  }
+  if (remainingFromToday < 0) remainingFromToday = 0;
+
+  const target = new Date(today || new Date());
+  target.setDate(target.getDate() + remainingFromToday);
+
+  const ty = target.getFullYear();
+  const tm = String(target.getMonth() + 1).padStart(2, '0');
+  const td = String(target.getDate()).padStart(2, '0');
+  const projectedDate = `${ty}-${tm}-${td}`;
+
+  return {
+    projectedDate,
+    remainingDays: remainingFromToday,
+    isDone: false,
+    formatted: `${td}/${tm}/${ty}`,
+  };
+}
+
+function calculateSCProductionDate(items, todayStr) {
   if (!items || !Array.isArray(items) || items.length === 0) return null;
   const validIsoDates = [];
   for (const item of items) {
     if (!item) continue;
-    const rawVal = item.projectedDate || item.projected_date;
+    let rawVal = item.projectedDate !== undefined ? item.projectedDate : item.projected_date;
+    if (rawVal === undefined && (item.currentStage || item.template || item.timestamp || item.poDate)) {
+      const dynamic = calculateProductProjectedDate({
+        product: item.product,
+        type: item.type,
+        family: item.family,
+        template: item.template,
+        currentStage: item.currentStage,
+        timestamp: item.timestamp,
+        poDate: item.poDate,
+        todayStr,
+      });
+      if (dynamic && dynamic.projectedDate) rawVal = dynamic.projectedDate;
+    }
     if (!rawVal) continue;
     const s = String(rawVal).trim();
-    if (!s || s === '—' || s === '-' || s === 'null' || s === 'undefined') continue;
+    if (!s || s === '—' || s === '-' || s === 'null' || s === 'undefined' || s.toLowerCase() === 'invalid') continue;
 
     // 1. Direct ISO YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
@@ -727,6 +988,9 @@ const calculationUtils = {
   calculateEstimatedDelivery,
   formatEstimatedDelivery,
   calculateSCProductionDate,
+  calculateProductProjectedDate,
+  canonicalProcess,
+  PROCESS_TEMPLATES_SUMMARY,
   getSCLastTimestamp,
   normalizeProductsInGroup,
   dateDiff,
