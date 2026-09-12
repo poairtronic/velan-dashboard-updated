@@ -109,15 +109,20 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
 
   try {
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
+    const email = `${username}@velanmetrology.com`;
     const result = await pool.query(
-      'INSERT INTO users (username, password_hash, role, status, allowed_modules) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, role, status, allowed_modules',
-      [username, hash, 'user', 'pending', JSON.stringify([])]
+      `INSERT INTO users (username, password_hash, role, status, allowed_modules, name, email, "passwordHash") 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING id, username, role, status, allowed_modules`,
+      [username, hash, 'user', 'pending', JSON.stringify([]), username, email, hash]
     );
     const u = result.rows[0];
     return res.status(201).json({ id: u.id, username: u.username, role: u.role, status: u.status, allowed_modules: u.allowed_modules || [] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Username already taken' });
-    return res.status(400).json({ error: 'Registration failed' });
+    const logger = require('../utils/logger');
+    logger.error(logger.categories.AUTH, 'Registration failed:', err);
+    return res.status(400).json({ error: err.message || 'Registration failed' });
   }
 }));
 
@@ -132,15 +137,20 @@ router.post('/admin-create', requireAuth(['admin']), dashboardLimiter, asyncHand
 
   try {
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
+    const email = `${username}@velanmetrology.com`;
     const result = await pool.query(
-      'INSERT INTO users (username, password_hash, role, status, allowed_modules) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, role, status, allowed_modules',
-      [username, hash, role, 'approved', modulesJson]
+      `INSERT INTO users (username, password_hash, role, status, allowed_modules, name, email, "passwordHash") 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING id, username, role, status, allowed_modules`,
+      [username, hash, role, 'approved', modulesJson, username, email, hash]
     );
     const u = result.rows[0];
     return res.status(201).json({ id: u.id, username: u.username, role: u.role, status: u.status, allowed_modules: u.allowed_modules || [] });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Username already taken' });
-    return res.status(400).json({ error: 'Failed to create user' });
+    const logger = require('../utils/logger');
+    logger.error(logger.categories.AUTH, 'Admin create user failed:', err);
+    return res.status(400).json({ error: err.message || 'Failed to create user' });
   }
 }));
 

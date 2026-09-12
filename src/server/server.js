@@ -4,6 +4,10 @@
  * Refactored modular entry point using Express.
  */
 
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 const http = require('http');
 const path = require('path');
 const fs = require('fs');

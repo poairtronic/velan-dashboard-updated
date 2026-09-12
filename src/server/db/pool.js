@@ -1,3 +1,7 @@
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 const { Pool } = require('pg');
 
 
@@ -126,10 +130,19 @@ async function initDB() {
         DO $$
         BEGIN
           IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'name') THEN
+            ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
             UPDATE users SET username = COALESCE(username, name, email, 'user_' || SUBSTRING(id::text, 1, 8)) WHERE username IS NULL OR username = '';
           END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email') THEN
+            ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+          END IF;
           IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'passwordHash') THEN
+            ALTER TABLE users ALTER COLUMN "passwordHash" DROP NOT NULL;
             UPDATE users SET password_hash = COALESCE(password_hash, "passwordHash", '') WHERE password_hash IS NULL OR password_hash = '';
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'role') THEN
+            ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(50) USING role::text;
+            ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';
           END IF;
           IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'createdAt') THEN
             UPDATE users SET created_at = COALESCE(created_at, "createdAt", NOW()) WHERE created_at IS NULL;
