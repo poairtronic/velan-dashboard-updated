@@ -1,4 +1,4 @@
-const { getSCLastTimestamp, daysBetween, isSCComplete, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
+const { getSCLastTimestamp, daysBetween, isSCComplete, TARGET_DAYS, getVendorInfo } = require('../../utils/calculationUtils.cjs');
 
 function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
   const totalItems = filtered.length;
@@ -44,8 +44,12 @@ function calculateKPIs({ filtered, scGroups, poGroups, todayStr }) {
 
     // WIP / Inhouse / Vendor
     if (!isTerminal) wipCount++;
-    if (row.inhouse === 'INHOUSE') inhouseCount++;
-    if (row.inhouse === 'VENDOR') vendorCount++;
+    const isVen = getVendorInfo(row) !== null || row.inhouse === 'VENDOR';
+    if (isVen) {
+      vendorCount++;
+    } else {
+      inhouseCount++;
+    }
 
     // Stage Counts
     if (stage) {

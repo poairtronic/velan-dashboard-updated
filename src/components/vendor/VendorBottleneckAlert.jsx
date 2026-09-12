@@ -37,7 +37,7 @@ function VendorBottleneckAlert({ bottleneck }) {
               color: 'var(--danger)',
             }}
           >
-            {bottleneck.vendor}
+            {bottleneck.fullName || bottleneck.name ? `${bottleneck.name || bottleneck.fullName} (${bottleneck.code})` : bottleneck.vendor || bottleneck.code || '—'}
           </div>
         </div>
         <div>
@@ -52,7 +52,7 @@ function VendorBottleneckAlert({ bottleneck }) {
               color: 'var(--accent4)',
             }}
           >
-            {bottleneck.avgPending}d
+            {bottleneck.avgDays ?? bottleneck.avgPending ?? 0}d
           </div>
         </div>
         <div>
@@ -67,7 +67,7 @@ function VendorBottleneckAlert({ bottleneck }) {
               color: 'var(--danger)',
             }}
           >
-            {bottleneck.slaViolations}
+            {bottleneck.slaViolations ?? 0}
           </div>
         </div>
         <div>
@@ -82,7 +82,7 @@ function VendorBottleneckAlert({ bottleneck }) {
               color: 'var(--warning)',
             }}
           >
-            {bottleneck.efficiency}%
+            {bottleneck.processEfficiency ?? bottleneck.efficiency ?? 0}%
           </div>
         </div>
       </div>

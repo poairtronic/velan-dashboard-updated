@@ -112,8 +112,12 @@ async function getFilteredData(filters, todayStr) {
     if (po && row.po !== po) return false;
     if (stage && (row.currentStage || '').trim() !== stage) return false;
     if (type && row.type !== type) return false;
-    if (inhouse && row.inhouse !== inhouse) return false;
     if (category && getProductCategory(row.type) !== category) return false;
+    if (inhouse) {
+      const isVen = getVendorInfo(row) !== null || row.inhouse === 'VENDOR';
+      if (inhouse === 'VENDOR' && !isVen) return false;
+      if (inhouse === 'INHOUSE' && isVen) return false;
+    }
     if (vendor) {
       const vInfo = getVendorInfo(row);
       const target = vendor.trim().toUpperCase();

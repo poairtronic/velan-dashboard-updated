@@ -279,7 +279,7 @@ function getVendorInfo(rowOrStage) {
   }
 
   // Match by vendor name if stage contains it
-  for (const [code, info] of Object.entries(VENDOR_MAP)) {
+  for (const info of Object.values(VENDOR_MAP)) {
     if (stage.includes(info.name.toUpperCase())) {
       return { ...info, operation: stage, isVendor: true };
     }

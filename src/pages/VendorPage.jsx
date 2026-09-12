@@ -7,6 +7,7 @@ import { useUI } from '../context/UIContext';
 import calculationUtils from '../utils/calculationUtils.js';
 const { calculateProcessCycleTime,
   daysBetween,
+  getVendorInfo,
  } = calculationUtils;
 import { fmtTs } from '../utils/dateUtils';
 
@@ -131,7 +132,7 @@ function VendorPage() {
                 📦 SC {selectedSC} — Vendor Products & Processing Status
               </div>
               <div className="chart-sub">
-                {data.filter((r) => r.sc === selectedSC && r.inhouse === 'VENDOR').length} vendor
+                {data.filter((r) => r.sc === selectedSC && (getVendorInfo(r) !== null || r.inhouse === 'VENDOR')).length} vendor
                 items in this SC set
               </div>
             </div>
@@ -169,7 +170,7 @@ function VendorPage() {
               </thead>
               <tbody>
                 {data
-                  .filter((r) => r.sc === selectedSC && r.inhouse === 'VENDOR')
+                  .filter((r) => r.sc === selectedSC && (getVendorInfo(r) !== null || r.inhouse === 'VENDOR'))
                   .map((item, idx) => {
                     const cycleTime = calculateProcessCycleTime(item.poDate, item.timestamp);
                     const pendingDays = daysBetween(item.timestamp, todayRef);

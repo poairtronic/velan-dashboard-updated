@@ -39,7 +39,11 @@ export function FilterProvider({ children }) {
         if (filters.po && row.po !== filters.po) return false;
         if (filters.stage && row.currentStage !== filters.stage) return false;
         if (filters.type && row.type !== filters.type) return false;
-        if (filters.inhouse && row.inhouse !== filters.inhouse) return false;
+        if (filters.inhouse) {
+          const isVen = getVendorInfo(row) !== null || row.inhouse === 'VENDOR';
+          if (filters.inhouse === 'VENDOR' && !isVen) return false;
+          if (filters.inhouse === 'INHOUSE' && isVen) return false;
+        }
         if (filters.vendor) {
           const vInfo = getVendorInfo(row);
           const target = filters.vendor.trim().toUpperCase();
