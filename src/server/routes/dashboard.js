@@ -34,7 +34,7 @@ router.get('/calculations', async (req, res) => {
       const kpis = calculateKPIs({ filtered, scGroups, poGroups, todayStr });
       
       // 3. Cycle Times
-      const cycleTimes = calculateCycleTimes({ filtered, scGroups });
+      const cycleTimes = calculateCycleTimes({ filtered, scGroups, todayStr });
       
       // 4. Vendors
       const vendors = calculateVendors({ filtered, todayStr });

@@ -15,15 +15,17 @@ async function runAlertEngine(rows) {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   try {
-    // 1. Fetch enabled alert rules
-    const rulesRes = await pool.query(
-      'SELECT rule_key, rule_name, category, severity, threshold_value, enabled, recipients FROM alert_rules WHERE enabled = true'
-    );
+    // 1. Fetch enabled alert rules and existing unread alerts
+    const [rulesRes, existingUnreadRes] = await Promise.all([
+      pool.query('SELECT rule_key, rule_name, category, severity, threshold_value, enabled, recipients FROM alert_rules WHERE enabled = true'),
+      pool.query("SELECT rule_key, item_key FROM alerts WHERE status = 'unread'")
+    ]);
     const rules = rulesRes.rows;
     if (rules.length === 0) {
       logger.info(logger.categories.SYNC, 'No active alert rules found. Skipping alerts processing.');
       return;
     }
+    const existingSet = new Set(existingUnreadRes.rows.map((r) => `${r.rule_key}||${r.item_key}`));
 
     // 2. Prep data groups
     // Group items by PO
@@ -68,7 +70,8 @@ async function runAlertEngine(rows) {
               ruleName: rule.rule_name,
               eventType: 'PO_DELAYED',
               eventTitle: `PO ${pg.po} Delayed`,
-              eventDesc: message
+              eventDesc: message,
+              existingSet
             });
           }
         }
@@ -92,7 +95,8 @@ async function runAlertEngine(rows) {
               ruleName: rule.rule_name,
               eventType: 'VENDOR_ALERT',
               eventTitle: `Vendor SLA Alert - SC ${row.sc}`,
-              eventDesc: message
+              eventDesc: message,
+              existingSet
             });
           }
         }
@@ -111,7 +115,8 @@ async function runAlertEngine(rows) {
               ruleName: rule.rule_name,
               eventType: 'PRODUCTION_ALERT',
               eventTitle: `Production Backlog - Stage ${stage}`,
-              eventDesc: message
+              eventDesc: message,
+              existingSet
             });
           }
         }
@@ -134,19 +139,18 @@ async function createAlertIfNew(params) {
     itemKey,
     eventType,
     eventTitle,
-    eventDesc
+    eventDesc,
+    existingSet
   } = params;
 
   try {
-    // Check for duplicates (unread alert with same rule and item)
-    const checkRes = await pool.query(
-      "SELECT id FROM alerts WHERE rule_key = $1 AND item_key = $2 AND status = 'unread'",
-      [ruleKey, itemKey]
-    );
-
-    if (checkRes.rows.length > 0) {
-      // Unread alert already exists, skip duplicate
+    // Check for duplicates in memory first
+    const key = `${ruleKey}||${itemKey}`;
+    if (existingSet && existingSet.has(key)) {
       return;
+    }
+    if (existingSet) {
+      existingSet.add(key);
     }
 
     // Insert alert

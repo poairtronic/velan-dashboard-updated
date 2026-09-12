@@ -47,19 +47,15 @@ const workerHandler = async (job) => {
     // 3. Log the successful sync
     await logSync(syncType, incomingLength, 'success', durationMs, saved, rowsSkipped, null);
 
-    // 4. Run Alert Engine on new data
-    try {
-      await runAlertEngine(incoming);
-    } catch (alertErr) {
+    // 4. Run Alert Engine on new data (background non-blocking)
+    runAlertEngine(incoming).catch((alertErr) => {
       logger.error(logger.categories.SYNC, `Alert Engine run failed: ${alertErr.message}`, alertErr);
-    }
+    });
 
-    // 5. Log Timeline Event
-    try {
-      await logTimelineEvent('SYNC_EXECUTED', 'Google Sheets Sync Completed', `Synchronized ${incoming.length} active rows. Database contains ${currentTotal} total archive rows.`, null, { durationMs, incomingLength, syncType });
-    } catch (timelineErr) {
+    // 5. Log Timeline Event (background non-blocking)
+    logTimelineEvent('SYNC_EXECUTED', 'Google Sheets Sync Completed', `Synchronized ${incoming.length} active rows. Database contains ${currentTotal} total archive rows.`, null, { durationMs, incomingLength, syncType }).catch((timelineErr) => {
       logger.error(logger.categories.SYNC, `Timeline logging failed: ${timelineErr.message}`, timelineErr);
-    }
+    });
 
     // 6. Broadcast Sync Completed Event over WebSockets
     try {

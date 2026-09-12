@@ -4,19 +4,12 @@ import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
 import calculationUtils from '../utils/calculationUtils.js';
-const { workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
-  TARGET_DAYS,
- } = calculationUtils;
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+const { TARGET_DAYS } = calculationUtils;
+import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
+
 // ─── CYCLE TIME PAGE COMPONENT ────────────────────────────────────────────────
 
 function CycleTimePage() {
@@ -34,10 +27,12 @@ function CycleTimePage() {
   
   const { rows: stageRows } = useProductionDataQuery(queryFilters, 1, 1000);
 
-  const cts = kpis.stageCycleTimes
-    .filter((s) => !['STOCK', 'RM', 'STORE', 'STORES'].includes(s.stage))
+  const cts = (kpis?.stageCycleTimes || [])
+    .filter((s) => !['STOCK', 'STORE', 'STORES'].includes(s.stage))
     .sort((a, b) => {
       const stageOrder = [
+        'DESIGN',
+        'RM',
         'HOV',
         'BLV',
         'HCV',
@@ -63,9 +58,12 @@ function CycleTimePage() {
       ];
       const aIdx = stageOrder.indexOf(a.stage);
       const bIdx = stageOrder.indexOf(b.stage);
-      return (aIdx >= 0 ? aIdx : 1000) - (bIdx >= 0 ? bIdx : 1000);
+      if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+      if (aIdx >= 0) return -1;
+      if (bIdx >= 0) return 1;
+      return (a.avgToReach || 0) - (b.avgToReach || 0);
     })
-    .map((s) => ({ ...s, duration: Math.round(s.duration), avgToReach: Math.round(s.avgToReach) }));
+    .map((s) => ({ ...s, duration: Math.round(s.duration || 0), avgToReach: Math.round(s.avgToReach || 0) }));
 
   const maxDur = Math.max(...cts.map((c) => c.duration), 1);
 
@@ -114,7 +112,7 @@ function CycleTimePage() {
         },
       },
     },
-    [kpis]
+    [kpis, cts, maxDur]
   );
 
   const flowStages = [...cts].sort((a, b) => a.avgToReach - b.avgToReach);

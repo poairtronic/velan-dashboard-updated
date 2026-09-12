@@ -547,7 +547,7 @@ function formatEstimatedDelivery(estDelivery) {
  */
 function calculateProductProjectedDate(params) {
   if (!params || typeof params !== 'object') return null;
-  const { product, type, family, template, currentStage, timestamp, poDate, todayStr } = params;
+  const { type, family, template, currentStage, timestamp, poDate, todayStr } = params;
   if (!currentStage && !template && !timestamp && !poDate) return null;
 
   const normStage = canonicalProcess(currentStage);
@@ -559,7 +559,6 @@ function calculateProductProjectedDate(params) {
 
   const effectiveFamily = family || (type ? String(type).trim().toUpperCase() : 'ARG');
   const templateInfo = (template && PROCESS_TEMPLATES_SUMMARY[template]) || null;
-  const totalDays = templateInfo ? templateInfo.totalDays : (effectiveFamily.includes('ARG') ? 45 : (effectiveFamily.includes('APG') ? 29 : 30));
   const totalProcesses = templateInfo ? templateInfo.totalProcesses : (effectiveFamily.includes('ARG') ? 17 : (effectiveFamily.includes('APG') ? 13 : 12));
   const daysPerProcess = templateInfo ? templateInfo.daysPerProcess : 3;
 
