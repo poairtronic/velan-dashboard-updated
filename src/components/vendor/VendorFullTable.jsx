@@ -13,13 +13,13 @@ function VendorFullTable({ vendors }) {
       </div>
       <div style={{ marginTop: 12 }}>
         <VirtualizedTable
-          headers={['VENDOR OP', 'ITEMS', '% SHARE', 'AVG PENDING DAYS', 'MAX PENDING', 'DELAYED (>21d)', 'PROCESS CYCLE', 'EFFICIENCY', 'SLA VIOLATIONS', 'LAST UPDATE', 'RATING', 'SAMPLE PRODUCTS']}
+          headers={['VENDOR NAME', 'CODE', 'OPERATION', 'ITEMS', '% SHARE', 'AVG PENDING DAYS', 'MAX PENDING', 'DELAYED (>21d)', 'EFFICIENCY', 'SLA VIOLATIONS', 'LAST UPDATE', 'RATING']}
           data={[...vendors].sort((a, b) => (b.avgDays || 0) - (a.avgDays || 0))}
           height={600}
           itemSize={50}
           RowComponent={({ row: v }) => {
             const overdue = (v.avgDays || 0) > TARGET_DAYS;
-            const latestTs = v.items
+            const latestTs = (v.items || [])
               .map((it) => it.timestamp)
               .filter(Boolean)
               .sort()
@@ -27,12 +27,18 @@ function VendorFullTable({ vendors }) {
             const rating = overdue ? '🔴 SLOW' : (v.avgDays || 0) > 14 ? '🟡 OK' : '🟢 FAST';
             return (
               <div style={{ display: 'flex', flex: 1, alignItems: 'center' }}>
+                <div style={{ flex: 1.4, padding: '0 12px', fontWeight: 700, color: 'var(--accent1)' }}>
+                  {v.name || v.vendorName || v.code}
+                </div>
+                <div style={{ flex: 0.8, padding: '0 12px' }}>
+                  <span className="status-pill s-vendor" style={{ fontSize: 11 }}>{v.code}</span>
+                </div>
                 <div style={{ flex: 1, padding: '0 12px' }}>
-                  <span className="status-pill s-vendor">{v.code}</span>
+                  <span className="status-pill badge-blue" style={{ fontSize: 10 }}>{v.operation || 'EXT'}</span>
                 </div>
                 <div
                   style={{
-                    flex: 1,
+                    flex: 0.8,
                     padding: '0 12px',
                     fontFamily: 'Rajdhani',
                     fontWeight: 700,
@@ -46,7 +52,7 @@ function VendorFullTable({ vendors }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div
                       style={{
-                        width: 60,
+                        width: 50,
                         height: 7,
                         background: 'rgba(255,255,255,0.05)',
                         borderRadius: 4,
@@ -62,12 +68,12 @@ function VendorFullTable({ vendors }) {
                         }}
                       />
                     </div>
-                    <span style={{ color: 'var(--accent6)', fontWeight: 700 }}>{v.pct}%</span>
+                    <span style={{ color: 'var(--accent6)', fontWeight: 700, fontSize: 12 }}>{v.pct}%</span>
                   </div>
                 </div>
                 <div
                   style={{
-                    flex: 1,
+                    flex: 1.1,
                     padding: '0 12px',
                     fontFamily: 'Rajdhani',
                     fontWeight: 700,
@@ -108,18 +114,6 @@ function VendorFullTable({ vendors }) {
                     fontFamily: 'Rajdhani',
                     fontWeight: 700,
                     fontSize: 14,
-                    color: 'var(--accent1)',
-                  }}
-                >
-                  {v.avgDays != null ? `${v.avgDays}d` : '—'}
-                </div>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: '0 12px',
-                    fontFamily: 'Rajdhani',
-                    fontWeight: 700,
-                    fontSize: 14,
                     color:
                       v.processEfficiency >= 80
                         ? 'var(--success)'
@@ -145,24 +139,7 @@ function VendorFullTable({ vendors }) {
                 <div className="mono" style={{ flex: 1, padding: '0 12px', fontSize: 10, color: 'var(--text-muted)' }}>
                   {fmtTs(latestTs)}
                 </div>
-                <div style={{ flex: 1, padding: '0 12px', fontSize: 12 }}>{rating}</div>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: '0 12px',
-                    fontSize: 10,
-                    color: 'var(--text-muted)',
-                    maxWidth: 220,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {v.items
-                    .slice(0, 3)
-                    .map((it) => it.product)
-                    .join(' · ')}
-                </div>
+                <div style={{ flex: 0.9, padding: '0 12px', fontSize: 12 }}>{rating}</div>
               </div>
             );
           }}

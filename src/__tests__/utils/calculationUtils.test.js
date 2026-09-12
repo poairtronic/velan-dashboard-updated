@@ -15,7 +15,11 @@ const { workingDaysBetween,
   getTodayIso,
   getProductionDateStatus,
   addCalendarDays,
-  isDateInNextDays
+  isDateInNextDays,
+  getVendorInfo,
+  getVendorCode,
+  getVendorName,
+  VENDOR_MAP
  } = calculationUtils;
 
 describe('calculationUtils', () => {
@@ -1003,6 +1007,96 @@ describe('calculationUtils', () => {
       expect(res.isDone).toBe(false);
       expect(res.projectedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(res.remainingDays).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Vendor Master Mapping & Identification', () => {
+    it('correctly maps all 22 written notes vendors', () => {
+      expect(VENDOR_MAP['V1'].name).toBe('Abi');
+      expect(VENDOR_MAP['V2'].name).toBe('RK Engg');
+      expect(VENDOR_MAP['V3'].name).toBe('Shiva Shakthi');
+      expect(VENDOR_MAP['V4'].name).toBe('Fine Turn');
+      expect(VENDOR_MAP['V6'].name).toBe('NVCNC');
+      expect(VENDOR_MAP['V7'].name).toBe('Micro Mac');
+      expect(VENDOR_MAP['V8'].name).toBe('Skyline');
+      expect(VENDOR_MAP['V10'].name).toBe('Std Engg');
+      expect(VENDOR_MAP['V11'].name).toBe('Flame Tech / HTV');
+      expect(VENDOR_MAP['V12'].name).toBe('Mech Tools');
+      expect(VENDOR_MAP['V13'].name).toBe('VS Engg');
+      expect(VENDOR_MAP['V14'].name).toBe('RKV Metal');
+      expect(VENDOR_MAP['V15'].name).toBe('Metal Form');
+      expect(VENDOR_MAP['V16'].name).toBe('Export');
+      expect(VENDOR_MAP['V17'].name).toBe('Sivam');
+      expect(VENDOR_MAP['V18'].name).toBe('JMC / Pre Tooling');
+      expect(VENDOR_MAP['V19'].name).toBe('PS Coating');
+      expect(VENDOR_MAP['V24'].name).toBe('Nisha Tools');
+      expect(VENDOR_MAP['V26'].name).toBe('GA Tools');
+      expect(VENDOR_MAP['V27'].name).toBe('JV Tools');
+      expect(VENDOR_MAP['V35'].name).toBe('GSM');
+      expect(VENDOR_MAP['V38'].name).toBe('SMV Engg');
+    });
+
+    it('identifies vendor info from raw stage codes and aliases', () => {
+      // FBV-VQ -> V1 (Abi)
+      const v1Info = getVendorInfo('FBV-VQ');
+      expect(v1Info.code).toBe('V1');
+      expect(v1Info.name).toBe('Abi');
+      expect(v1Info.operation).toBe('FBV');
+      expect(v1Info.fullName).toBe('Abi (V1)');
+
+      // BRV-V13 -> V13 (VS Engg)
+      const v13Info = getVendorInfo('BRV-V13');
+      expect(v13Info.code).toBe('V13');
+      expect(v13Info.name).toBe('VS Engg');
+      expect(v13Info.operation).toBe('BRV');
+      expect(v13Info.fullName).toBe('VS Engg (V13)');
+
+      // CGV-V8 -> V8 (Skyline)
+      const v8Info = getVendorInfo('CGV-V8');
+      expect(v8Info.code).toBe('V8');
+      expect(v8Info.name).toBe('Skyline');
+      expect(v8Info.operation).toBe('CGV');
+
+      // SDV-V6 -> V6 (NVCNC)
+      const v6Info = getVendorInfo('SDV-V6');
+      expect(v6Info.code).toBe('V6');
+      expect(v6Info.name).toBe('NVCNC');
+
+      // PTV-V18 -> V18 (JMC / Pre Tooling)
+      const v18Info = getVendorInfo('PTV-V18');
+      expect(v18Info.code).toBe('V18');
+      expect(v18Info.name).toBe('JMC / Pre Tooling');
+
+      // HTV-V11 -> V11 (Flame Tech / HTV)
+      const v11Info = getVendorInfo('HTV-V11');
+      expect(v11Info.code).toBe('V11');
+      expect(v11Info.name).toBe('Flame Tech / HTV');
+
+      // ODCGV-V35 -> V35 (GSM)
+      const v35Info = getVendorInfo('ODCGV-V35');
+      expect(v35Info.code).toBe('V35');
+      expect(v35Info.name).toBe('GSM');
+    });
+
+    it('returns empty info for in-house processes and exclusions', () => {
+      expect(getVendorInfo('RM_01')).toBeNull();
+      expect(getVendorInfo('SAMPLE')).toBeNull();
+      expect(getVendorInfo('LAPPING')).toBeNull();
+      expect(getVendorInfo('LATHE')).toBeNull();
+      expect(getVendorInfo('QC_MAC')).toBeNull();
+      expect(getVendorInfo('READY')).toBeNull();
+      expect(getVendorInfo('M1')).toBeNull();
+      expect(getVendorInfo('VBM')).toBeNull();
+    });
+
+    it('correctly reads vendor info from row object', () => {
+      const row = { currentStage: 'FBV-V2', inhouse: false };
+      expect(getVendorCode(row)).toBe('V2');
+      expect(getVendorName(row)).toBe('RK Engg');
+
+      const inhouseRow = { currentStage: 'M1', inhouse: true };
+      expect(getVendorCode(inhouseRow)).toBeNull();
+      expect(getVendorName(inhouseRow)).toBeNull();
     });
   });
 });

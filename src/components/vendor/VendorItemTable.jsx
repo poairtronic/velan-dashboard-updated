@@ -1,6 +1,6 @@
 import React from 'react';
 import calculationUtils from '../../utils/calculationUtils.js';
-const { TARGET_DAYS, calculateProcessCycleTime, daysBetween } = calculationUtils;
+const { TARGET_DAYS, calculateProcessCycleTime, daysBetween, getVendorInfo } = calculationUtils;
 import { fmtTs } from '../../utils/dateUtils';
 
 import VirtualizedTable from '../ui/VirtualizedTable';
@@ -15,14 +15,20 @@ function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSel
       </div>
       <div style={{ marginTop: 12 }}>
         <VirtualizedTable
-          headers={['SC', 'PO', 'PRODUCT', 'PROCESS', 'LAST UPDATE', 'PENDING DAYS', 'CYCLE TIME', 'SLA STATUS', 'STATUS']}
-          data={data
-            .filter((r) => r.inhouse === 'VENDOR')
+          headers={['SC', 'PO', 'PRODUCT', 'VENDOR', 'PROCESS', 'LAST UPDATE', 'PENDING DAYS', 'CYCLE TIME', 'SLA STATUS', 'STATUS']}
+          data={(data || [])
+            .filter((r) => {
+              const vInfo = getVendorInfo(r);
+              return vInfo && vInfo.isVendor;
+            })
             .map((r) => {
-              const pendingDays = daysBetween(r.timestamp, todayRef);
+              const vInfo = getVendorInfo(r);
+              const pendingDays = r.timestamp
+                ? daysBetween(r.timestamp, todayRef)
+                : (r.poDate ? daysBetween(r.poDate, todayRef) : null);
               const cycleTime = calculateProcessCycleTime(r.poDate, r.timestamp);
               const slaViolation = pendingDays !== null && pendingDays > 2;
-              return { ...r, pendingDays, cycleTime, slaViolation };
+              return { ...r, vInfo, pendingDays, cycleTime, slaViolation };
             })
             .sort((a, b) => (b.pendingDays || 0) - (a.pendingDays || 0))}
           height={600}
@@ -44,7 +50,7 @@ function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSel
                 }}
                 title="Click to view item details"
               >
-                <div style={{ flex: 1, padding: '0 12px' }}>
+                <div style={{ flex: 0.9, padding: '0 12px' }}>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -67,10 +73,10 @@ function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSel
                 <div style={{ flex: 1, padding: '0 12px', fontSize: 11 }}>{r.po || '—'}</div>
                 <div
                   style={{
-                    flex: 1,
+                    flex: 1.4,
                     padding: '0 12px',
                     fontSize: 11,
-                    maxWidth: 260,
+                    maxWidth: 240,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -78,15 +84,18 @@ function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSel
                 >
                   {r.product || '—'}
                 </div>
-                <div style={{ flex: 1, padding: '0 12px' }}>
-                  <span className="status-pill s-vendor">{r.currentStage || 'UNKNOWN'}</span>
+                <div style={{ flex: 1.1, padding: '0 12px', fontWeight: 700, color: 'var(--accent1)' }}>
+                  {r.vInfo ? `${r.vInfo.name} (${r.vInfo.code})` : '—'}
                 </div>
-                <div className="mono" style={{ flex: 1, padding: '0 12px', fontSize: 10 }}>
+                <div style={{ flex: 0.9, padding: '0 12px' }}>
+                  <span className="status-pill s-vendor" style={{ fontSize: 10 }}>{r.currentStage || 'UNKNOWN'}</span>
+                </div>
+                <div className="mono" style={{ flex: 0.9, padding: '0 12px', fontSize: 10 }}>
                   {fmtTs(r.timestamp)}
                 </div>
                 <div
                   style={{
-                    flex: 1,
+                    flex: 0.9,
                     padding: '0 12px',
                     fontFamily: 'Rajdhani',
                     fontWeight: 700,
@@ -98,7 +107,7 @@ function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSel
                 </div>
                 <div
                   style={{
-                    flex: 1,
+                    flex: 0.9,
                     padding: '0 12px',
                     fontFamily: 'Rajdhani',
                     fontWeight: 700,
@@ -108,13 +117,13 @@ function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSel
                 >
                   {cycle != null ? `${cycle}d` : '—'}
                 </div>
-                <div style={{ flex: 1, padding: '0 12px' }}>
-                  <span className={`status-pill ${r.slaViolation ? 'badge-red' : 'badge-green'}`}>
+                <div style={{ flex: 0.9, padding: '0 12px' }}>
+                  <span className={`status-pill ${r.slaViolation ? 'badge-red' : 'badge-green'}`} style={{ fontSize: 10 }}>
                     {slaStatus}
                   </span>
                 </div>
-                <div style={{ flex: 1, padding: '0 12px' }}>
-                  <span className={`status-pill ${overdue ? 'badge-red' : 'badge-green'}`}>
+                <div style={{ flex: 0.8, padding: '0 12px' }}>
+                  <span className={`status-pill ${overdue ? 'badge-red' : 'badge-green'}`} style={{ fontSize: 10 }}>
                     {overdue ? 'DELAYED' : 'ACTIVE'}
                   </span>
                 </div>

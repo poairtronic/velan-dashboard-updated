@@ -1,129 +1,104 @@
-const { dateDiff, TARGET_DAYS } = require('../../utils/calculationUtils.cjs');
+const { dateDiff, TARGET_DAYS, getVendorInfo, VENDOR_MAP } = require('../../utils/calculationUtils.cjs');
 
 function calculateVendors({ filtered, todayStr }) {
-  const vendorStageData = [];
-  filtered.forEach((r) => {
-    if (!r.currentStage || !r.currentStage.toUpperCase().endsWith('V') || !r.timestamp) return;
-    const daysFromPO = r.poDate ? dateDiff(r.poDate, r.timestamp) : null;
-    const pendingDays = dateDiff(r.timestamp, todayStr);
-    if (pendingDays !== null)
-      vendorStageData.push({
-        vendor: r.currentStage || 'UNKNOWN',
-        stage: r.currentStage,
-        daysFromPO,
-        pendingDays,
-        po: r.po,
-        sc: r.sc,
-        product: r.product,
-        timestamp: r.timestamp,
-      });
+  const currentIso = todayStr || new Date().toISOString().substring(0, 10);
+  const vendorItemMap = {};
+
+  (filtered || []).forEach((r) => {
+    const vInfo = getVendorInfo(r);
+    if (!vInfo || !vInfo.isVendor) return;
+
+    const vendorKey = vInfo.code;
+    if (!vendorItemMap[vendorKey]) {
+      vendorItemMap[vendorKey] = {
+        code: vInfo.code,
+        name: vInfo.name,
+        fullName: `${vInfo.name} (${vInfo.code})`,
+        operation: vInfo.operation || r.currentStage || 'EXT',
+        items: [],
+        pendingDays: [],
+        fromPODays: [],
+      };
+    }
+
+    const effectiveTs = r.timestamp ? r.timestamp.substring(0, 10) : currentIso;
+    const daysFromPO = r.poDate ? dateDiff(r.poDate, effectiveTs) : null;
+    const pending = r.timestamp
+      ? dateDiff(r.timestamp.substring(0, 10), currentIso)
+      : (r.poDate ? dateDiff(r.poDate, currentIso) : 0);
+
+    const pendingVal = pending !== null && pending >= 0 ? pending : 0;
+
+    vendorItemMap[vendorKey].items.push(r);
+    vendorItemMap[vendorKey].pendingDays.push(pendingVal);
+    if (daysFromPO !== null && daysFromPO >= 0) {
+      vendorItemMap[vendorKey].fromPODays.push(daysFromPO);
+    }
   });
+
+  const vendorTotal = Object.values(vendorItemMap).reduce((s, v) => s + v.items.length, 0);
 
   const vendorStats = {};
-  vendorStageData.forEach((s) => {
-    if (!vendorStats[s.vendor]) {
-      vendorStats[s.vendor] = {
-        vendor: s.vendor,
-        totalPending: 0,
-        count: 0,
-        pendingDays: [],
-        totalFromPO: 0,
-        fromPODays: [],
-        items: [],
-      };
-    }
-    vendorStats[s.vendor].totalPending += s.pendingDays;
-    vendorStats[s.vendor].count++;
-    vendorStats[s.vendor].pendingDays.push(s.pendingDays);
-    if (s.daysFromPO !== null) {
-      vendorStats[s.vendor].totalFromPO += s.daysFromPO;
-      vendorStats[s.vendor].fromPODays.push(s.daysFromPO);
-    }
-    vendorStats[s.vendor].items.push(s);
-  });
-
-  Object.keys(vendorStats).forEach((v) => {
-    const stats = vendorStats[v];
-    stats.avgPending = stats.count > 0 ? Math.round(stats.totalPending / stats.count) : 0;
-    stats.maxPending = stats.pendingDays.length > 0 ? Math.max(...stats.pendingDays) : 0;
-    stats.minPending = stats.pendingDays.length > 0 ? Math.min(...stats.pendingDays) : 0;
-    stats.stale = stats.pendingDays.filter((d) => d > TARGET_DAYS).length;
-    stats.avgFromPO =
-      stats.fromPODays.length > 0
-        ? Math.round(stats.totalFromPO / stats.fromPODays.length)
-        : null;
-
-    stats.slaViolations = stats.pendingDays.filter((d) => d > 2).length;
-    stats.slaViolationRate =
-      stats.count > 0 ? Math.round((stats.slaViolations / stats.count) * 100) : 0;
-
-    const completedItems = stats.items.filter((i) =>
-      ['READY', 'STORES', 'STOCK', 'EXSTOCK'].includes(i.stage)
-    ).length;
-    stats.processEfficiency =
-      stats.count > 0 ? Math.round((completedItems / stats.count) * 100) : 0;
-
-    stats.avgActiveTime = stats.avgPending;
-  });
-
-  const vendorBottlenecks = Object.values(vendorStats)
-    .map((v) => ({
-      vendor: v.vendor,
-      count: v.count,
-      avgPending: v.avgPending,
-      maxPending: v.maxPending,
-      slaViolations: v.slaViolations,
-      efficiency: v.processEfficiency,
-    }))
-    .sort(
-      (a, b) =>
-        b.slaViolations - a.slaViolations || b.avgPending - a.avgPending || b.count - a.count
-    );
-
-  const topVendorBottleneck = vendorBottlenecks[0] || null;
-
-  const vendorTimeMap = {};
-  filtered.forEach((r) => {
-    if (!r.currentStage || !r.currentStage.toUpperCase().endsWith('V')) return;
-    const vcode = r.currentStage;
-    if (!vendorTimeMap[vcode])
-      vendorTimeMap[vcode] = { code: vcode, count: 0, items: [], days: [] };
-    vendorTimeMap[vcode].count++;
-    vendorTimeMap[vcode].items.push(r);
-    const d = dateDiff(r.timestamp, todayStr);
-    if (d !== null) vendorTimeMap[vcode].days.push(d);
-  });
-  const vendorTotal = Object.values(vendorTimeMap).reduce((s, v) => s + v.count, 0);
-  const vendors = Object.values(vendorTimeMap)
-    .sort((a, b) => b.count - a.count)
+  const vendors = Object.values(vendorItemMap)
+    .sort((a, b) => b.items.length - a.items.length)
     .map((v) => {
-      const avgDays =
-        v.days.length > 0 ? Math.round(v.days.reduce((a, b) => a + b, 0) / v.days.length) : null;
-      const maxDays = v.days.length > 0 ? Math.max(...v.days) : null;
-      const delayed = v.items.filter((i) => {
-        const d = dateDiff(i.timestamp, todayStr);
-        return d !== null && d > TARGET_DAYS;
-      }).length;
-      const stats = vendorStats[v.code] || {};
-      return {
-        ...v,
-        pct: Math.round((v.count / Math.max(vendorTotal, 1)) * 100),
+      const count = v.items.length;
+      const totalPending = v.pendingDays.reduce((a, b) => a + b, 0);
+      const avgDays = count > 0 ? Math.round(totalPending / count) : 0;
+      const maxDays = v.pendingDays.length > 0 ? Math.max(...v.pendingDays) : 0;
+      const minDays = v.pendingDays.length > 0 ? Math.min(...v.pendingDays) : 0;
+      const delayed = v.pendingDays.filter((d) => d > TARGET_DAYS).length;
+      const slaViolations = v.pendingDays.filter((d) => d > 2).length;
+      const slaViolationRate = count > 0 ? Math.round((slaViolations / count) * 100) : 0;
+
+      const completedItems = v.items.filter((i) =>
+        ['READY', 'STORES', 'STOCK', 'EXSTOCK', 'VA'].includes(i.currentStage)
+      ).length;
+      const processEfficiency = count > 0 ? Math.round((completedItems / count) * 100) : 0;
+
+      const totalFromPO = v.fromPODays.reduce((a, b) => a + b, 0);
+      const avgFromPO = v.fromPODays.length > 0 ? Math.round(totalFromPO / v.fromPODays.length) : avgDays;
+
+      const statObj = {
+        code: v.code,
+        name: v.name,
+        fullName: v.fullName,
+        vendor: v.fullName,
+        vendorName: v.name,
+        operation: v.operation,
+        count,
+        pct: Math.round((count / Math.max(vendorTotal, 1)) * 100),
         avgDays,
         maxDays,
+        minDays,
         delayed,
-        avgFromPO: stats.avgFromPO || null,
-        slaViolations: stats.slaViolations || 0,
-        slaViolationRate: stats.slaViolationRate || 0,
-        processEfficiency: stats.processEfficiency || 0,
-        avgActiveTime: stats.avgActiveTime || 0,
+        avgFromPO,
+        slaViolations,
+        slaViolationRate,
+        processEfficiency,
+        avgActiveTime: avgDays,
+        items: v.items,
       };
+
+      vendorStats[v.code] = statObj;
+      vendorStats[v.fullName] = statObj;
+      vendorStats[v.name] = statObj;
+
+      return statObj;
     });
+
+  const vendorBottlenecks = [...vendors].sort(
+    (a, b) =>
+      b.slaViolations - a.slaViolations || b.avgDays - a.avgDays || b.count - a.count
+  );
+
+  const topVendorBottleneck = vendorBottlenecks[0] || null;
 
   return {
     vendorStats,
     topVendorBottleneck,
     vendors,
-    vendorTotal
+    vendorTotal,
   };
 }
 

@@ -12,6 +12,8 @@ import useUploadHandlers from '../hooks/useUploadHandlers';
 import { normalizeGoogleSheetsUrl } from '../services/googleSheets';
 import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
+import calculationUtils from '../utils/calculationUtils.js';
+const { VENDOR_MAP } = calculationUtils;
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
@@ -303,6 +305,13 @@ export function DataProvider({ children }) {
     () => [...new Set(liveRows.map((r) => r.type))].filter(Boolean).sort(),
     [liveRows]
   );
+  const uniqueVendors = useMemo(() => {
+    return Object.values(VENDOR_MAP).map((v) => ({
+      code: v.code,
+      name: v.name,
+      label: `${v.code} - ${v.name}`,
+    }));
+  }, []);
 
   const contextValue = useMemo(
     () => ({
@@ -327,6 +336,7 @@ export function DataProvider({ children }) {
       uniquePOs,
       uniqueStages,
       uniqueTypes,
+      uniqueVendors,
     }),
     [
       data,
@@ -347,6 +357,7 @@ export function DataProvider({ children }) {
       uniquePOs,
       uniqueStages,
       uniqueTypes,
+      uniqueVendors,
       setLiveState,
     ]
   );

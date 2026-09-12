@@ -10,7 +10,7 @@ function VendorCharts({ vendors }) {
     {
       type: 'bar',
       data: {
-        labels: vendors.map((v) => v.code),
+        labels: vendors.map((v) => (v.name ? `${v.name} (${v.code})` : v.code)),
         datasets: [
           {
             label: 'Items Processing',
@@ -42,7 +42,7 @@ function VendorCharts({ vendors }) {
     {
       type: 'bar',
       data: {
-        labels: vendors.map((v) => v.code),
+        labels: vendors.map((v) => (v.name ? `${v.name} (${v.code})` : v.code)),
         datasets: [
           {
             label: 'Avg Pending Days (Today - Last Update)',

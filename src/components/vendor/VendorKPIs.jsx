@@ -27,7 +27,7 @@ function VendorKPIs({ kpis, vendors, worstVendor, mostDelayed, inhPct, venPct })
       />
       <KPICard
         label="SLOWEST VENDOR OP"
-        value={worstVendor?.code || '—'}
+        value={worstVendor?.name ? `${worstVendor.name} (${worstVendor.code})` : worstVendor?.code || '—'}
         sub={`~${worstVendor?.avgDays || 0} days since last update`}
         color1="#ff3d5a"
         color2="#ff6b35"
@@ -35,7 +35,7 @@ function VendorKPIs({ kpis, vendors, worstVendor, mostDelayed, inhPct, venPct })
       />
       <KPICard
         label="MOST DELAYED"
-        value={mostDelayed?.code || '—'}
+        value={mostDelayed?.name ? `${mostDelayed.name} (${mostDelayed.code})` : mostDelayed?.code || '—'}
         sub={`${mostDelayed?.delayed || 0} items >21 days pending`}
         color1="#ff3d5a"
         color2="#b24bff"

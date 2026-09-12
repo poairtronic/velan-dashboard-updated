@@ -8,6 +8,7 @@ const {
   formatEstimatedDelivery,
   calculateSCProductionDate,
   getProductionDateStatus,
+  getVendorInfo,
 } = require('../../utils/calculationUtils.cjs');
 
 async function getAllRawData() {
@@ -103,7 +104,7 @@ async function getFilteredData(filters, todayStr) {
     data = processed; // For live, we don't use the complex merged getActiveData logic
   }
 
-  const { po, stage, type, inhouse, category, search, fromDate, toDate, dateType = 'poDate' } = filters;
+  const { po, stage, type, inhouse, category, search, fromDate, toDate, dateType = 'poDate', vendor } = filters;
 
   const filtered = data.filter((row) => {
     const dateVal = dateType === 'poDate' ? row.poDate : row.timestamp;
@@ -113,6 +114,13 @@ async function getFilteredData(filters, todayStr) {
     if (type && row.type !== type) return false;
     if (inhouse && row.inhouse !== inhouse) return false;
     if (category && getProductCategory(row.type) !== category) return false;
+    if (vendor) {
+      const vInfo = getVendorInfo(row);
+      const target = vendor.trim().toUpperCase();
+      if (!vInfo || (vInfo.code.toUpperCase() !== target && vInfo.name.toUpperCase() !== target && vInfo.fullName.toUpperCase() !== target)) {
+        return false;
+      }
+    }
     if (search) {
       const s = search.trim().toLowerCase();
       const scStr = String(row.sc || '').toLowerCase();

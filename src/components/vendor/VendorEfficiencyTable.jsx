@@ -32,14 +32,16 @@ function VendorEfficiencyTable({ vendors }) {
               >
                 <div
                   style={{
-                    width: 90,
-                    fontFamily: 'Share Tech Mono',
-                    fontSize: 11,
+                    width: 140,
+                    fontSize: 12,
                     color: 'var(--accent1)',
                     fontWeight: 700,
                   }}
                 >
-                  {v.code}
+                  <div>{v.name || v.code}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Share Tech Mono' }}>
+                    {v.code} · {v.operation || 'EXT'}
+                  </div>
                 </div>
                 <div style={{ flex: 0.25 }}>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>

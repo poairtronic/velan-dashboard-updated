@@ -7,7 +7,7 @@ import { useUI } from '../context/UIContext';
 
 function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters();
-  const { uniquePOs, uniqueStages, uniqueTypes, kpis } = useData();
+  const { uniquePOs, uniqueStages, uniqueTypes, uniqueVendors, kpis } = useData();
   const { activeNav } = useUI();
 
   // Local state tracks raw input value for instant visual feedback
@@ -133,6 +133,22 @@ function FilterBar() {
         <option value="">Inhouse + Vendor</option>
         <option value="INHOUSE">Inhouse Only</option>
         <option value="VENDOR">Vendor Only</option>
+      </select>
+
+      <select
+        id="filter-vendor"
+        name="filter-vendor"
+        className="filter-select"
+        aria-label="Filter by Vendor"
+        value={filters.vendor || ''}
+        onChange={(e) => setFilters((f) => ({ ...f, vendor: e.target.value }))}
+      >
+        <option value="">All Vendors</option>
+        {(uniqueVendors || []).map((v) => (
+          <option key={v.code} value={v.code}>
+            {v.label}
+          </option>
+        ))}
       </select>
 
       <input

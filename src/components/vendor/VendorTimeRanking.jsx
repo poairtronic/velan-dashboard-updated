@@ -17,9 +17,9 @@ function VendorTimeRanking({ vendors, maxDays }) {
               <div className="vendor-row" key={i}>
                 <div
                   className="vendor-name"
-                  style={{ color: overdue ? 'var(--danger)' : 'var(--text-secondary)' }}
+                  style={{ color: overdue ? 'var(--danger)' : 'var(--text-secondary)', minWidth: 150 }}
                 >
-                  {v.code}
+                  {v.name ? `${v.name} (${v.code})` : v.code}
                 </div>
                 <div className="vendor-bar-bg">
                   <div

@@ -230,12 +230,77 @@ function calculateProcessEfficiency(activeTime, totalTime) {
   return Math.round((activeTime / totalTime) * 100);
 }
 
-function getVendorCode(stage, inhouse) {
-  if (inhouse === 'VENDOR') {
-    if (stage && stage.endsWith('V')) return stage.slice(0, -1);
-    return 'EXT';
+const VENDOR_MAP = {
+  'V1': { code: 'V1', name: 'Abi', fullName: 'Abi (V1)' },
+  'V2': { code: 'V2', name: 'RK Engg', fullName: 'RK Engg (V2)' },
+  'V3': { code: 'V3', name: 'Shiva Shakthi', fullName: 'Shiva Shakthi (V3)' },
+  'V4': { code: 'V4', name: 'Fine Turn', fullName: 'Fine Turn (V4)' },
+  'V6': { code: 'V6', name: 'NVCNC', fullName: 'NVCNC (V6)' },
+  'V7': { code: 'V7', name: 'Micro Mac', fullName: 'Micro Mac (V7)' },
+  'V8': { code: 'V8', name: 'Skyline', fullName: 'Skyline (V8)' },
+  'V10': { code: 'V10', name: 'Std Engg', fullName: 'Std Engg (V10)' },
+  'V11': { code: 'V11', name: 'Flame Tech / HTV', fullName: 'Flame Tech (V11)' },
+  'V12': { code: 'V12', name: 'Mech Tools', fullName: 'Mech Tools (V12)' },
+  'V13': { code: 'V13', name: 'VS Engg', fullName: 'VS Engg (V13)' },
+  'V14': { code: 'V14', name: 'RKV Metal', fullName: 'RKV Metal (V14)' },
+  'V15': { code: 'V15', name: 'Metal Form', fullName: 'Metal Form (V15)' },
+  'V16': { code: 'V16', name: 'Export', fullName: 'Export (V16)' },
+  'V17': { code: 'V17', name: 'Sivam', fullName: 'Sivam (V17)' },
+  'V18': { code: 'V18', name: 'JMC / Pre Tooling', fullName: 'JMC (V18)' },
+  'V19': { code: 'V19', name: 'PS Coating', fullName: 'PS Coating (V19)' },
+  'V24': { code: 'V24', name: 'Nisha Tools', fullName: 'Nisha Tools (V24)' },
+  'V26': { code: 'V26', name: 'GA Tools', fullName: 'GA Tools (V26)' },
+  'V27': { code: 'V27', name: 'JV Tools', fullName: 'JV Tools (V27)' },
+  'V35': { code: 'V35', name: 'GSM', fullName: 'GSM (V35)' },
+  'V38': { code: 'V38', name: 'SMV Engg', fullName: 'SMV Engg (V38)' },
+};
+
+function getVendorInfo(rowOrStage) {
+  if (!rowOrStage) return null;
+  const stage = typeof rowOrStage === 'string'
+    ? rowOrStage.trim().toUpperCase()
+    : String(rowOrStage.currentStage || rowOrStage.op || rowOrStage.vendor || '').trim().toUpperCase();
+  
+  if (!stage) return null;
+
+  // Special alias handling (FBV-VQ / FBV_ABI -> V1 - Abi)
+  if (stage.includes('-VQ') || stage.includes('_ABI') || stage === 'FBV_ABI' || stage === 'ABI') {
+    return { ...VENDOR_MAP['V1'], operation: 'FBV', isVendor: true };
   }
+
+  // Regex match for V-codes like -V13, -V2, -V01, V38, etc.
+  const vMatch = stage.match(/[-_]?V0*(\d+)/i);
+  if (vMatch) {
+    const vCode = 'V' + parseInt(vMatch[1], 10);
+    if (VENDOR_MAP[vCode]) {
+      const op = stage.replace(/[-_]?V0*\d+.*$/i, '').trim() || stage;
+      return { ...VENDOR_MAP[vCode], operation: op, isVendor: true };
+    }
+  }
+
+  // Match by vendor name if stage contains it
+  for (const [code, info] of Object.entries(VENDOR_MAP)) {
+    if (stage.includes(info.name.toUpperCase())) {
+      return { ...info, operation: stage, isVendor: true };
+    }
+  }
+
+  // If inhouse === 'VENDOR' and no specific vendor code was resolved
+  if (typeof rowOrStage === 'object' && rowOrStage.inhouse === 'VENDOR') {
+    return { code: 'EXT', name: stage || 'External Vendor', fullName: stage || 'External Vendor', operation: stage, isVendor: true };
+  }
+
   return null;
+}
+
+function getVendorCode(rowOrStage, inhouse) {
+  const info = getVendorInfo(typeof rowOrStage === 'object' ? rowOrStage : { currentStage: rowOrStage, inhouse });
+  return info ? info.code : null;
+}
+
+function getVendorName(rowOrStage, inhouse) {
+  const info = getVendorInfo(typeof rowOrStage === 'object' ? rowOrStage : { currentStage: rowOrStage, inhouse });
+  return info ? info.name : null;
 }
 
 function isSCComplete(items) {
@@ -984,6 +1049,9 @@ const calculationUtils = {
   calculateVendorAging,
   calculateProcessEfficiency,
   getVendorCode,
+  getVendorName,
+  getVendorInfo,
+  VENDOR_MAP,
   isSCComplete,
   calculateEstimatedDelivery,
   formatEstimatedDelivery,
@@ -1019,6 +1087,9 @@ export {
   calculateVendorAging,
   calculateProcessEfficiency,
   getVendorCode,
+  getVendorName,
+  getVendorInfo,
+  VENDOR_MAP,
   isSCComplete,
   calculateEstimatedDelivery,
   formatEstimatedDelivery,
