@@ -1099,5 +1099,76 @@ describe('calculationUtils', () => {
       expect(getVendorName(inhouseRow)).toBeNull();
     });
   });
+
+  describe('6-Day Work Week (Monday–Saturday) Calculations', () => {
+    const { workingDaysBetween5Day, addWorkingDays5Day, workingDaysBetween6Day, addWorkingDays6Day } = calculationUtils;
+
+    it('counts Saturdays as working days and skips Sundays and Company Holidays', () => {
+      // 2026-09-07 is Mon, 2026-09-12 is Sat -> Mon,Tue,Wed,Thu,Fri,Sat = 6 working days
+      expect(workingDaysBetween5Day('2026-09-07', '2026-09-12')).toBe(6);
+      expect(workingDaysBetween6Day('2026-09-07', '2026-09-12')).toBe(6);
+
+      // 2026-09-13 is Sunday. Mon-Sun (07 to 13) -> 6 working days (skips Sunday)
+      expect(workingDaysBetween5Day('2026-09-07', '2026-09-13')).toBe(6);
+
+      // 2026-09-14 is Vinayagar Chaturthi (Company Holiday)
+      // Mon 07 to Mon 14 -> 6 days (week 1) + 0 (Sun skipped) + 0 (Holiday skipped) = 6 working days
+      expect(workingDaysBetween5Day('2026-09-07', '2026-09-14')).toBe(6);
+    });
+
+    it('addWorkingDays5Day adds working days skipping only Sundays and Holidays', () => {
+      // Starting from Friday 2026-09-11, adding 2 working days:
+      // +1 = Sat 2026-09-12
+      // Sun 2026-09-13 skipped
+      // Mon 2026-09-14 (Holiday) skipped
+      // +2 = Tue 2026-09-15
+      expect(addWorkingDays5Day('2026-09-11', 2)).toBe('2026-09-15');
+      expect(addWorkingDays6Day('2026-09-11', 2)).toBe('2026-09-15');
+    });
+  });
+
+  describe('Standard Process Templates Matrix & Stage-by-Stage Projected Date', () => {
+    const { PROCESS_TEMPLATES_SUMMARY, PROCESS_TEMPLATES, calculateProductProjectedDate } = calculationUtils;
+
+    it('contains all template definitions with detailed stage sequences', () => {
+      expect(PROCESS_TEMPLATES['ACG'].totalProcesses).toBe(10);
+      expect(PROCESS_TEMPLATES['ACG'].totalDays).toBe(26);
+      expect(PROCESS_TEMPLATES['ACG'].stages.length).toBe(10);
+      expect(PROCESS_TEMPLATES['ACG'].stages[0]).toEqual({ name: 'DESIGN', days: 3 });
+
+      expect(PROCESS_TEMPLATES['APG 10 TO 15 OUTSOURCE'].totalProcesses).toBe(12);
+      expect(PROCESS_TEMPLATES['APG 10 TO 15 OUTSOURCE'].totalDays).toBe(27);
+
+      expect(PROCESS_TEMPLATES['ARG_6_To_20_VBM_HBM'].totalProcesses).toBe(18);
+      expect(PROCESS_TEMPLATES['ARG_6_To_20_VBM_HBM'].totalDays).toBe(47);
+
+      expect(PROCESS_TEMPLATES['ARG_20_To_130_VBM_HBM'].totalProcesses).toBe(17);
+      expect(PROCESS_TEMPLATES['ARG_20_To_130_VBM_HBM'].totalDays).toBe(45);
+    });
+
+    it('calculates remaining days by summing exact stage days from current stage to end', () => {
+      // ACG stages: DESIGN (3d), RM (2d), PRE TOOLING (6d), HT (2d), BRAZZING (3d), SG (3d), QC (1d), SD (3d), JR/AE (2d), ASSEMBLE (1d)
+      // At DESIGN: remaining planned days = 26
+      const resDesign = calculateProductProjectedDate({
+        template: 'ACG',
+        currentStage: 'DESIGN',
+        todayStr: '2026-09-01',
+        timestamp: '2026-09-01 00:00:00',
+      });
+      expect(resDesign.remainingDays).toBe(26);
+      expect(resDesign.projectedDate).toBe('2026-09-27');
+
+      // At SG (stage 6): remaining planned days = SG(3) + QC(1) + SD(3) + JR/AE(2) + ASSEMBLE(1) = 10 days
+      const resSG = calculateProductProjectedDate({
+        template: 'ACG',
+        currentStage: 'SG',
+        todayStr: '2026-09-01',
+        timestamp: '2026-09-01 00:00:00',
+      });
+      expect(resSG.remainingDays).toBe(10);
+      expect(resSG.projectedDate).toBe('2026-09-11');
+    });
+  });
 });
+
 
