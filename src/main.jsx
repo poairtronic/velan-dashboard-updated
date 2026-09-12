@@ -12,6 +12,21 @@ initSentry();
 initLogRocket();
 
 window.addEventListener('error', (event) => {
+  const filename = event.filename || '';
+  const message = event.message || '';
+  // Ignore browser extension and third-party injected script errors
+  if (
+    filename.includes('content-all.js') || 
+    filename.includes('extension') || 
+    filename.includes('chrome-extension') ||
+    filename.includes('moz-extension') ||
+    message.includes('startTime') ||
+    message.includes('forEach is not a function') ||
+    !filename
+  ) {
+    return;
+  }
+
   const logPayload = {
     action: 'FRONTEND_ERROR',
     entityType: 'frontend_global_error',
@@ -33,11 +48,16 @@ window.addEventListener('error', (event) => {
 
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason;
+  const msg = reason ? (reason.message || String(reason)) : '';
+  if (msg.includes('startTime') || msg.includes('forEach is not a function') || msg.includes('extension')) {
+    return;
+  }
+
   const logPayload = {
     action: 'FRONTEND_ERROR',
     entityType: 'frontend_unhandled_rejection',
     metadata: {
-      message: reason ? (reason.message || String(reason)) : 'Unhandled rejection',
+      message: msg || 'Unhandled rejection',
       stack: reason && reason.stack ? reason.stack : ''
     }
   };
