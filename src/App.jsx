@@ -30,6 +30,7 @@ const CycleTimePage = React.lazy(() => import('./pages/CycleTimePage'));
 const BottleneckPage = React.lazy(() => import('./pages/BottleneckPage'));
 const POPage = React.lazy(() => import('./pages/POPage'));
 const SCPage = React.lazy(() => import('./pages/SCPage'));
+const SalesProjectionPage = React.lazy(() => import('./pages/SalesProjectionPage'));
 const VendorPage = React.lazy(() => import('./pages/VendorPage'));
 const UploadPage = React.lazy(() => import('./pages/UploadPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
@@ -229,6 +230,15 @@ function DashboardLayout() {
                   </RouteWrapper>
                 }
               />
+              <Route
+                path="/sales-projection"
+                element={
+                  <RouteWrapper>
+                    <SalesProjectionPage />
+                  </RouteWrapper>
+                }
+              />
+              <Route path="/sales" element={<Navigate to="/sales-projection" replace />} />
               <Route
                 path="/vendor"
                 element={

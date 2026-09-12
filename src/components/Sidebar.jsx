@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { id: 'bottleneck', label: 'Bottleneck', icon: '🔴' },
   { id: 'po', label: 'PO Analysis', icon: '📋' },
   { id: 'sc', label: 'SC Sets', icon: '📦' },
+  { id: 'sales-projection', label: 'Sales Projection', icon: '📈' },
   { id: 'vendor', label: 'Vendor Eval', icon: '🏭' },
   { id: 'executive', label: 'Executive Intel', icon: '📊' },
   { id: 'mic', label: 'Manufacturing Intel', icon: '⚡' },
