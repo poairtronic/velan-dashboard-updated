@@ -28,6 +28,7 @@ function DatabasePage() {
     resetDB: onResetDB,
     handleHistoryFileUpload,
     handleHistoryDragDrop,
+    uniqueVendors,
   } = useData();
   const { importState } = useUI();
 
@@ -124,6 +125,7 @@ function DatabasePage() {
         setFilters={setFilters}
         uniquePOs={uniquePOs}
         uniqueTypes={uniqueTypes}
+        uniqueVendors={uniqueVendors}
         filteredCount={filtered.length}
         totalCount={total}
       />

@@ -12,6 +12,7 @@ function DatabaseFilterBar({
   setFilters,
   uniquePOs,
   uniqueTypes,
+  uniqueVendors,
   filteredCount,
   totalCount,
 }) {
@@ -131,6 +132,18 @@ function DatabaseFilterBar({
           <option value="INHOUSE">Inhouse Only</option>
           <option value="VENDOR">Vendor Only</option>
         </select>
+        <select
+          className="filter-select"
+          value={filters.vendor || ''}
+          onChange={(e) => setFilters((f) => ({ ...f, vendor: e.target.value }))}
+        >
+          <option value="">All Vendors</option>
+          {(uniqueVendors || []).map((v) => (
+            <option key={v.code} value={v.code}>
+              {v.label}
+            </option>
+          ))}
+        </select>
         <input
           className="filter-input"
           placeholder="Search SC / Product / PO..."
@@ -141,7 +154,7 @@ function DatabaseFilterBar({
         <button
           className="filter-btn reset"
           onClick={() =>
-            setFilters({ po: '', stage: '', type: '', inhouse: '', category: '', search: '' })
+            setFilters({ po: '', stage: '', type: '', inhouse: '', vendor: '', category: '', search: '' })
           }
         >
           ✕ Reset

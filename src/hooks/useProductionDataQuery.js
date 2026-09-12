@@ -8,6 +8,7 @@ export function useProductionDataQuery(filters, page = 1, limit = 100) {
     if (f.stage) params.append('stage', f.stage);
     if (f.type) params.append('type', f.type);
     if (f.inhouse) params.append('inhouse', f.inhouse);
+    if (f.vendor) params.append('vendor', f.vendor);
     if (f.category) params.append('category', f.category);
     if (f.search) params.append('search', f.search);
     if (f.fromDate) params.append('fromDate', f.fromDate);

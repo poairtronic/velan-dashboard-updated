@@ -9,6 +9,7 @@ export function useDatabaseFilters() {
     stage: '',
     type: '',
     inhouse: '',
+    vendor: '',
     category: '',
     search: '',
   });
@@ -26,6 +27,7 @@ export function useDatabaseFilters() {
     filters.search ||
     filters.type ||
     filters.inhouse ||
+    filters.vendor ||
     filters.category ||
     filters.stage
   );
