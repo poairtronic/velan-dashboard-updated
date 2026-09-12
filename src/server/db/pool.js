@@ -212,9 +212,17 @@ async function initDB() {
       )
     `);
 
-    // Ensure action column exists for tables created by older schema versions
+    // Ensure all required columns exist for older schema versions
     await client.query(`
-      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT ''
+      ALTER TABLE audit_log 
+        ADD COLUMN IF NOT EXISTS user_id INTEGER,
+        ADD COLUMN IF NOT EXISTS user_email VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS entity_type VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS entity_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS metadata JSONB,
+        ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45),
+        ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ DEFAULT NOW();
     `);
 
     // 5. Create indices for speed optimization
