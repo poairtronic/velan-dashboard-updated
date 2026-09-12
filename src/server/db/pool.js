@@ -10,7 +10,7 @@ if (!isMock) {
     ssl: { rejectUnauthorized: false },
     max: parseInt(process.env.DB_POOL_MAX, 10) || 20, // Increased for 10k+ users handling
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 30000,
   });
 
   pool.on('error', (err) => {
