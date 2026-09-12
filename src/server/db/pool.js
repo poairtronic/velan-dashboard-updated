@@ -99,12 +99,13 @@ async function initDB() {
     // 4. Create users table (separate from production data)
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id            SERIAL PRIMARY KEY,
-        username      VARCHAR(50) UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role          VARCHAR(50) NOT NULL DEFAULT 'user',
-        status        VARCHAR(15) NOT NULL DEFAULT 'approved',
-        created_at    TIMESTAMPTZ DEFAULT NOW()
+        id              SERIAL PRIMARY KEY,
+        username        VARCHAR(50) UNIQUE NOT NULL,
+        password_hash   TEXT NOT NULL,
+        role            VARCHAR(50) NOT NULL DEFAULT 'user',
+        status          VARCHAR(15) NOT NULL DEFAULT 'approved',
+        allowed_modules JSONB DEFAULT '[]'::jsonb,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
@@ -115,6 +116,7 @@ async function initDB() {
         ADD COLUMN IF NOT EXISTS password_hash TEXT,
         ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user',
         ADD COLUMN IF NOT EXISTS status VARCHAR(15) DEFAULT 'approved',
+        ADD COLUMN IF NOT EXISTS allowed_modules JSONB DEFAULT '[]'::jsonb,
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()
     `);
 

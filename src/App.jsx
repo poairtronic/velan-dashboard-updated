@@ -109,51 +109,63 @@ function DashboardLayout() {
               <Route
                 path="/"
                 element={
-                  <RouteWrapper>
-                    <OverviewPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="overview">
+                    <RouteWrapper>
+                      <OverviewPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route path="/overview" element={<Navigate to="/" replace />} />
               <Route
                 path="/executive"
                 element={
-                  <RouteWrapper>
-                    <ExecutivePage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="executive">
+                    <RouteWrapper>
+                      <ExecutivePage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/executive-war-room"
                 element={
-                  <RouteWrapper>
-                    <ExecutiveWarRoom />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="executive-war-room">
+                    <RouteWrapper>
+                      <ExecutiveWarRoom />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
 
               <Route
                 path="/mic"
                 element={
-                  <RouteWrapper>
-                    <ManufacturingIntelligencePage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="mic">
+                    <RouteWrapper>
+                      <ManufacturingIntelligencePage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/forecast"
                 element={
-                  <RouteWrapper>
-                    <PredictiveAnalyticsPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="forecast">
+                    <RouteWrapper>
+                      <PredictiveAnalyticsPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/inventory"
                 element={
-                  <RouteWrapper>
-                    <InventoryPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="inventory">
+                    <RouteWrapper>
+                      <InventoryPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
@@ -169,82 +181,102 @@ function DashboardLayout() {
               <Route
                 path="/monthday"
                 element={
-                  <RouteWrapper>
-                    <MonthDayPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="monthday">
+                    <RouteWrapper>
+                      <MonthDayPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/database"
                 element={
-                  <RouteWrapper>
-                    <DatabasePage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="database">
+                    <RouteWrapper>
+                      <DatabasePage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/production"
                 element={
-                  <RouteWrapper>
-                    <ProductionPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="production">
+                    <RouteWrapper>
+                      <ProductionPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/wip"
                 element={
-                  <RouteWrapper>
-                    <WIPPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="wip">
+                    <RouteWrapper>
+                      <WIPPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/cycleTime"
                 element={
-                  <RouteWrapper>
-                    <CycleTimePage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="cycleTime">
+                    <RouteWrapper>
+                      <CycleTimePage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/bottleneck"
                 element={
-                  <RouteWrapper>
-                    <BottleneckPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="bottleneck">
+                    <RouteWrapper>
+                      <BottleneckPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/po"
                 element={
-                  <RouteWrapper>
-                    <POPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="po">
+                    <RouteWrapper>
+                      <POPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/sc"
                 element={
-                  <RouteWrapper>
-                    <SCPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="sc">
+                    <RouteWrapper>
+                      <SCPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route
                 path="/sales-projection"
                 element={
-                  <RouteWrapper>
-                    <SalesProjectionPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="sales-projection">
+                    <RouteWrapper>
+                      <SalesProjectionPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route path="/sales" element={<Navigate to="/sales-projection" replace />} />
               <Route
                 path="/vendor"
                 element={
-                  <RouteWrapper>
-                    <VendorPage />
-                  </RouteWrapper>
+                  <ProtectedRoute moduleId="vendor">
+                    <RouteWrapper>
+                      <VendorPage />
+                    </RouteWrapper>
+                  </ProtectedRoute>
                 }
               />
               <Route

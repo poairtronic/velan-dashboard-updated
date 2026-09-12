@@ -26,7 +26,12 @@ function authenticate(req, res, next) {
 
       // Generate new access token
       const newAccessToken = jwt.sign(
-        { id: decodedRefresh.id, username: decodedRefresh.username, role: decodedRefresh.role },
+        {
+          id: decodedRefresh.id,
+          username: decodedRefresh.username,
+          role: decodedRefresh.role,
+          allowed_modules: decodedRefresh.allowed_modules || [],
+        },
         JWT_SECRET,
         { expiresIn: '15m' }
       );

@@ -30,12 +30,17 @@ const NAV_ITEMS = [
 function Sidebar() {
   const navigate = useNavigate();
   const { activeNav, setActiveNav } = useUI();
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasModuleAccess } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
 
-  const filteredNavItems = NAV_ITEMS.filter(
-    (n) => (n.id !== 'upload' && n.id !== 'users' && n.id !== 'health' && n.id !== 'executive-war-room' && n.id !== 'audit-trail') || isAdmin
-  );
+  const filteredNavItems = NAV_ITEMS.filter((n) => {
+    if (isAdmin) return true;
+    // Strictly admin-only modules
+    if (n.id === 'upload' || n.id === 'users' || n.id === 'health' || n.id === 'audit-trail') {
+      return false;
+    }
+    return hasModuleAccess ? hasModuleAccess(n.id) : true;
+  });
 
   const fetchPendingCount = useCallback(async () => {
     if (!isAdmin) return;
