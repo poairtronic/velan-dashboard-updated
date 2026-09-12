@@ -68,16 +68,26 @@ function requireAuth(roles = []) {
       return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired session' });
     }
 
-    if (roles.length > 0 && !roles.includes(req.user.role)) {
-      const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
-      logger.warn(logger.categories.AUTH, `[AUTH FAILURE] Forbidden: Insufficient permissions for user ${req.user.username}`, {
-        ip,
-        url: req.originalUrl,
-        username: req.user.username,
-        role: req.user.role,
-        requiredRoles: roles
-      });
-      return res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions' });
+    if (roles.length > 0) {
+      const userRole = (req.user.role || '').toLowerCase();
+      const normalizedRoles = roles.map(r => r.toLowerCase());
+      
+      const isAdmin = userRole === 'admin';
+      const isAllowedAdmin = normalizedRoles.includes('admin') && isAdmin;
+      const isAllowedUser = normalizedRoles.includes('user'); // 'user' represents any authenticated dashboard user
+      const isExplicitMatch = normalizedRoles.includes(userRole);
+
+      if (!isAdmin && !isAllowedAdmin && !isAllowedUser && !isExplicitMatch) {
+        const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'anonymous';
+        logger.warn(logger.categories.AUTH, `[AUTH FAILURE] Forbidden: Insufficient permissions for user ${req.user.username}`, {
+          ip,
+          url: req.originalUrl,
+          username: req.user.username,
+          role: req.user.role,
+          requiredRoles: roles
+        });
+        return res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions' });
+      }
     }
 
     next();

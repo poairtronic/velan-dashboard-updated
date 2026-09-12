@@ -13,6 +13,8 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, AlertTriangle, Info, CheckCircle2
 } from 'lucide-react';
 import DrilldownCard from '../components/DrilldownCard';
+import { getVendorInfo } from '../utils/calculationUtils';
+
 
 // --- Shared Components ---
 
@@ -447,9 +449,13 @@ export default function ManufacturingIntelligencePage() {
       filteredRows = allRows.filter(r => r.po === value);
     } else if (type === 'Vendor') {
       filteredRows = allRows.filter(r => {
-        if (r.inhouse !== 'VENDOR') return false;
+        const isVen = r.inhouse === 'VENDOR' || (r.currentStage && r.currentStage.endsWith('V'));
+        if (!isVen) return false;
         const code = r.currentStage && r.currentStage.endsWith('V') ? r.currentStage.slice(0, -1) : 'EXT';
-        return code === value;
+        if (code === value || (r.currentStage && r.currentStage.includes(value)) || value.includes(code)) return true;
+        const vInfo = getVendorInfo ? getVendorInfo(r) : null;
+        if (vInfo && (vInfo.code === value || vInfo.fullName === value || vInfo.name === value || value.includes(vInfo.code))) return true;
+        return false;
       });
     }
     setDrillDown({ title: `${type}: ${value}`, data: filteredRows });

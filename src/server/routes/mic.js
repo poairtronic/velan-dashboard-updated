@@ -1,6 +1,6 @@
 const express = require('express');
 const { calculateMIC } = require('../services/micService');
-const { getFilteredData, computeGroups } = require('../services/dataQueryService');
+const { getFilteredData, getMergedData, computeGroups } = require('../services/dataQueryService');
 const { getOrSetCache } = require('../cache/cacheService');
 
 const router = express.Router();
@@ -13,12 +13,13 @@ function getTodayStr() {
 router.get('/', async (req, res) => {
   try {
     const filters = req.query;
-    const cacheKey = `mic_intelligence:${JSON.stringify(filters)}`;
+    const cacheKey = `mic_intelligence_v2:${JSON.stringify(filters)}`;
     
-    const micData = await getOrSetCache(cacheKey, 300, async () => {
+    const micData = await getOrSetCache(cacheKey, 60, async () => {
       const todayStr = getTodayStr();
       const filtered = await getFilteredData(filters, todayStr);
-      const { scGroups, poGroups } = computeGroups(filtered);
+      const allData = await getMergedData(todayStr);
+      const { scGroups, poGroups } = computeGroups(filtered, allData);
 
       return calculateMIC({ filtered, scGroups, poGroups, todayStr });
     });
@@ -31,3 +32,4 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
+
