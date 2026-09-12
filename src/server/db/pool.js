@@ -230,7 +230,7 @@ async function initDB() {
     // Ensure all required columns exist for older schema versions
     await client.query(`
       ALTER TABLE audit_log 
-        ADD COLUMN IF NOT EXISTS user_id INTEGER,
+        ADD COLUMN IF NOT EXISTS user_id VARCHAR(100),
         ADD COLUMN IF NOT EXISTS user_email VARCHAR(255),
         ADD COLUMN IF NOT EXISTS action VARCHAR(100) NOT NULL DEFAULT '',
         ADD COLUMN IF NOT EXISTS entity_type VARCHAR(100),
@@ -239,6 +239,32 @@ async function initDB() {
         ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45),
         ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ DEFAULT NOW();
     `);
+
+    // Safely drop legacy constraints on older audit_log tables
+    try {
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'report_id') THEN
+            ALTER TABLE audit_log ALTER COLUMN report_id DROP NOT NULL;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'actor_id') THEN
+            ALTER TABLE audit_log ALTER COLUMN actor_id DROP NOT NULL;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'actionType') THEN
+            ALTER TABLE audit_log ALTER COLUMN "actionType" DROP NOT NULL;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'user_id') THEN
+            ALTER TABLE audit_log ALTER COLUMN user_id TYPE VARCHAR(100) USING user_id::text;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'timestamp') THEN
+            ALTER TABLE audit_log ALTER COLUMN timestamp SET DEFAULT NOW();
+          END IF;
+        END $$;
+      `);
+    } catch (auditMigErr) {
+      console.warn('[DB] Audit log migration notice:', auditMigErr.message);
+    }
 
     // 5. Create indices for speed optimization
     await client.query('CREATE INDEX IF NOT EXISTS idx_velan_rows_key ON velan_rows (row_key)');
