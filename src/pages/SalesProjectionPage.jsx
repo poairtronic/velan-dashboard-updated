@@ -22,85 +22,11 @@ const {
   isDateInNextDays,
 } = calculationUtils;
 
-// ─── DATE STATUS BADGE COMPONENT ─────────────────────────────────────────────
-function DateStatusBadge({ status, scProdDate }) {
-  if (!status || status.code === 'NO_DATE') {
+// ─── DATE STATUS BADGE COMPONENT ──────────────────────────────────────────────
+function DateStatusBadge({ status }) {
+  if (!status) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+  if (status.code === 'NO_DATE') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 8px',
-            borderRadius: 4,
-            fontSize: 9,
-            fontWeight: 700,
-            fontFamily: 'Share Tech Mono, monospace',
-            background: 'rgba(123, 167, 204, 0.12)',
-            color: 'var(--text-muted, #7ba7cc)',
-            border: '1px solid rgba(123, 167, 204, 0.25)',
-            width: 'fit-content',
-          }}
-        >
-          <span style={{ fontSize: 7 }}>●</span> NO DATE
-        </span>
-        {scProdDate && <span className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtDate(scProdDate)}</span>}
-      </div>
-    );
-  }
-  if (status.code === 'OVERDUE') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 8px',
-            borderRadius: 4,
-            fontSize: 9,
-            fontWeight: 700,
-            fontFamily: 'Share Tech Mono, monospace',
-            background: 'rgba(255, 61, 90, 0.15)',
-            color: '#ff3d5a',
-            border: '1px solid rgba(255, 61, 90, 0.35)',
-            width: 'fit-content',
-          }}
-        >
-          <span style={{ fontSize: 7 }}>●</span> OVERDUE
-        </span>
-        {scProdDate && <span className="mono" style={{ fontSize: 10, color: '#ff3d5a' }}>{fmtDate(scProdDate)}</span>}
-      </div>
-    );
-  }
-  if (status.code === 'DUE_TODAY') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 8px',
-            borderRadius: 4,
-            fontSize: 9,
-            fontWeight: 700,
-            fontFamily: 'Share Tech Mono, monospace',
-            background: 'rgba(255, 214, 10, 0.15)',
-            color: '#ffd60a',
-            border: '1px solid rgba(255, 214, 10, 0.35)',
-            width: 'fit-content',
-          }}
-        >
-          <span style={{ fontSize: 7 }}>●</span> DUE TODAY
-        </span>
-        {scProdDate && <span className="mono" style={{ fontSize: 10, color: '#ffd60a' }}>{fmtDate(scProdDate)}</span>}
-      </div>
-    );
-  }
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <span
         style={{
           display: 'inline-flex',
@@ -111,16 +37,79 @@ function DateStatusBadge({ status, scProdDate }) {
           fontSize: 9,
           fontWeight: 700,
           fontFamily: 'Share Tech Mono, monospace',
-          background: 'rgba(0, 201, 255, 0.15)',
-          color: '#00c9ff',
-          border: '1px solid rgba(0, 201, 255, 0.35)',
+          background: 'rgba(123, 167, 204, 0.12)',
+          color: 'var(--text-muted, #7ba7cc)',
+          border: '1px solid rgba(123, 167, 204, 0.25)',
           width: 'fit-content',
         }}
       >
-        <span style={{ fontSize: 7 }}>●</span> UPCOMING
+        <span style={{ fontSize: 7 }}>●</span> NO DATE
       </span>
-      {scProdDate && <span className="mono" style={{ fontSize: 10, color: '#00c9ff' }}>{fmtDate(scProdDate)}</span>}
-    </div>
+    );
+  }
+  if (status.code === 'OVERDUE') {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '2px 8px',
+          borderRadius: 4,
+          fontSize: 9,
+          fontWeight: 700,
+          fontFamily: 'Share Tech Mono, monospace',
+          background: 'rgba(255, 61, 90, 0.15)',
+          color: '#ff3d5a',
+          border: '1px solid rgba(255, 61, 90, 0.35)',
+          width: 'fit-content',
+        }}
+      >
+        <span style={{ fontSize: 7 }}>●</span> OVERDUE
+      </span>
+    );
+  }
+  if (status.code === 'DUE_TODAY') {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '2px 8px',
+          borderRadius: 4,
+          fontSize: 9,
+          fontWeight: 700,
+          fontFamily: 'Share Tech Mono, monospace',
+          background: 'rgba(255, 214, 10, 0.15)',
+          color: '#ffd60a',
+          border: '1px solid rgba(255, 214, 10, 0.35)',
+          width: 'fit-content',
+        }}
+      >
+        <span style={{ fontSize: 7 }}>●</span> DUE TODAY
+      </span>
+    );
+  }
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 8px',
+        borderRadius: 4,
+        fontSize: 9,
+        fontWeight: 700,
+        fontFamily: 'Share Tech Mono, monospace',
+        background: 'rgba(0, 201, 255, 0.15)',
+        color: '#00c9ff',
+        border: '1px solid rgba(0, 201, 255, 0.35)',
+        width: 'fit-content',
+      }}
+    >
+      <span style={{ fontSize: 7 }}>●</span> UPCOMING
+    </span>
   );
 }
 
@@ -382,7 +371,6 @@ export default function SalesProjectionPage() {
       `"${(sg.productNames || []).join('; ') || sg.primaryProductName || ''}"`,
       sg.itemCount || 0,
       `"${(sg.stagesList || []).join(', ')}"`,
-      `"${sg.scProductionDate || ''}"`,
       `"${sg.productionDateStatus?.label || sg.productionDateStatus?.code || ''}"`,
       `"${sg.estimatedDelivery || ''}"`,
       `"${sg.lastTimestamp || ''}"`,
@@ -594,7 +582,7 @@ export default function SalesProjectionPage() {
                 {renderSortHeader('product', 'ITEM NAME')}
                 {renderSortHeader('items', 'ITEM QTY')}
                 <th style={{ padding: '10px 8px', color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', fontSize: '11px' }}>STAGE</th>
-                {renderSortHeader('scProdDate', 'SC PROD DATE / STATUS')}
+                {renderSortHeader('prodDateStatus', 'PROD DATE STATUS')}
                 {renderSortHeader('estDelivery', 'ESTIMATED DELIVERY')}
                 {renderSortHeader('lastTs', 'LAST TIMESTAMP')}
                 {renderSortHeader('days', 'DAYS TAKEN')}
@@ -717,9 +705,9 @@ export default function SalesProjectionPage() {
                           </div>
                         </td>
 
-                        {/* PROD DATE STATUS & SC PROD DATE */}
+                        {/* PROD DATE STATUS */}
                         <td>
-                          <DateStatusBadge status={sg.productionDateStatus} scProdDate={sg.scProductionDate} />
+                          <DateStatusBadge status={sg.productionDateStatus} />
                         </td>
 
                         {/* ESTIMATED DELIVERY */}
