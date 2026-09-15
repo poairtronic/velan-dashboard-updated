@@ -36,7 +36,7 @@ const env = _env.data;
 
 const isProd = env.NODE_ENV === 'production';
 
-const crypto = require('crypto');
+
 
 // Configuration warning and random key generation for unsafe defaults in production
 if (isProd) {
