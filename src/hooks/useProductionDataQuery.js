@@ -5,7 +5,7 @@ export function useProductionDataQuery(filters, page = 1, limit = 100) {
   const buildQueryString = (f) => {
     const params = new URLSearchParams();
     if (f.po) params.append('po', f.po);
-    if (f.stage) params.append('stage', f.stage);
+    if (f.stage && f.stage.length > 0) params.append('stage', Array.isArray(f.stage) ? f.stage.join(',') : f.stage);
     if (f.type) params.append('type', f.type);
     if (f.inhouse) params.append('inhouse', f.inhouse);
     if (f.vendor) params.append('vendor', f.vendor);

@@ -105,12 +105,17 @@ async function getFilteredData(filters, todayStr) {
   }
 
   const { po, stage, type, inhouse, category, search, fromDate, toDate, dateType = 'poDate', vendor } = filters;
+  
+  let stageList = [];
+  if (stage) {
+    stageList = stage.split(',').map(s => s.trim()).filter(Boolean);
+  }
 
   const filtered = data.filter((row) => {
     const dateVal = dateType === 'poDate' ? row.poDate : row.timestamp;
     if (!dateInRange(dateVal, fromDate, toDate)) return false;
     if (po && row.po !== po) return false;
-    if (stage && (row.currentStage || '').trim() !== stage) return false;
+    if (stageList.length > 0 && !stageList.includes((row.currentStage || '').trim())) return false;
     if (type && row.type !== type) return false;
     if (category && getProductCategory(row.type) !== category) return false;
     if (inhouse) {
