@@ -41,12 +41,10 @@ const crypto = require('crypto');
 // Configuration warning and random key generation for unsafe defaults in production
 if (isProd) {
   if (env.JWT_SECRET === 'default_jwt_secret_change_me_in_production') {
-    console.warn('[SECURITY WARNING] JWT_SECRET is unset in production! Generating temporary random secret for session security.');
-    env.JWT_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn('[SECURITY WARNING] JWT_SECRET is unset in production! Using insecure default. Please set JWT_SECRET in environment variables.');
   }
   if (env.JWT_REFRESH_SECRET === 'default_jwt_refresh_secret_change_me_in_production') {
-    console.warn('[SECURITY WARNING] JWT_REFRESH_SECRET is unset in production! Generating temporary random secret.');
-    env.JWT_REFRESH_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn('[SECURITY WARNING] JWT_REFRESH_SECRET is unset in production! Using insecure default. Please set JWT_REFRESH_SECRET in environment variables.');
   }
   if (env.DATABASE_URL === 'mock' || !env.DATABASE_URL) {
     console.warn('[CONFIG WARNING] DATABASE_URL is set to mock or missing in production!');
