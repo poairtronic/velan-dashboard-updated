@@ -1,13 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import calculationUtils from '../utils/calculationUtils.js';
-const { getProductCategory, getVendorInfo } = calculationUtils;
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { getProductCategory, getVendorInfo } from '../utils/calculationUtils.js';
 
 const FilterContext = createContext();
 
 export function FilterProvider({ children }) {
   const [filters, setFilters] = useState({
     po: '',
-    stage: '',
+    stage: [],
     type: '',
     inhouse: '',
     vendor: '',
@@ -23,7 +22,7 @@ export function FilterProvider({ children }) {
   const resetFilters = useCallback(() => {
     setFilters({
       po: '',
-      stage: '',
+      stage: [],
       type: '',
       inhouse: '',
       vendor: '',
@@ -37,7 +36,7 @@ export function FilterProvider({ children }) {
     (rows) => {
       return (rows || []).filter((row) => {
         if (filters.po && row.po !== filters.po) return false;
-        if (filters.stage && row.currentStage !== filters.stage) return false;
+        if (filters.stage && filters.stage.length > 0 && !filters.stage.includes(row.currentStage)) return false;
         if (filters.type && row.type !== filters.type) return false;
         if (filters.inhouse) {
           const isVen = getVendorInfo(row) !== null || row.inhouse === 'VENDOR';

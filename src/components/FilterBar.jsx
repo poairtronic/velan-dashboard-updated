@@ -3,6 +3,7 @@ import debounce from '../utils/debounce';
 import { useFilters } from '../context/FilterContext';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
+import MultiSelectCheckbox from './MultiSelectCheckbox';
 // ─── FILTERBAR UI COMPONENT ───────────────────────────────────────────────────
 
 function FilterBar() {
@@ -30,12 +31,9 @@ function FilterBar() {
   }, [debouncedSearch]);
 
   // Keep local input in sync when external reset clears filters
-  // eslint-disable-next-line
-  React.useEffect(() => {
-    if (filters.search === '') {
-      setSearchInput('');
-    }
-  }, [filters.search]);
+  if (filters.search === '' && searchInput !== '') {
+    setSearchInput('');
+  }
 
   const handleSearchChange = React.useCallback(
     (e) => {
@@ -76,21 +74,12 @@ function FilterBar() {
         ))}
       </select>
 
-      <select
-        id="filter-stage"
-        name="filter-stage"
-        className="filter-select"
-        aria-label="Filter by Stage"
-        value={filters.stage}
-        onChange={(e) => setFilters((f) => ({ ...f, stage: e.target.value }))}
-      >
-        <option value="">All Stages</option>
-        {uniqueStages.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
+      <MultiSelectCheckbox
+        placeholder="All Stages"
+        options={uniqueStages}
+        selectedValues={filters.stage || []}
+        onChange={(val) => setFilters((f) => ({ ...f, stage: val }))}
+      />
 
       <select
         id="filter-type"

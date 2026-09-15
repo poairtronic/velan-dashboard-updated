@@ -6,7 +6,7 @@ export function useDatabaseFilters() {
   const [toDate, setToDate] = useState('');
   const [filters, setFilters] = useState({
     po: '',
-    stage: '',
+    stage: [],
     type: '',
     inhouse: '',
     vendor: '',
@@ -29,7 +29,7 @@ export function useDatabaseFilters() {
     filters.inhouse ||
     filters.vendor ||
     filters.category ||
-    filters.stage
+    (filters.stage && filters.stage.length > 0)
   );
 
   function setQuickDays(days) {

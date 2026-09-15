@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React from 'react';
+import MultiSelectCheckbox from '../MultiSelectCheckbox';
 
 function DatabaseFilterBar({
   dateType,
@@ -89,18 +90,12 @@ function DatabaseFilterBar({
             </option>
           ))}
         </select>
-        <select
-          className="filter-select"
-          value={filters.stage}
-          onChange={(e) => setFilters((f) => ({ ...f, stage: e.target.value }))}
-        >
-          <option value="">All Stages</option>
-          {['STORES', 'STOCK', 'READY'].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <MultiSelectCheckbox
+          placeholder="All Stages"
+          options={['STORES', 'STOCK', 'READY']}
+          selectedValues={filters.stage || []}
+          onChange={(val) => setFilters((f) => ({ ...f, stage: val }))}
+        />
         <select
           className="filter-select"
           value={filters.type}
@@ -154,7 +149,7 @@ function DatabaseFilterBar({
         <button
           className="filter-btn reset"
           onClick={() =>
-            setFilters({ po: '', stage: '', type: '', inhouse: '', vendor: '', category: '', search: '' })
+            setFilters({ po: '', stage: [], type: '', inhouse: '', vendor: '', category: '', search: '' })
           }
         >
           ✕ Reset
