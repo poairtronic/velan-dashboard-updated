@@ -241,14 +241,7 @@ export default function CuttingDashboard() {
     }
   };
 
-  const handleCutPieceSelect = (e) => {
-    const selectedName = e.target.value;
-    setCutPieceName(selectedName);
-    const piece = inventory.find(inv => inv.cutPiece.cutPieceName === selectedName);
-    if (piece) {
-      setCutDimension(piece.cutPiece.cutDimension);
-    }
-  };
+
 
   const getStatusColor = (status) => {
     if (status === 'Active') return 'bg-[var(--glow2)] text-[var(--success)] border-[var(--success)]/20';

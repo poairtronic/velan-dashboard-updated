@@ -4,7 +4,7 @@ import { TableSkeleton } from './skeletons/Skeletons';
 import EmptyState from './EmptyState';
 
 // Row Renderer for react-window
-const RowRenderer = React.memo(({ index, style, data: itemData }) => {
+const RowRenderer = React.memo(function RowRenderer({ index, style, data: itemData }) {
   const { data, RowComponent } = itemData;
   const row = data[index];
   return (

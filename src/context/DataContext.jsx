@@ -12,8 +12,7 @@ import useUploadHandlers from '../hooks/useUploadHandlers';
 import { normalizeGoogleSheetsUrl } from '../services/googleSheets';
 import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
-import calculationUtils from '../utils/calculationUtils.js';
-const { VENDOR_MAP } = calculationUtils;
+import { VENDOR_MAP } from '../utils/calculationUtils.js';
 const DataContext = createContext();
 
 export function DataProvider({ children }) {

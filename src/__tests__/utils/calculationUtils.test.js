@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import calculationUtils from '../../utils/calculationUtils.js';
-import { toIsoDateString } from '../../utils/dateUtils';
-const { workingDaysBetween, 
+import { 
+  workingDaysBetween, 
   getProductCategory, 
   parseDateTime,
   isSLAViolation,
@@ -19,8 +18,14 @@ const { workingDaysBetween,
   getVendorInfo,
   getVendorCode,
   getVendorName,
-  VENDOR_MAP
- } = calculationUtils;
+  VENDOR_MAP,
+  workingDaysBetween5Day, 
+  addWorkingDays5Day, 
+  workingDaysBetween6Day, 
+  addWorkingDays6Day,
+  PROCESS_TEMPLATES
+} from '../../utils/calculationUtils.js';
+import { toIsoDateString } from '../../utils/dateUtils';
 
 describe('calculationUtils', () => {
   describe('workingDaysBetween', () => {
@@ -1101,7 +1106,7 @@ describe('calculationUtils', () => {
   });
 
   describe('6-Day Work Week (Monday–Saturday) Calculations', () => {
-    const { workingDaysBetween5Day, addWorkingDays5Day, workingDaysBetween6Day, addWorkingDays6Day } = calculationUtils;
+
 
     it('counts Saturdays as working days and skips Sundays and Company Holidays', () => {
       // 2026-09-07 is Mon, 2026-09-12 is Sat -> Mon,Tue,Wed,Thu,Fri,Sat = 6 working days
@@ -1128,7 +1133,7 @@ describe('calculationUtils', () => {
   });
 
   describe('Standard Process Templates Matrix & Stage-by-Stage Projected Date', () => {
-    const { PROCESS_TEMPLATES_SUMMARY, PROCESS_TEMPLATES, calculateProductProjectedDate } = calculationUtils;
+
 
     it('contains all template definitions with detailed stage sequences', () => {
       expect(PROCESS_TEMPLATES['ACG'].totalProcesses).toBe(10);

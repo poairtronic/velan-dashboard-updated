@@ -279,7 +279,7 @@ function getVendorInfo(rowOrStage) {
   }
 
   // Match by vendor name if stage contains it
-  for (const [code, info] of Object.entries(VENDOR_MAP)) {
+  for (const info of Object.values(VENDOR_MAP)) {
     if (stage.includes(info.name.toUpperCase())) {
       return { ...info, operation: stage, isVendor: true };
     }
@@ -1728,7 +1728,7 @@ function formatEstimatedDelivery(estDelivery) {
  */
 function calculateProductProjectedDate(params) {
   if (!params || typeof params !== 'object') return null;
-  const { product, type, family, template, currentStage, timestamp, poDate, todayStr } = params;
+  const { type, family, template, currentStage, timestamp, poDate, todayStr } = params;
   if (!currentStage && !template && !timestamp && !poDate) return null;
 
   const normStage = canonicalProcess(currentStage);
@@ -1766,7 +1766,7 @@ function calculateProductProjectedDate(params) {
       currentProcessDays = Math.round(templateInfo.daysPerProcess || 3);
     }
   } else {
-    const totalDays = templateInfo ? templateInfo.totalDays : (effectiveFamily.includes('ARG') ? 45 : (effectiveFamily.includes('APG') ? 29 : 30));
+
     const totalProcesses = templateInfo ? templateInfo.totalProcesses : (effectiveFamily.includes('ARG') ? 17 : (effectiveFamily.includes('APG') ? 13 : 12));
     const daysPerProcess = templateInfo ? templateInfo.daysPerProcess : 3;
 

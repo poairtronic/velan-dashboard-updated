@@ -1,11 +1,8 @@
 import React from 'react';
-import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
-import calculationUtils from '../utils/calculationUtils.js';
-const {
-  workingDaysBetween,
+import {
   daysBetween,
   calculateProcessCycleTime,
   isSCComplete,
@@ -13,16 +10,13 @@ const {
   formatEstimatedDelivery,
   calculateSCProductionDate,
   getSCLastTimestamp,
-  getProductCategory,
   normalizeProductsInGroup,
   getProductionDateStatus,
   getTodayIso,
   isDateInNextDays,
-} = calculationUtils;
+} from '../utils/calculationUtils.js';
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 
 // ─── DATE STATUS BADGE COMPONENT ─────────────────────────────────────────────
@@ -113,7 +107,7 @@ function DateStatusBadge({ status }) {
 
 // ─── SC COMPONENT SET COMPLETION & ANALYTICS PAGE ─────────────────────────────
 function SCPage() {
-  const { kpis } = useData();
+
   const { filters } = useFilters();
   const [tab, setTab] = React.useState('all');
   const [dateFilter, setDateFilter] = React.useState('all');

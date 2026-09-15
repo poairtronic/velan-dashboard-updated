@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
 import { useNavigate } from 'react-router-dom';
@@ -49,26 +49,23 @@ export default function CommandPalette({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // eslint-disable-next-line
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
-
   const resultsRef = useRef(results);
   const selectedIndexRef = useRef(selectedIndex);
-  resultsRef.current = results;
-  selectedIndexRef.current = selectedIndex;
-
+  
   const executeCommand = (item) => {
     setActiveNav(item.nav);
     navigate(item.path);
     onClose();
   };
   const executeCommandRef = useRef(executeCommand);
-  executeCommandRef.current = executeCommand;
-
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    resultsRef.current = results;
+    selectedIndexRef.current = selectedIndex;
+    executeCommandRef.current = executeCommand;
+    onCloseRef.current = onClose;
+  });
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -112,13 +109,13 @@ export default function CommandPalette({ isOpen, onClose }) {
           className="command-palette-input"
           placeholder="Search for POs, SCs, or navigate to pages..."
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={e => { setQuery(e.target.value); setSelectedIndex(0); }}
         />
         
         <div className="command-palette-results">
           {results.length === 0 ? (
             <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              No results found for "{query}"
+              No results found for &quot;{query}&quot;
             </div>
           ) : (
             results.map((item, idx) => (
