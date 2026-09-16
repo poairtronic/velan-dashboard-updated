@@ -157,14 +157,58 @@ function toIsoDateString(value) {
   if (!isNaN(num) && num > 20000 && num < 80000) {
     const epoch = new Date(Math.round((num - 25569) * 86400 * 1000));
     if (!isNaN(epoch.getTime())) {
-      const y2 = epoch.getFullYear();
-      const mo2 = String(epoch.getMonth() + 1).padStart(2, '0');
-      const d2 = String(epoch.getDate()).padStart(2, '0');
+      const y2 = epoch.getUTCFullYear();
+      const mo2 = String(epoch.getUTCMonth() + 1).padStart(2, '0');
+      const d2 = String(epoch.getUTCDate()).padStart(2, '0');
       if (y2 >= 1900 && y2 <= 9999) {
         return `${y2}-${mo2}-${d2}`;
       }
     }
   }
+
+  // Named month support: "16-Sep-2026", "16 Sep 2026", "16-Sep-26"
+  const MONTH_MAP = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+    apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+    aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12
+  };
+  const namedMatch1 = text.match(/^(\d{1,2})[- /]([a-zA-Z]{3,9})[- /](\d{2,4})(?:[T ]|$)/);
+  if (namedMatch1) {
+    const d = parseInt(namedMatch1[1], 10);
+    const m = MONTH_MAP[namedMatch1[2].toLowerCase()];
+    let yr = parseInt(namedMatch1[3], 10);
+    if (yr < 100) yr += 2000;
+    if (m && d >= 1 && d <= 31 && yr >= 1900 && yr <= 9999) {
+      return `${yr}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+  const namedMatch2 = text.match(/^([a-zA-Z]{3,9})[- /](\d{1,2})[-, /]+(\d{2,4})(?:[T ]|$)/);
+  if (namedMatch2) {
+    const m = MONTH_MAP[namedMatch2[1].toLowerCase()];
+    const d = parseInt(namedMatch2[2], 10);
+    let yr = parseInt(namedMatch2[3], 10);
+    if (yr < 100) yr += 2000;
+    if (m && d >= 1 && d <= 31 && yr >= 1900 && yr <= 9999) {
+      return `${yr}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  // Fallback for valid date strings parseable by native Date (e.g. JS date strings)
+  try {
+    const parsedNative = new Date(text);
+    if (!isNaN(parsedNative.getTime())) {
+      const ny = parsedNative.getFullYear();
+      const nm = String(parsedNative.getMonth() + 1).padStart(2, '0');
+      const nd = String(parsedNative.getDate()).padStart(2, '0');
+      if (ny >= 1900 && ny <= 9999) {
+        return `${ny}-${nm}-${nd}`;
+      }
+    }
+  } catch {
+    // Ignore native parse failure
+  }
+
   return '';
 }
 

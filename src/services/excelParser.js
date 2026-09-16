@@ -234,7 +234,28 @@ function parseGenericRows(rows) {
         inhouse,
         currentStage: resolveLatestStage({ opStage, status1, status2 }),
         timestamp: normalizeTimestamp(
-          pickField(r, ['timestamp', 'time stamp', 'last updated', 'op time'])
+          pickField(r, [
+            'timestamp',
+            'time stamp',
+            'op updated date',
+            'op update date',
+            'op updated',
+            'op date',
+            'last updated',
+            'last update',
+            'last updated date',
+            'updated date',
+            'update date',
+            'updated at',
+            'updated on',
+            'op time',
+            'date time',
+            'datetime',
+            'stage date',
+            'status date',
+            'entry date',
+            'time',
+          ])
         ),
       };
     })
@@ -267,8 +288,8 @@ function parseRowsFromHeaderAoA(rawAoA) {
     const row = rawAoA[i] || [];
     const probe = {
       sc: findColumn(row, ['sc', 'scno', 'sc#']),
-      po: findColumn(row, ['pono', 'purchaseorder'], ['pono']),
-      poDate: findColumn(row, ['porecddate', 'podate', 'datereceived', 'date']),
+      po: findColumn(row, ['po', 'pono', 'purchaseorder', 'po#', 'ponumber'], ['pono', 'purchaseorder']),
+      poDate: findColumn(row, ['porecddate', 'podate', 'datereceived', 'date', 'poreceiveddate', 'poreceived'], ['porecd', 'podate', 'poreceived']),
       product: findColumn(
         row,
         ['productname', 'product', 'itemdescription', 'description'],
@@ -288,8 +309,44 @@ function parseRowsFromHeaderAoA(rawAoA) {
       ),
       timestamp: findColumn(
         row,
-        ['timestamp', 'lastupdated', 'optime', 'datetime'],
-        ['timestamp', 'lastupdated']
+        [
+          'timestamp',
+          'lastupdated',
+          'optime',
+          'datetime',
+          'opupdateddate',
+          'opupdated',
+          'opupdatedate',
+          'opdate',
+          'updateddate',
+          'updatedate',
+          'updatedat',
+          'updatedon',
+          'lastupdate',
+          'lastupdateddate',
+          'stagedate',
+          'statusdate',
+          'entrydate',
+          'time',
+          'timestmp',
+          'dateandtime',
+          'operationdate',
+          'operationupdateddate',
+          'logdate',
+          'modifieddate',
+        ],
+        [
+          'timestamp',
+          'lastupdate',
+          'opupdate',
+          'optime',
+          'updateddate',
+          'stagedate',
+          'statusdate',
+          'datetime',
+          'entrydate',
+          'opdate',
+        ]
       ),
       family: findColumn(row, ['family', 'productfamily', 'familyname']),
       template: findColumn(row, ['processtemplate', 'template', 'processtype']),
@@ -343,6 +400,53 @@ function parseRowsFromHeaderAoA(rawAoA) {
   }
 
   if (headerRowIdx < 0) return [];
+
+  // Fallback for timestamp if header was missing, blank, or unrecognized
+  if (headerMap.timestamp === undefined) {
+    const isDateLike = (val) => {
+      if (!val) return false;
+      if (val instanceof Date && !isNaN(val.getTime())) return true;
+      const s = String(val).trim();
+      if (!s) return false;
+      return (
+        /^\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(s) ||
+        /^\d{1,2}[- /][a-zA-Z]{3,9}[- /]\d{2,4}/.test(s) ||
+        (!isNaN(Number(s)) && Number(s) > 20000 && Number(s) < 80000)
+      );
+    };
+
+    const maxCols = Math.max(...rawAoA.slice(headerRowIdx, headerRowIdx + 10).map((r) => (r ? r.length : 0)));
+    const knownCols = new Set(Object.values(headerMap).filter((v) => v !== undefined));
+
+    const candidates = [];
+    if (headerMap.op !== undefined && headerMap.op + 1 < maxCols && !knownCols.has(headerMap.op + 1)) {
+      candidates.push(headerMap.op + 1);
+    }
+    if (maxCols > 11 && !knownCols.has(11)) {
+      candidates.push(11);
+    }
+    for (let c = 0; c < maxCols; c++) {
+      if (!knownCols.has(c) && !candidates.includes(c)) {
+        candidates.push(c);
+      }
+    }
+
+    for (const c of candidates) {
+      let dateMatchCount = 0;
+      let sampled = 0;
+      for (let r = headerRowIdx + 1; r < Math.min(rawAoA.length, headerRowIdx + 15); r++) {
+        const val = rawAoA[r]?.[c];
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          sampled++;
+          if (isDateLike(val)) dateMatchCount++;
+        }
+      }
+      if (sampled > 0 && dateMatchCount / sampled >= 0.5) {
+        headerMap.timestamp = c;
+        break;
+      }
+    }
+  }
 
   const result = [];
   let currentSC = '',

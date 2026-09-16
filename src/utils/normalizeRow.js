@@ -46,7 +46,39 @@ export function normalizeRow(raw) {
   );
 
   const timestamp = normalizeTimestamp(
-    raw.timestamp || raw['OP UPDATED DATE'] || raw['Timestamp'] || raw['LAST UPDATED']
+    raw.timestamp ||
+      raw['OP UPDATED DATE'] ||
+      raw['OP Updated Date'] ||
+      raw['op_updated_date'] ||
+      raw['OP UPDATE DATE'] ||
+      raw['OP UPDATED'] ||
+      raw['OP Date'] ||
+      raw['OP DATE'] ||
+      raw['Timestamp'] ||
+      raw['TIMESTAMP'] ||
+      raw['Time Stamp'] ||
+      raw['TIME STAMP'] ||
+      raw['LAST UPDATED'] ||
+      raw['Last Updated'] ||
+      raw['LAST UPDATE'] ||
+      raw['Last Update'] ||
+      raw['Updated Date'] ||
+      raw['Update Date'] ||
+      raw['UPDATED DATE'] ||
+      raw['UPDATE DATE'] ||
+      raw['Date Time'] ||
+      raw['DATETIME'] ||
+      raw['DateTime'] ||
+      raw['OP Time'] ||
+      raw['OP TIME'] ||
+      raw['Stage Date'] ||
+      raw['STAGE DATE'] ||
+      raw['Status Date'] ||
+      raw['STATUS DATE'] ||
+      raw['Entry Date'] ||
+      raw['ENTRY DATE'] ||
+      raw['TIME'] ||
+      raw['Time']
   );
 
   // Dynamic fallback calculation for estimated delivery if not in raw data

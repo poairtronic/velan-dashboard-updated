@@ -171,7 +171,29 @@ function parseCSV(text) {
       'vendor_status'
     );
     const qty = pick(obj, 'qty', '_qty', 'quantity');
-    const timestamp = pick(obj, 'timestamp', 'time_stamp', 'last_updated', 'op_time', 'datetime');
+    const timestamp = pick(
+      obj,
+      'timestamp',
+      'time_stamp',
+      'op_updated_date',
+      'op_update_date',
+      'op_updated',
+      'op_date',
+      'last_updated',
+      'last_update',
+      'last_updated_date',
+      'updated_date',
+      'update_date',
+      'updated_at',
+      'updated_on',
+      'op_time',
+      'date_time',
+      'datetime',
+      'stage_date',
+      'status_date',
+      'entry_date',
+      'time'
+    );
 
     if (!sc && !po) continue;
     rows.push({ sc, po, poDate, product, status1, status2, currentStage, inhouse, qty, timestamp });

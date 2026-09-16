@@ -1,5 +1,5 @@
 import { normalizeGoogleSheetsUrl } from './googleSheets';
-import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet } from './excelParser';
+import { parseRawCsv, parseRowsFromHeaderAoA, parseWorksheet, parseVelanExcel } from './excelParser';
 import { apiBase, apiClient } from './apiClient';
 
 export async function fetchDataUrl(sourceUrl) {
@@ -35,7 +35,17 @@ export async function fetchDataUrl(sourceUrl) {
     const text = await res.text();
     // Raw CSV parsing to preserve Indian DD/MM date string format
     const rawAoA = parseRawCsv(text);
-    return parseRowsFromHeaderAoA(rawAoA);
+    const headerMapped = parseRowsFromHeaderAoA(rawAoA);
+    if (headerMapped && headerMapped.length > 0) return headerMapped;
+    const isVelanFormat =
+      rawAoA
+        .slice(0, 5)
+        .some((row) => row && row.some((cell) => cell && String(cell).includes('VELAN METROLOGY'))) ||
+      rawAoA
+        .slice(0, 6)
+        .some((row) => row && row.some((cell) => String(cell || '').trim() === 'SNO'));
+    if (isVelanFormat) return parseVelanExcel(rawAoA);
+    return headerMapped;
   } else if (isExcelUrl) {
     const res = await apiClient(fetchUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

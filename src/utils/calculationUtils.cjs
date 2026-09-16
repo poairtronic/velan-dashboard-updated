@@ -128,12 +128,30 @@ function getProductCategory(type) {
 
 function parseDateTime(str) {
   if (!str) return null;
-  const cleaned = String(str).trim();
-  const [datePart, timePart = '00:00:00'] = cleaned.split(' ');
+  if (str instanceof Date && !isNaN(str.getTime())) return str;
+  const cleaned = String(str).trim().replace('T', ' ');
+  if (!cleaned) return null;
+
+  const spaceIdx = cleaned.indexOf(' ');
+  const datePart = spaceIdx > 0 ? cleaned.substring(0, spaceIdx) : cleaned;
+  const restPart = spaceIdx > 0 ? cleaned.substring(spaceIdx + 1).trim() : '00:00:00';
 
   let day, month, year;
 
-  if (datePart.includes('/')) {
+  const MONTH_MAP = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+    apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+    aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12
+  };
+
+  const namedMatch = datePart.match(/^(\d{1,2})[- /]([a-zA-Z]{3,9})[- /](\d{2,4})$/);
+  if (namedMatch) {
+    day = parseInt(namedMatch[1], 10);
+    month = MONTH_MAP[namedMatch[2].toLowerCase()];
+    year = parseInt(namedMatch[3], 10);
+    if (year < 100) year += 2000;
+  } else if (datePart.includes('/')) {
     const parts = datePart.split('/');
     const p0 = parseInt(parts[0], 10);
     const p1 = parseInt(parts[1], 10);
@@ -172,13 +190,27 @@ function parseDateTime(str) {
       }
     }
   } else {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) return d;
+    } catch {
+      // ignore
+    }
     return null;
   }
 
-  const time = timePart.split(':');
-  const hh = parseInt(time[0] || 0, 10);
-  const mm = parseInt(time[1] || 0, 10);
-  const ss = parseInt(time[2] || 0, 10);
+  if (!month || !day || !year) return null;
+
+  const timeMatch = restPart.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+  let hh = 0, mm = 0, ss = 0;
+  if (timeMatch) {
+    hh = parseInt(timeMatch[1], 10);
+    mm = parseInt(timeMatch[2], 10);
+    ss = parseInt(timeMatch[3] || 0, 10);
+    const ampm = (timeMatch[4] || '').toLowerCase();
+    if (ampm === 'pm' && hh < 12) hh += 12;
+    if (ampm === 'am' && hh === 12) hh = 0;
+  }
 
   return new Date(year, month - 1, day, hh, mm, ss);
 }

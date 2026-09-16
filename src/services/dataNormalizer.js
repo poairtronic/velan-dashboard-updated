@@ -95,18 +95,57 @@ function getStageColor(stage) {
 
 function normalizeTimestamp(value) {
   if (value === undefined || value === null || value === '') return '';
-  const s = String(value).trim().replace('T', ' ');
-  if (!s) return '';
+
+  // 1. Native Date object (e.g. from SheetJS XLSX parsing with cellDates: true)
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    const hh = String(value.getHours()).padStart(2, '0');
+    const mm = String(value.getMinutes()).padStart(2, '0');
+    const ss = String(value.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+  }
+
+  // 2. Excel numeric serial date (e.g. 46148 or 46148.52083)
+  const num = typeof value === 'number' ? value : Number(String(value).trim());
+  if (!isNaN(num) && num > 20000 && num < 80000) {
+    const epochMs = Math.round((num - 25569) * 86400 * 1000);
+    const dateObj = new Date(epochMs);
+    if (!isNaN(dateObj.getTime())) {
+      const y = dateObj.getUTCFullYear();
+      const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getUTCDate()).padStart(2, '0');
+      const hh = String(dateObj.getUTCHours()).padStart(2, '0');
+      const mm = String(dateObj.getUTCMinutes()).padStart(2, '0');
+      const ss = String(dateObj.getUTCSeconds()).padStart(2, '0');
+      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+    }
+  }
+
+  // 3. String representation
+  const s = String(value).trim();
+  if (!s || s === '—' || s === '-' || s === 'null' || s === 'undefined' || s === 'NaN') return '';
 
   const date = toIsoDateString(s);
-  const timeMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  const timeMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+
   if (date && timeMatch) {
-    const hh = String(timeMatch[1]).padStart(2, '0');
+    let hh = parseInt(timeMatch[1], 10);
     const mm = String(timeMatch[2]).padStart(2, '0');
     const ss = String(timeMatch[3] || '00').padStart(2, '0');
-    return `${date} ${hh}:${mm}:${ss}`;
+    const ampm = (timeMatch[4] || '').toLowerCase();
+    if (ampm === 'pm' && hh < 12) hh += 12;
+    if (ampm === 'am' && hh === 12) hh = 0;
+    const hhStr = String(hh).padStart(2, '0');
+    return `${date} ${hhStr}:${mm}:${ss}`;
   }
-  return date || s.substring(0, 19);
+
+  if (date) {
+    return `${date} 00:00:00`;
+  }
+
+  return s.substring(0, 19);
 }
 
 export {

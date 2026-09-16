@@ -3,18 +3,9 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
-import calculationUtils from '../utils/calculationUtils.js';
-const { workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
- } = calculationUtils;
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+import { daysBetween } from '../utils/calculationUtils.js';
+import { fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
@@ -36,25 +27,6 @@ function BottleneckPage() {
   }, [filters, top]);
   
   const { rows: stuckRows } = useProductionDataQuery(queryFilters, 1, 5000);
-
-  // Export helpers - export "Items Currently Stuck" table
-  function getStuckRows() {
-    if (!top) return [];
-    const today = new Date().toISOString().substring(0, 10);
-    return stuckRows.map((r) => {
-        const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), today) || 0);
-        return {
-          SC: r.sc || '—',
-          PO: r.po || '—',
-          Product: r.product || '—',
-          Type: r.type || '—',
-          'Status 1': r.status1 || '',
-          'Days Stuck': days,
-          Inhouse: r.inhouse || '',
-          Timestamp: r.timestamp?.substring(0, 10) || '',
-        };
-      });
-  }
 
 
 
@@ -449,10 +421,13 @@ function BottleneckPage() {
               </thead>
               <tbody>
                 {stuckRows.map((r, i) => {
-                    const today = new Date().toISOString().substring(0, 10);
-                    const days = Math.ceil(daysBetween(r.timestamp?.substring(0, 10), today));
+                    const now = new Date();
+                    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    const refDate = r.timestamp ? r.timestamp.substring(0, 10) : (r.poDate ? r.poDate.substring(0, 10) : null);
+                    const days = refDate ? Math.max(0, Math.ceil(daysBetween(refDate, today) || 0)) : 0;
                     const matchesSearch =
                       !timeSearch.trim() || days >= parseInt(timeSearch.trim(), 10);
+                    const displayTs = r.timestamp ? (fmtDate(r.timestamp.substring(0, 10)) || r.timestamp.substring(0, 10)) : (r.poDate ? `${fmtDate(r.poDate)} (PO)` : '—');
                     return matchesSearch ? (
                       <tr key={i}>
                         <td className="mono text-accent">{r.sc || '—'}</td>
@@ -504,7 +479,7 @@ function BottleneckPage() {
                           </span>
                         </td>
                         <td className="mono" style={{ fontSize: 10 }}>
-                          {r.timestamp?.substring(0, 10)}
+                          {displayTs}
                         </td>
                       </tr>
                     ) : null;
