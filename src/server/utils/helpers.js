@@ -95,6 +95,37 @@ function readBody(req) {
   });
 }
 
+function normalizeTimestampString(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  if (!s || s === '-' || s === '—') return '';
+  const dmyTime = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?)?/i);
+  if (dmyTime) {
+    const day = dmyTime[1].padStart(2, '0');
+    const month = dmyTime[2].padStart(2, '0');
+    const year = dmyTime[3];
+    let hours = parseInt(dmyTime[4] || '0', 10);
+    const minutes = String(dmyTime[5] || '00').padStart(2, '0');
+    const seconds = String(dmyTime[6] || '00').padStart(2, '0');
+    const ampm = dmyTime[7] ? dmyTime[7].toUpperCase() : null;
+    if (ampm === 'PM' && hours < 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+    const hStr = String(hours).padStart(2, '0');
+    return `${year}-${month}-${day} ${hStr}:${minutes}:${seconds}`;
+  }
+  const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (ymd) {
+    const year = ymd[1];
+    const month = ymd[2].padStart(2, '0');
+    const day = ymd[3].padStart(2, '0');
+    const hours = String(ymd[4] || '00').padStart(2, '0');
+    const minutes = String(ymd[5] || '00').padStart(2, '0');
+    const seconds = String(ymd[6] || '00').padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+  return s;
+}
+
 function parseCSV(text) {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -127,9 +158,68 @@ function parseCSV(text) {
       .replace(/[\s/-]+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
 
-  let hIdx = 0;
-  while (hIdx < lines.length && !lines[hIdx].trim()) hIdx++;
-  const headers = parseLine(lines[hIdx]).map(normKey);
+  let hIdx = -1;
+  let headers = [];
+  for (let i = 0; i < Math.min(lines.length, 40); i++) {
+    if (!lines[i].trim()) continue;
+    const candidate = parseLine(lines[i]).map(normKey);
+    const hasSC = candidate.some((h) => ['sc', 'sc_no', 'sc_number', 'scno'].includes(h));
+    const hasPO = candidate.some((h) => ['po', 'po_no', 'po_number', 'pono', 'purchase_order'].includes(h));
+    const hasProduct = candidate.some((h) =>
+      ['product', 'product_name', 'item', 'description', 'item_description'].includes(h)
+    );
+    const hasStage = candidate.some((h) => ['op', 'currentstage', 'current_stage', 'stage'].includes(h));
+    if ((hasSC || hasPO) && (hasProduct || hasStage)) {
+      hIdx = i;
+      headers = candidate;
+      break;
+    }
+  }
+
+  if (hIdx === -1) {
+    let i = 0;
+    while (i < lines.length && !lines[i].trim()) i++;
+    if (i < lines.length) {
+      hIdx = i;
+      headers = parseLine(lines[hIdx]).map(normKey);
+    } else return [];
+  }
+
+  let tsIdx = headers.findIndex((h) =>
+    [
+      'op_updated_date',
+      'op_update_date',
+      'op_updated',
+      'op_date',
+      'timestamp',
+      'time_stamp',
+      'last_updated',
+      'last_update',
+      'last_updated_date',
+      'updated_date',
+      'update_date',
+      'updated_at',
+      'updated_on',
+      'op_time',
+      'date_time',
+      'datetime',
+      'stage_date',
+      'status_date',
+      'entry_date',
+      'time',
+    ].includes(h)
+  );
+
+  if (tsIdx === -1) {
+    const opIdx = headers.findIndex((h) =>
+      ['op', 'currentstage', 'current_stage', 'stage', 'operation_stage'].includes(h)
+    );
+    if (opIdx !== -1 && opIdx + 1 < headers.length) {
+      tsIdx = opIdx + 1;
+    } else if (headers.length > 11) {
+      tsIdx = 11;
+    }
+  }
 
   const pick = (obj, ...aliases) => {
     for (const a of aliases) {
@@ -140,6 +230,9 @@ function parseCSV(text) {
   };
 
   const rows = [];
+  let currentPO = '',
+    currentPODate = '',
+    currentSC = '';
   for (let i = hIdx + 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const cols = parseLine(lines[i]);
@@ -148,9 +241,18 @@ function parseCSV(text) {
       obj[h] = (cols[idx] || '').trim();
     });
 
-    const sc = pick(obj, 'sc', 'sc_no', 'sc_number', 'scno');
-    const po = pick(obj, 'po_no', 'po', 'po_number', 'pono', 'purchase_order');
-    const poDate = pick(obj, 'po_recd_date', 'po_date', 'podate', 'date_received', 'date');
+    let sc = pick(obj, 'sc', 'sc_no', 'sc_number', 'scno');
+    if (sc) currentSC = sc;
+    else if (!sc && currentSC) sc = currentSC;
+
+    let po = pick(obj, 'po_no', 'po', 'po_number', 'pono', 'purchase_order');
+    if (po && !po.includes('SETS') && !po.match(/^\d{4}$/)) currentPO = po;
+    else if (!po && currentPO) po = currentPO;
+
+    let poDate = pick(obj, 'po_recd_date', 'po_date', 'podate', 'date_received', 'date');
+    if (poDate) currentPODate = poDate;
+    else if (!poDate && currentPODate) poDate = currentPODate;
+
     const product = pick(obj, 'product_name', 'product', 'item', 'description', 'item_description');
     const status1 = pick(obj, 'status_1', 'status1', 'current_operation', 'operation');
     const status2 = pick(obj, 'status_2', 'status2', 'next_operation');
@@ -171,7 +273,7 @@ function parseCSV(text) {
       'vendor_status'
     );
     const qty = pick(obj, 'qty', '_qty', 'quantity');
-    const timestamp = pick(
+    let rawTimestamp = pick(
       obj,
       'timestamp',
       'time_stamp',
@@ -194,6 +296,10 @@ function parseCSV(text) {
       'entry_date',
       'time'
     );
+    if (!rawTimestamp && tsIdx !== -1 && cols[tsIdx]) {
+      rawTimestamp = cols[tsIdx].trim();
+    }
+    const timestamp = normalizeTimestampString(rawTimestamp);
 
     if (!sc && !po) continue;
     rows.push({ sc, po, poDate, product, status1, status2, currentStage, inhouse, qty, timestamp });

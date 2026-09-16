@@ -477,7 +477,11 @@ function parseRowsFromHeaderAoA(rawAoA) {
     const status2 = getVal(headerMap.status2);
     const inhouse = normalizeInhouse(getVal(headerMap.inhouse));
     const opStage = getVal(headerMap.op);
-    const timestamp = normalizeTimestamp(getVal(headerMap.timestamp));
+    const rawTs =
+      getVal(headerMap.timestamp) ||
+      (headerMap.op !== undefined ? getVal(headerMap.op + 1) : '') ||
+      getVal(11);
+    const timestamp = normalizeTimestamp(rawTs);
     const familyRaw = getVal(headerMap.family);
     const templateRaw = getVal(headerMap.template);
     const projectedDate = toIsoDateString(getVal(headerMap.projectedDate));

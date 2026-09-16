@@ -96,4 +96,26 @@ describe('parseRowsFromHeaderAoA Google Sheets extraction', () => {
     expect(rows[0].sc).toBe('1600-1');
     expect(rows[0].timestamp).toBe('2026-09-16 11:15:00');
   });
+
+  it('should parse CSV with title row and map Column L to timestamp correctly', async () => {
+    const { parseCSV } = await import('../../server/utils/helpers.js');
+    const csv = [
+      ',,,,,,,,,,,',
+      ',,,,,PRODUCTION STATUS,,,,,,',
+      ',,,,,,,,,,,',
+      'SNO,PO NO,PO RECD DATE,SC NO,,PRODUCT NAME,QTY,STATUS 1,STATUS 2,INHOUSE/ VENDOR,OP,OP UPDATED DATE',
+      '1,AGIPLPO427,10/06/2026,1550-1,,ARG DIA 47.587,1 NO,,MOVE TO VA,INHOUSE,VA,12/09/2026 19:30:29',
+      '2,,,1550-1,,SPG DIA 47.587,1 SET,,MOVE TO VA,INHOUSE,VA,25/08/2026 18:06:53',
+    ].join('\n');
+
+    const rows = parseCSV(csv);
+    expect(rows.length).toBe(2);
+    expect(rows[0].po).toBe('AGIPLPO427');
+    expect(rows[0].poDate).toBe('10/06/2026');
+    expect(rows[0].currentStage).toBe('VA');
+    expect(rows[0].timestamp).toBe('2026-09-12 19:30:29');
+    // Second row under same PO must inherit PO and have its own stage timestamp
+    expect(rows[1].po).toBe('AGIPLPO427');
+    expect(rows[1].timestamp).toBe('2026-08-25 18:06:53');
+  });
 });

@@ -423,11 +423,13 @@ function BottleneckPage() {
                 {stuckRows.map((r, i) => {
                     const now = new Date();
                     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                    const refDate = r.timestamp ? r.timestamp.substring(0, 10) : (r.poDate ? r.poDate.substring(0, 10) : null);
-                    const days = refDate ? Math.max(0, Math.ceil(daysBetween(refDate, today) || 0)) : 0;
+                    const refDate = r.timestamp ? r.timestamp.substring(0, 10) : null;
+                    const days = refDate ? Math.max(0, Math.ceil(daysBetween(refDate, today) || 0)) : null;
                     const matchesSearch =
-                      !timeSearch.trim() || days >= parseInt(timeSearch.trim(), 10);
-                    const displayTs = r.timestamp ? (fmtDate(r.timestamp.substring(0, 10)) || r.timestamp.substring(0, 10)) : (r.poDate ? `${fmtDate(r.poDate)} (PO)` : '—');
+                      !timeSearch.trim() || (days !== null && days >= parseInt(timeSearch.trim(), 10));
+                    const displayTs = r.timestamp
+                      ? (fmtDate(r.timestamp.substring(0, 10)) + (r.timestamp.length > 10 ? ' ' + r.timestamp.substring(11, 16) : ''))
+                      : '—';
                     return matchesSearch ? (
                       <tr key={i}>
                         <td className="mono text-accent">{r.sc || '—'}</td>
@@ -462,14 +464,14 @@ function BottleneckPage() {
                             fontWeight: 700,
                             fontSize: 14,
                             color:
-                              days > 5
+                              days !== null && days > 5
                                 ? 'var(--danger)'
-                                : days > 2
+                                : days !== null && days > 2
                                   ? 'var(--warning)'
                                   : 'var(--text-secondary)',
                           }}
                         >
-                          {days}d
+                          {days !== null ? `${days}d` : '—'}
                         </td>
                         <td>
                           <span
