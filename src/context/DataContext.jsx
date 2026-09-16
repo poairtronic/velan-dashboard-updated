@@ -13,6 +13,7 @@ import { normalizeGoogleSheetsUrl } from '../services/googleSheets';
 import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
 import { VENDOR_MAP } from '../utils/calculationUtils.js';
+import { ALL_MACHINES } from '../utils/machineUtils';
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
@@ -336,6 +337,7 @@ export function DataProvider({ children }) {
       uniqueStages,
       uniqueTypes,
       uniqueVendors,
+      uniqueMachines: ALL_MACHINES,
     }),
     [
       data,

@@ -11,6 +11,7 @@ export function useDatabaseFilters() {
     inhouse: '',
     vendor: '',
     category: '',
+    machine: '',
     search: '',
   });
 
@@ -29,6 +30,7 @@ export function useDatabaseFilters() {
     filters.inhouse ||
     filters.vendor ||
     filters.category ||
+    filters.machine ||
     (filters.stage && filters.stage.length > 0)
   );
 

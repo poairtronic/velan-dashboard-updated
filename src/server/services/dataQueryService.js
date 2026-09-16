@@ -10,6 +10,7 @@ const {
   getProductionDateStatus,
   getVendorInfo,
 } = require('../../utils/calculationUtils.cjs');
+const { getMachineForRow } = require('../../utils/machineUtils.cjs');
 
 async function getAllRawData() {
   // We fetch both live and history from Neon. 
@@ -36,6 +37,7 @@ async function getMergedData(todayStr) {
   const liveProcessed = liveRows.map((row) => ({
     ...row,
     currentStage: row.currentStage || row.op || row.OP || '',
+    machine: getMachineForRow(row),
     _isLive: true,
     pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
     cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
@@ -43,6 +45,7 @@ async function getMergedData(todayStr) {
   const dbProcessed = dbRows.map((row) => ({
     ...row,
     currentStage: row.currentStage || row.op || row.OP || '',
+    machine: getMachineForRow(row),
     _isLive: false,
     pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
     cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
@@ -98,13 +101,14 @@ async function getFilteredData(filters, todayStr) {
     const processed = rawTarget.map((row) => ({
       ...row,
       currentStage: row.currentStage || row.op || row.OP || '',
+      machine: getMachineForRow(row),
       pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
       cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
     }));
     data = processed; // For live, we don't use the complex merged getActiveData logic
   }
 
-  const { po, stage, type, inhouse, category, search, fromDate, toDate, dateType = 'poDate', vendor } = filters;
+  const { po, stage, type, inhouse, category, search, fromDate, toDate, dateType = 'poDate', vendor, machine } = filters;
   
   let stageList = [];
   if (stage) {
@@ -117,6 +121,7 @@ async function getFilteredData(filters, todayStr) {
     if (po && row.po !== po) return false;
     if (stageList.length > 0 && !stageList.includes((row.currentStage || '').trim())) return false;
     if (type && row.type !== type) return false;
+    if (machine && (row.machine || getMachineForRow(row)) !== machine) return false;
     if (category && getProductCategory(row.type) !== category) return false;
     if (inhouse) {
       const isVen = getVendorInfo(row) !== null || row.inhouse === 'VENDOR';

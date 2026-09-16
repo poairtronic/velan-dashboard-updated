@@ -8,6 +8,7 @@ const { getProductCategory } = calculationUtils;
 import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import useChart from '../utils/chartUtils';
+import { getMachineForRow } from '../utils/machineUtils';
 // ─── WORK IN PROGRESS (WIP) PAGE COMPONENT ────────────────────────────────────
 
 function WIPPage() {
@@ -111,200 +112,250 @@ function WIPPage() {
                 <th>PO</th>
                 <th>SC</th>
                 <th>PRODUCT</th>
+                <th>STAGE</th>
+                <th>MACHINE</th>
                 <th>DAYS PENDING</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, 200).map((r, i) => (
-                <React.Fragment key={i}>
-                  <tr
-                    onClick={() => setExpandedItem(expandedItem === i ? null : i)}
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor: expandedItem === i ? 'rgba(0,201,255,0.08)' : 'transparent',
-                    }}
-                  >
-                    <td style={{ fontSize: 11 }} className="mono">
-                      {r.po}
-                    </td>
-                    <td className="mono text-accent">{r.sc || '—'}</td>
-                    <td
+              {filtered.slice(0, 200).map((r, i) => {
+                const machineName = r.machine || getMachineForRow(r);
+                return (
+                  <React.Fragment key={i}>
+                    <tr
+                      onClick={() => setExpandedItem(expandedItem === i ? null : i)}
                       style={{
-                        maxWidth: 350,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        backgroundColor: expandedItem === i ? 'rgba(0,201,255,0.08)' : 'transparent',
                       }}
                     >
-                      {r.product || '—'}
-                    </td>
-                    <td>
-                      <span
+                      <td style={{ fontSize: 11 }} className="mono">
+                        {r.po}
+                      </td>
+                      <td className="mono text-accent">{r.sc || '—'}</td>
+                      <td
                         style={{
-                          fontFamily: 'Rajdhani',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color: (r.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)',
+                          maxWidth: 300,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
                         }}
                       >
-                        {r.pendingDays != null ? `${r.pendingDays} days` : '—'}
-                      </span>
-                    </td>
-                  </tr>
-                  {expandedItem === i && (
-                    <tr
-                      style={{
-                        backgroundColor: 'rgba(0,201,255,0.04)',
-                        borderBottom: '2px solid var(--border)',
-                      }}
-                    >
-                      <td colSpan="4" style={{ padding: '16px' }}>
-                        <div
-                          style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}
-                        >
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              PO Number
-                            </div>
-                            <div
-                              style={{
-                                fontFamily: 'Share Tech Mono',
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: 'var(--accent1)',
-                              }}
-                            >
-                              {r.po}
-                            </div>
-                          </div>
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              SC Number
-                            </div>
-                            <div
-                              style={{
-                                fontFamily: 'Share Tech Mono',
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: 'var(--accent1)',
-                              }}
-                            >
-                              {r.sc || '—'}
-                            </div>
-                          </div>
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              Product Type & Category
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: 'var(--text-primary)',
-                              }}
-                            >
-                              {r.type}{' '}
-                              <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
-                                ({getProductCategory(r.type)})
-                              </span>
-                            </div>
-                          </div>
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              Days Pending
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color:
-                                  (r.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)',
-                              }}
-                            >
-                              {r.pendingDays != null ? `${r.pendingDays}d` : '-'}
-                            </div>
-                          </div>
-                        </div>
-                        <div
+                        {r.product || '—'}
+                      </td>
+                      <td>
+                        <span
+                          className="status-pill"
                           style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(4,1fr)',
-                            gap: 16,
-                            marginTop: 14,
-                            borderTop: '1px solid rgba(26,58,92,0.2)',
-                            paddingTop: 12,
+                            background: getStageColor(r.currentStage) + '22',
+                            color: getStageColor(r.currentStage),
+                            fontSize: 10,
                           }}
                         >
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              Current Stage
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: getStageColor(r.currentStage),
-                              }}
-                            >
-                              {r.currentStage}
-                            </div>
-                          </div>
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              Workload Location
-                            </div>
-                            <span
-                              className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}
-                              style={{ fontSize: 9 }}
-                            >
-                              {r.inhouse}
-                            </span>
-                          </div>
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              Processing Comments
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                              {r.status1 ? <div>Status 1: {r.status1}</div> : null}
-                              {r.status2 ? <div>Status 2: {r.status2}</div> : null}
-                            </div>
-                          </div>
-                          <div>
-                            <div
-                              style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
-                            >
-                              Last Edit/Update Timestamp
-                            </div>
-                            <div
-                              style={{
-                                fontFamily: 'Share Tech Mono',
-                                fontSize: 11,
-                                color: 'var(--text-muted)',
-                              }}
-                            >
-                              {fmtTs(r.timestamp)}
-                            </div>
-                          </div>
-                        </div>
+                          {r.currentStage || '—'}
+                        </span>
+                      </td>
+                      <td>
+                        {machineName ? (
+                          <span
+                            className="status-pill badge-yellow"
+                            style={{
+                              fontFamily: 'Share Tech Mono',
+                              fontSize: 10,
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            ⚙ {machineName}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          style={{
+                            fontFamily: 'Rajdhani',
+                            fontWeight: 700,
+                            fontSize: 14,
+                            color: (r.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)',
+                          }}
+                        >
+                          {r.pendingDays != null ? `${r.pendingDays} days` : '—'}
+                        </span>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                    {expandedItem === i && (
+                      <tr
+                        style={{
+                          backgroundColor: 'rgba(0,201,255,0.04)',
+                          borderBottom: '2px solid var(--border)',
+                        }}
+                      >
+                        <td colSpan="6" style={{ padding: '16px' }}>
+                          <div
+                            style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}
+                          >
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                PO Number
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: 'Share Tech Mono',
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: 'var(--accent1)',
+                                }}
+                              >
+                                {r.po}
+                              </div>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                SC Number
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: 'Share Tech Mono',
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: 'var(--accent1)',
+                                }}
+                              >
+                                {r.sc || '—'}
+                              </div>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Product Type & Category
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  color: 'var(--text-primary)',
+                                }}
+                              >
+                                {r.type}{' '}
+                                <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                                  ({getProductCategory(r.type)})
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Days Pending
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color:
+                                    (r.pendingDays || 0) > 2 ? 'var(--danger)' : 'var(--success)',
+                                }}
+                              >
+                                {r.pendingDays != null ? `${r.pendingDays}d` : '-'}
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(5,1fr)',
+                              gap: 16,
+                              marginTop: 14,
+                              borderTop: '1px solid rgba(26,58,92,0.2)',
+                              paddingTop: 12,
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Current Stage
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  color: getStageColor(r.currentStage),
+                                }}
+                              >
+                                {r.currentStage}
+                              </div>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Assigned Machine
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: machineName ? 'var(--warning)' : 'var(--text-muted)',
+                                  fontFamily: 'Share Tech Mono',
+                                }}
+                              >
+                                {machineName ? `⚙ ${machineName}` : 'Unassigned'}
+                              </div>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Workload Location
+                              </div>
+                              <span
+                                className={`status-pill ${r.inhouse === 'VENDOR' ? 's-vendor' : 'badge-blue'}`}
+                                style={{ fontSize: 9 }}
+                              >
+                                {r.inhouse}
+                              </span>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Processing Comments
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                {r.status1 ? <div>Status 1: {r.status1}</div> : null}
+                                {r.status2 ? <div>Status 2: {r.status2}</div> : null}
+                              </div>
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}
+                              >
+                                Last Edit/Update Timestamp
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: 'Share Tech Mono',
+                                  fontSize: 11,
+                                  color: 'var(--text-muted)',
+                                }}
+                              >
+                                {fmtTs(r.timestamp)}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

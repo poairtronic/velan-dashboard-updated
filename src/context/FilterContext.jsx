@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { getProductCategory, getVendorInfo } from '../utils/calculationUtils.js';
+import { getMachineForRow } from '../utils/machineUtils';
 
 const FilterContext = createContext();
 
@@ -11,6 +12,7 @@ export function FilterProvider({ children }) {
     inhouse: '',
     vendor: '',
     category: '',
+    machine: '',
     search: '',
   });
 
@@ -27,6 +29,7 @@ export function FilterProvider({ children }) {
       inhouse: '',
       vendor: '',
       category: '',
+      machine: '',
       search: '',
     });
     setDateRange({ from: '', to: '' });
@@ -38,6 +41,7 @@ export function FilterProvider({ children }) {
         if (filters.po && row.po !== filters.po) return false;
         if (filters.stage && filters.stage.length > 0 && !filters.stage.includes(row.currentStage)) return false;
         if (filters.type && row.type !== filters.type) return false;
+        if (filters.machine && getMachineForRow(row) !== filters.machine) return false;
         if (filters.inhouse) {
           const isVen = getVendorInfo(row) !== null || row.inhouse === 'VENDOR';
           if (filters.inhouse === 'VENDOR' && !isVen) return false;

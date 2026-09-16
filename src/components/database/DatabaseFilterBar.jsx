@@ -1,5 +1,6 @@
 import React from 'react';
 import MultiSelectCheckbox from '../MultiSelectCheckbox';
+import { ALL_MACHINES } from '../../utils/machineUtils';
 
 function DatabaseFilterBar({
   dateType,
@@ -139,6 +140,18 @@ function DatabaseFilterBar({
             </option>
           ))}
         </select>
+        <select
+          className="filter-select"
+          value={filters.machine || ''}
+          onChange={(e) => setFilters((f) => ({ ...f, machine: e.target.value }))}
+        >
+          <option value="">All Machines</option>
+          {ALL_MACHINES.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
         <input
           className="filter-input"
           placeholder="Search SC / Product / PO..."
@@ -149,7 +162,7 @@ function DatabaseFilterBar({
         <button
           className="filter-btn reset"
           onClick={() =>
-            setFilters({ po: '', stage: [], type: '', inhouse: '', vendor: '', category: '', search: '' })
+            setFilters({ po: '', stage: [], type: '', inhouse: '', vendor: '', category: '', machine: '', search: '' })
           }
         >
           ✕ Reset

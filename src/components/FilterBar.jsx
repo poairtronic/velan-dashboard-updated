@@ -8,7 +8,7 @@ import MultiSelectCheckbox from './MultiSelectCheckbox';
 
 function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters();
-  const { uniquePOs, uniqueStages, uniqueTypes, uniqueVendors, kpis } = useData();
+  const { uniquePOs, uniqueStages, uniqueTypes, uniqueVendors, uniqueMachines, kpis } = useData();
   const { activeNav } = useUI();
 
   // Local state tracks raw input value for instant visual feedback
@@ -136,6 +136,22 @@ function FilterBar() {
         {(uniqueVendors || []).map((v) => (
           <option key={v.code} value={v.code}>
             {v.label}
+          </option>
+        ))}
+      </select>
+
+      <select
+        id="filter-machine"
+        name="filter-machine"
+        className="filter-select"
+        aria-label="Filter by Machine"
+        value={filters.machine || ''}
+        onChange={(e) => setFilters((f) => ({ ...f, machine: e.target.value }))}
+      >
+        <option value="">All Machines</option>
+        {(uniqueMachines || []).map((m) => (
+          <option key={m} value={m}>
+            {m}
           </option>
         ))}
       </select>
