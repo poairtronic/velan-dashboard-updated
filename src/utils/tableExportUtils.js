@@ -19,7 +19,7 @@ export function extractTableFromDOM(tableElement) {
     }
   }
 
-  const rawHeaders = Array.from(headerCells).map((th) => cleanCellText(th.innerText));
+  const rawHeaders = Array.from(headerCells).map((th) => cleanHeaderText(th.innerText || th.textContent));
 
   // Determine indices of columns to ignore (e.g. action buttons, expand icons)
   const ignoreIndices = new Set();
@@ -68,9 +68,32 @@ export function extractTableFromDOM(tableElement) {
   return { headers, rows };
 }
 
-function cleanCellText(str) {
+export function cleanHeaderText(str) {
   if (!str) return '';
   return String(str)
+    // Remove sort arrows and unicode artifacts (▲, ▼, ⇅, ↑, ↓, △, ▽, %², %ï, etc.)
+    .replace(/[▲▼⇅↑↓△▽⬍⇕%²%ï]+/g, '')
+    // Replace non-breaking spaces
+    .replace(/\u00A0/g, ' ')
+    // Replace em/en dashes
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function cleanCellText(str) {
+  if (!str) return '';
+  return String(str)
+    // Remove bullet points, status dots, and icon artifacts (●, •, ■, ◆, ○, ▶, ★, ✓, ✕, ✖, ✔, %ï, %²)
+    .replace(/[●•■◆○▶★✓✕✖✔%ï%²]+/g, '')
+    // Replace non-breaking spaces
+    .replace(/\u00A0/g, ' ')
+    // Replace em/en dashes
+    .replace(/[\u2013\u2014]/g, '-')
+    // Replace curly single & double quotes with clean standard quotes
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
     .replace(/\r?\n+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -85,12 +108,14 @@ export async function exportTableToExcel({ title = 'TABLE DATA', headers = [], r
   const cleanTitle = `VELAN METROLOGY - ${title.toUpperCase()}`;
   const nowStr = new Date().toLocaleString();
 
+  const cleanHeaders = headers.map(cleanHeaderText);
   // Check if headers already include SNO
-  const hasSno = headers.some((h) => /^s\.?\s*no\.?$/i.test(h.trim()));
-  const finalHeaders = hasSno ? headers : ['SNO', ...headers];
+  const hasSno = cleanHeaders.some((h) => /^s\.?\s*no\.?$/i.test(h.trim()));
+  const finalHeaders = hasSno ? cleanHeaders : ['SNO', ...cleanHeaders];
 
   const finalRows = rows.map((row, idx) => {
-    const cells = Array.isArray(row) ? row : Object.values(row);
+    const rawCells = Array.isArray(row) ? row : Object.values(row);
+    const cells = rawCells.map(cleanCellText);
     return hasSno ? cells : [idx + 1, ...cells];
   });
 
@@ -133,16 +158,18 @@ export async function exportTableToPdf({ title = 'TABLE DATA', headers = [], row
   const { jsPDF } = await import('jspdf');
   await import('jspdf-autotable');
 
-  const hasSno = headers.some((h) => /^s\.?\s*no\.?$/i.test(h.trim()));
-  const finalHeaders = hasSno ? headers : ['SNO', ...headers];
+  const cleanHeaders = headers.map(cleanHeaderText);
+  const hasSno = cleanHeaders.some((h) => /^s\.?\s*no\.?$/i.test(h.trim()));
+  const finalHeaders = hasSno ? cleanHeaders : ['SNO', ...cleanHeaders];
 
   const finalRows = rows.map((row, idx) => {
-    const cells = Array.isArray(row) ? row : Object.values(row);
-    return hasSno ? cells : [idx + 1, ...cells];
+    const rawCells = Array.isArray(row) ? row : Object.values(row);
+    const cells = rawCells.map(cleanCellText);
+    return hasSno ? cells : [String(idx + 1), ...cells];
   });
 
-  // Choose orientation: landscape for tables with more than 5 columns
-  const orientation = finalHeaders.length > 5 ? 'landscape' : 'portrait';
+  // Choose orientation: landscape for tables with 5 or more columns
+  const orientation = finalHeaders.length >= 5 ? 'landscape' : 'portrait';
   const doc = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
 
   const cleanTitle = `VELAN METROLOGY - ${title.toUpperCase()}`;
@@ -152,13 +179,17 @@ export async function exportTableToPdf({ title = 'TABLE DATA', headers = [], row
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(20, 20, 20);
-  doc.text(cleanTitle, 40, 36);
+  doc.text(cleanTitle, 30, 36);
 
   // Subtitle info
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(100, 100, 100);
-  doc.text(`Generated: ${nowStr}   |   Total Records: ${finalRows.length}`, 40, 50);
+  doc.text(`Generated: ${nowStr}   |   Total Records: ${finalRows.length}`, 30, 50);
+
+  // Determine appropriate font size and cell padding based on column count
+  const fontSize = finalHeaders.length > 12 ? 6.5 : finalHeaders.length > 8 ? 7.5 : 8.5;
+  const padding = finalHeaders.length > 8 ? 3 : 4;
 
   // Generate Table on pure white background, no dark theme
   doc.autoTable({
@@ -167,34 +198,41 @@ export async function exportTableToPdf({ title = 'TABLE DATA', headers = [], row
     startY: 62,
     theme: 'grid',
     styles: {
-      fontSize: finalHeaders.length > 8 ? 7 : 8,
-      cellPadding: 4,
+      font: 'helvetica',
+      fontSize,
+      cellPadding: padding,
       textColor: [30, 30, 30],
       fillColor: [255, 255, 255],
       lineColor: [210, 215, 220],
       lineWidth: 0.5,
       overflow: 'linebreak',
+      valign: 'middle',
     },
     headStyles: {
+      font: 'helvetica',
+      fontStyle: 'bold',
+      fontSize,
       fillColor: [242, 244, 248],
       textColor: [20, 20, 20],
-      fontStyle: 'bold',
       lineColor: [180, 190, 200],
       lineWidth: 0.75,
+      overflow: 'linebreak',
+      valign: 'middle',
     },
     alternateRowStyles: {
       fillColor: [250, 251, 253],
     },
-    margin: { left: 40, right: 40, bottom: 40 },
+    margin: { left: 30, right: 30, bottom: 35 },
     didDrawPage: () => {
       // Clean footer with page number
       const str = `Page ${doc.internal.getNumberOfPages()}`;
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(120, 120, 120);
       const pageSize = doc.internal.pageSize;
       const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
       const pageWidth = pageSize.width ? pageSize.width : pageSize.getWidth();
-      doc.text(str, pageWidth - 60, pageHeight - 20);
+      doc.text(str, pageWidth - 50, pageHeight - 15);
     },
   });
 
