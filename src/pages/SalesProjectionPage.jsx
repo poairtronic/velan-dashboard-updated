@@ -2,14 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { getStageColor } from '../services/dataNormalizer';
-import calculationUtils from '../utils/calculationUtils.js';
-import { fmtTs, fmtDate } from '../utils/dateUtils';
-import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
-import { ChevronDown, ChevronRight, Download } from 'lucide-react';
-
-const {
+import {
   daysBetween,
   isSCComplete,
   calculateEstimatedDelivery,
@@ -20,7 +13,13 @@ const {
   getProductionDateStatus,
   getTodayIso,
   isDateInNextDays,
-} = calculationUtils;
+} from '../utils/calculationUtils.js';
+import { fmtTs, fmtDate } from '../utils/dateUtils';
+import KPICard from '../components/KPICard';
+import Modal from '../components/Modal';
+import DataTable from '../components/DataTable';
+import { ChevronDown, ChevronRight, Download } from 'lucide-react';
+import TableExportDropdown from '../components/TableExportDropdown';
 
 // ─── DATE STATUS BADGE COMPONENT ──────────────────────────────────────────────
 function DateStatusBadge({ status }) {
@@ -149,7 +148,8 @@ export default function SalesProjectionPage() {
   const [sortField, setSortField] = useState('sc');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize] = useState(50);
+  const tableRef = React.useRef(null);
 
   const todayStr = useMemo(
     () => (getTodayIso ? getTodayIso() : new Date().toISOString().substring(0, 10)),
@@ -568,11 +568,12 @@ export default function SalesProjectionPage() {
                 ✕ Clear
               </button>
             )}
+            <TableExportDropdown title="Sales Projection" tableRef={tableRef} />
           </div>
         </div>
 
         <div className="table-wrap">
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table ref={tableRef} style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th style={{ width: 30 }}></th>

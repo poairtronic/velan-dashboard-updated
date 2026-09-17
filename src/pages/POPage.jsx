@@ -20,6 +20,7 @@ import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
+import TableExportDropdown from '../components/TableExportDropdown';
 // ─── PO ANALYSIS PAGE COMPONENT ───────────────────────────────────────────────
 
 const _now = new Date();
@@ -38,6 +39,7 @@ function POPage() {
   const { kpis } = useData();
   const { filters } = useFilters();
   const { selectedPONum, setSelectedPONum } = useUI();
+  const tableRef = React.useRef(null);
 
   const { rows: filtered } = useProductionDataQuery(filters, 1, 20000);
 
@@ -262,10 +264,11 @@ function POPage() {
                 ✕ Clear
               </button>
             )}
+            <TableExportDropdown title="PO Sets Overview" tableRef={tableRef} />
           </div>
         </div>
         <div className="table-wrap">
-          <table>
+          <table ref={tableRef}>
             <thead>
               <tr>
                 <th>PO</th>

@@ -7,6 +7,7 @@ import { daysBetween } from '../utils/calculationUtils.js';
 import { fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import useChart from '../utils/chartUtils';
+import TableExportDropdown from '../components/TableExportDropdown';
 // ─── BOTTLENECK PAGE COMPONENT ────────────────────────────────────────────────
 
 function BottleneckPage() {
@@ -14,6 +15,8 @@ function BottleneckPage() {
   const { filters } = useFilters();
   const scoreRef = React.useRef();
   const queueRef = React.useRef();
+  const rankingTableRef = React.useRef(null);
+  const stuckTableRef = React.useRef(null);
   const [timeSearch, setTimeSearch] = React.useState('');
 
   const stages = kpis.bottleneckStages.filter((s) => s.count > 0);
@@ -266,9 +269,10 @@ function BottleneckPage() {
       <div className="table-card">
         <div className="table-header">
           <div className="chart-title">Bottleneck Ranking — All Stages</div>
+          <TableExportDropdown title="Bottleneck Ranking - All Stages" tableRef={rankingTableRef} />
         </div>
         <div className="table-wrap">
-          <table>
+          <table ref={rankingTableRef}>
             <thead>
               <tr>
                 <th>RANK</th>
@@ -376,6 +380,7 @@ function BottleneckPage() {
         <div className="table-card" style={{ marginTop: 0 }}>
           <div className="table-header">
             <div className="chart-title">🔴 Items Currently Stuck in {top.stage}</div>
+            <TableExportDropdown title={`Items Stuck in ${top.stage}`} tableRef={stuckTableRef} />
           </div>
           <div
             style={{
@@ -406,7 +411,7 @@ function BottleneckPage() {
             />
           </div>
           <div className="table-wrap">
-            <table>
+            <table ref={stuckTableRef}>
               <thead>
                 <tr>
                   <th>SC</th>

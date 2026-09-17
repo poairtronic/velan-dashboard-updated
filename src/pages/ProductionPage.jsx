@@ -18,6 +18,7 @@ import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
+import TableExportDropdown from '../components/TableExportDropdown';
 // ─── PRODUCTION PAGE COMPONENT ────────────────────────────────────────────────
 
 function ProductionPage() {
@@ -26,6 +27,8 @@ function ProductionPage() {
   const dailyRef = React.useRef();
   const setsRef = React.useRef();
   const catRef = React.useRef();
+  const setsTableRef = React.useRef(null);
+  const itemsTableRef = React.useRef(null);
   const [tab, setTab] = React.useState('sets'); // 'sets' | 'items'
 
   // Fetch ready items directly from backend only when needed
@@ -372,9 +375,10 @@ function ProductionPage() {
             <div className="chart-title">
               ✅ Complete SC Sets ({displaySets.length}) — Ready + Stores
             </div>
+            <TableExportDropdown title="Complete SC Sets" tableRef={setsTableRef} />
           </div>
           <div className="table-wrap">
-            <table>
+            <table ref={setsTableRef}>
               <thead>
                 <tr>
                   <th>SC NO</th>
@@ -439,9 +443,10 @@ function ProductionPage() {
         <div className="table-card">
           <div className="table-header">
             <div className="chart-title">✅ Ready Items ({readyItems.length})</div>
+            <TableExportDropdown title="Ready Items" tableRef={itemsTableRef} />
           </div>
           <div className="table-wrap">
-            <table>
+            <table ref={itemsTableRef}>
               <thead>
                 <tr>
                   <th>SC</th>

@@ -4,33 +4,52 @@ const { TARGET_DAYS, calculateProcessCycleTime, daysBetween, getVendorInfo } = c
 import { fmtTs } from '../../utils/dateUtils';
 
 import VirtualizedTable from '../ui/VirtualizedTable';
+import TableExportDropdown from '../TableExportDropdown';
 
-function VendorItemTable({ data, todayRef, selectedItem, setSelectedItem, setSelectedSC }) {
+function VendorItemTable({ data = [], todayRef, selectedItem, setSelectedItem, setSelectedSC }) {
+  const headers = ['SC', 'PO', 'PRODUCT', 'VENDOR', 'PROCESS', 'LAST UPDATE', 'PENDING DAYS', 'CYCLE TIME', 'SLA STATUS', 'STATUS'];
+  
+  const processedData = (data || [])
+    .filter((r) => {
+      const vInfo = getVendorInfo(r);
+      return vInfo && vInfo.isVendor;
+    })
+    .map((r) => {
+      const vInfo = getVendorInfo(r);
+      const pendingDays = r.timestamp
+        ? daysBetween(r.timestamp, todayRef)
+        : (r.poDate ? daysBetween(r.poDate, todayRef) : null);
+      const cycleTime = calculateProcessCycleTime(r.poDate, r.timestamp);
+      const slaViolation = pendingDays !== null && pendingDays > 2;
+      return { ...r, vInfo, pendingDays, cycleTime, slaViolation };
+    })
+    .sort((a, b) => (b.pendingDays || 0) - (a.pendingDays || 0));
+
+  const exportRows = processedData.map((r) => [
+    r.sc || '—',
+    r.po || '—',
+    r.product || '—',
+    r.vInfo?.vendorName || r.vInfo?.vendorCode || '—',
+    r.currentStage || '—',
+    fmtTs(r.timestamp),
+    r.pendingDays !== null ? `${r.pendingDays}d` : '—',
+    r.cycleTime !== null ? `${r.cycleTime}d` : '—',
+    r.slaViolation ? 'VIOLATION' : 'COMPLIANT',
+    r.isDone ? 'COMPLETED' : 'IN PROGRESS',
+  ]);
+
   return (
     <div className="table-card" style={{ marginTop: 16 }}>
       <div className="table-header">
         <div className="chart-title">
           Vendor Process Aging & Cycle Time — Item Level (Today Reference)
         </div>
+        <TableExportDropdown title="Vendor Item Aging & Cycle Time" headers={headers} rows={exportRows} />
       </div>
       <div style={{ marginTop: 12 }}>
         <VirtualizedTable
-          headers={['SC', 'PO', 'PRODUCT', 'VENDOR', 'PROCESS', 'LAST UPDATE', 'PENDING DAYS', 'CYCLE TIME', 'SLA STATUS', 'STATUS']}
-          data={(data || [])
-            .filter((r) => {
-              const vInfo = getVendorInfo(r);
-              return vInfo && vInfo.isVendor;
-            })
-            .map((r) => {
-              const vInfo = getVendorInfo(r);
-              const pendingDays = r.timestamp
-                ? daysBetween(r.timestamp, todayRef)
-                : (r.poDate ? daysBetween(r.poDate, todayRef) : null);
-              const cycleTime = calculateProcessCycleTime(r.poDate, r.timestamp);
-              const slaViolation = pendingDays !== null && pendingDays > 2;
-              return { ...r, vInfo, pendingDays, cycleTime, slaViolation };
-            })
-            .sort((a, b) => (b.pendingDays || 0) - (a.pendingDays || 0))}
+          headers={headers}
+          data={processedData}
           height={600}
           itemSize={50}
           RowComponent={({ row: r }) => {

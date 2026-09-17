@@ -16,12 +16,14 @@ import { getStageColor } from '../services/dataNormalizer';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import DataTable from '../components/DataTable';
+import TableExportDropdown from '../components/TableExportDropdown';
 // ─── MONTH / DAY TIMELINE VIEW PAGE COMPONENT ──────────────────────────────────
 
 function MonthDayPage() {
   const { filters } = useFilters();
   const { rows: liveData } = useProductionDataQuery(filters, 1, 50000);
   const barRef = React.useRef();
+  const monthTableRef = React.useRef(null);
   const todayDate = new Date();
   const [viewMode, setViewMode] = React.useState('month');
   const [selMonth, setSelMonth] = React.useState(todayDate.getMonth());
@@ -146,9 +148,12 @@ function MonthDayPage() {
               <span style={{ fontFamily: 'Rajdhani', fontWeight: 700 }}>
                 Items received in {MONTHS[selMonth]} {selYear}
               </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {monthItems.length} items
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {monthItems.length} items
+                </span>
+                <TableExportDropdown title={`Items Received ${MONTHS[selMonth]} ${selYear}`} tableRef={monthTableRef} />
+              </div>
             </div>
             <div className="table-wrap">
               {monthItems.length === 0 ? (
@@ -156,7 +161,7 @@ function MonthDayPage() {
                   No items received in {MONTHS[selMonth]} {selYear}
                 </div>
               ) : (
-                <table>
+                <table ref={monthTableRef}>
                   <thead>
                     <tr>
                       <th>PO</th>

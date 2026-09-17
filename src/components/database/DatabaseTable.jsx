@@ -1,8 +1,8 @@
 import React from 'react';
 import { fmtDate, fmtTs } from '../../utils/dateUtils';
-import calculationUtils from '../../utils/calculationUtils.js';
-const { normalizeProductsInGroup } = calculationUtils;
+import { normalizeProductsInGroup } from '../../utils/calculationUtils.js';
 import VirtualizedTable from '../ui/VirtualizedTable';
+import TableExportDropdown from '../TableExportDropdown';
 
 function DatabaseTable({ filtered, isDoneStage }) {
   const dedupeMap = {};
@@ -48,6 +48,17 @@ function DatabaseTable({ filtered, isDoneStage }) {
   const doneCount = tableRows.filter((r) => isDoneStage(r.currentStage)).length;
   const wipCount = tableRows.length - doneCount;
 
+  const headers = ['SC', 'PO', 'PO DATE', 'PRODUCT', 'STAGE', 'INHOUSE', 'TIMESTAMP'];
+  const exportRows = tableRows.map((r) => [
+    r.sc || '—',
+    r.po || '—',
+    r.poDate ? fmtDate(r.poDate) : '—',
+    r.product || '—',
+    r.currentStage || '—',
+    r.inhouse || '—',
+    fmtTs(r.timestamp),
+  ]);
+
   return (
     <div className="chart-card" style={{ marginBottom: 16 }}>
       <div
@@ -66,7 +77,7 @@ function DatabaseTable({ filtered, isDoneStage }) {
             LIVE OPERATIONAL WIP & HISTORICAL DONE RECORDS COMBINED · LATEST STATE PER PRODUCT
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span
             style={{
               background: 'rgba(255,214,10,0.12)',
@@ -93,6 +104,7 @@ function DatabaseTable({ filtered, isDoneStage }) {
           >
             ✓ {doneCount} DONE
           </span>
+          <TableExportDropdown title="Database All Items" headers={headers} rows={exportRows} />
         </div>
       </div>
       <div style={{ marginTop: 12 }}>

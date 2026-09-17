@@ -9,6 +9,7 @@ import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import Modal from '../components/Modal';
 import useChart from '../utils/chartUtils';
+import TableExportDropdown from '../components/TableExportDropdown';
 
 // ─── CYCLE TIME PAGE COMPONENT ────────────────────────────────────────────────
 
@@ -18,6 +19,8 @@ function CycleTimePage() {
   const [selectedStage, setSelectedStage] = React.useState(null);
   const ctBarRef = React.useRef();
   const ctLineRef = React.useRef();
+  const mainTableRef = React.useRef(null);
+  const modalTableRef = React.useRef(null);
 
   // Fetch items for the specific stage when modal is open
   const queryFilters = React.useMemo(
@@ -258,14 +261,17 @@ function CycleTimePage() {
 
       <div className="table-card">
         <div className="table-header">
-          <div className="chart-title">Stage Cycle Time — Full Detail</div>
-          <div style={{ fontSize: 10, fontFamily: 'Share Tech Mono', color: 'var(--text-muted)' }}>
-            AVG DURATION IN STAGE = Mean of (Next Timestamp − Current Timestamp) for each item
-            transition from one stage to next
+          <div>
+            <div className="chart-title">Stage Cycle Time — Full Detail</div>
+            <div style={{ fontSize: 10, fontFamily: 'Share Tech Mono', color: 'var(--text-muted)' }}>
+              AVG DURATION IN STAGE = Mean of (Next Timestamp − Current Timestamp) for each item
+              transition from one stage to next
+            </div>
           </div>
+          <TableExportDropdown title="Stage Cycle Time" tableRef={mainTableRef} />
         </div>
         <div className="table-wrap">
-          <table>
+          <table ref={mainTableRef}>
             <thead>
               <tr>
                 <th>STAGE</th>
@@ -363,8 +369,11 @@ function CycleTimePage() {
           title={`Stage ${selectedStage} — Active Items`}
           width={800}
         >
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <TableExportDropdown title={`Stage ${selectedStage} Active Items`} tableRef={modalTableRef} />
+          </div>
           <div className="table-wrap" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-            <table>
+            <table ref={modalTableRef}>
               <thead>
                 <tr>
                   <th>PO</th>

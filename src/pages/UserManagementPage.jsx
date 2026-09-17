@@ -4,7 +4,8 @@ import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
 import { apiClient } from '../services/apiClient';
 import Modal from '../components/Modal';
-import { Shield, Settings, CheckSquare, Square, Check, X, Users, Lock, Unlock, Eye, Sparkles } from 'lucide-react';
+import { Shield, Settings, CheckSquare, Square, Users } from 'lucide-react';
+import TableExportDropdown from '../components/TableExportDropdown';
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
 
@@ -39,6 +40,7 @@ const PRESETS = {
 
 function UserManagementPage() {
   const { userId } = useAuth();
+  const userTableRef = React.useRef(null);
   const [users, setUsers] = useState([]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -66,8 +68,22 @@ function UserManagementPage() {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    let active = true;
+    const loadUsers = async () => {
+      try {
+        const res = await apiClient(`${apiBase}/api/auth/users`);
+        const data = await res.json();
+        if (active) setUsers(data);
+      } catch (err) {
+        logger.error('Failed to load users:', err);
+        if (active) setMsg({ type: 'error', text: 'Failed to load users' });
+      }
+    };
+    loadUsers();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -439,12 +455,15 @@ function UserManagementPage() {
           <div className="chart-title" style={{ fontSize: 14 }}>
             {activeTab === 'pending' ? 'Pending Approval Requests' : 'Configured Users & Module Access'}
           </div>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {displayedUsers.length} user{displayedUsers.length !== 1 ? 's' : ''}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {displayedUsers.length} user{displayedUsers.length !== 1 ? 's' : ''}
+            </span>
+            <TableExportDropdown title={activeTab === 'pending' ? 'Pending Approval Requests' : 'Configured Users & Module Access'} tableRef={userTableRef} />
+          </div>
         </div>
         <div className="table-wrap">
-          <table>
+          <table ref={userTableRef}>
             <thead>
               <tr>
                 <th>Username</th>

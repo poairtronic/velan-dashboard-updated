@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { TableSkeleton } from './ui/skeletons/Skeletons';
 import EmptyState from './ui/EmptyState';
+import TableExportDropdown from './TableExportDropdown';
 
 function DataTable({ 
   headers, 
@@ -10,8 +11,12 @@ function DataTable({
   isLoading = false,
   isEmpty = false,
   emptyMessage = 'No data found.',
-  lightMode = false
+  lightMode = false,
+  title,
+  exportable = true,
 }) {
+  const tableRef = useRef(null);
+
   if (isLoading) {
     return <TableSkeleton />;
   }
@@ -27,7 +32,28 @@ function DataTable({
         border: lightMode ? '1px solid #e2e8f0' : '1px solid var(--border)',
       }}
     >
-      <table className={className} style={{ width: '100%', borderCollapse: 'collapse', ...style }}>
+      {(title || exportable) && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: title ? 'space-between' : 'flex-end',
+            alignItems: 'center',
+            padding: '10px 14px',
+            borderBottom: lightMode ? '1px solid #e2e8f0' : '1px solid var(--border)',
+            background: lightMode ? '#f8fafc' : 'var(--bg-secondary)',
+          }}
+        >
+          {title && (
+            <div style={{ fontWeight: 600, fontSize: 13, color: lightMode ? '#1e293b' : 'var(--text-primary)' }}>
+              {title}
+            </div>
+          )}
+          {exportable && !isEmpty && (
+            <TableExportDropdown title={title || 'Table Data'} tableRef={tableRef} />
+          )}
+        </div>
+      )}
+      <table ref={tableRef} className={className} style={{ width: '100%', borderCollapse: 'collapse', ...style }}>
         {headers && (
           <thead style={lightMode ? { background: '#f8fafc', borderBottom: '1px solid #e2e8f0' } : {}}>
             <tr>

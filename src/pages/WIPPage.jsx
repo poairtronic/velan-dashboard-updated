@@ -9,6 +9,7 @@ import { fmtTs } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import useChart from '../utils/chartUtils';
 import { getMachineForRow } from '../utils/machineUtils';
+import TableExportDropdown from '../components/TableExportDropdown';
 // ─── WORK IN PROGRESS (WIP) PAGE COMPONENT ────────────────────────────────────
 
 function WIPPage() {
@@ -17,6 +18,7 @@ function WIPPage() {
   const { rows: filtered } = useProductionDataQuery(filters, 1, 200);
   const [expandedItem, setExpandedItem] = React.useState(null);
   const wipRef = React.useRef();
+  const tableRef = React.useRef(null);
   const stages = Object.entries(kpis.stageCounts).sort((a, b) => b[1] - a[1]);
 
   useChart(
@@ -104,9 +106,10 @@ function WIPPage() {
       <div className="table-card">
         <div className="table-header">
           <div className="chart-title">All Items by Stage — Separate Individual Items</div>
+          <TableExportDropdown title="All Items by Stage" tableRef={tableRef} />
         </div>
         <div className="table-wrap">
-          <table>
+          <table ref={tableRef}>
             <thead>
               <tr>
                 <th>PO</th>

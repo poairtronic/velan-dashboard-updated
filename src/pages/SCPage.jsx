@@ -18,6 +18,7 @@ import {
 import { fmtTs, fmtDate } from '../utils/dateUtils';
 import KPICard from '../components/KPICard';
 import useChart from '../utils/chartUtils';
+import TableExportDropdown from '../components/TableExportDropdown';
 
 // ─── DATE STATUS BADGE COMPONENT ─────────────────────────────────────────────
 function DateStatusBadge({ status }) {
@@ -116,6 +117,8 @@ function SCPage() {
   const [sortField, setSortField] = React.useState('sc');
   const [sortDir, setSortDir] = React.useState('asc');
   const distChartRef = React.useRef(null);
+  const scTableRef = React.useRef(null);
+  const childTableRef = React.useRef(null);
 
   const todayStr = React.useMemo(
     () => (getTodayIso ? getTodayIso() : new Date().toISOString().substring(0, 10)),
@@ -539,10 +542,11 @@ function SCPage() {
                 ✕ Clear
               </button>
             )}
+            <TableExportDropdown title="SC Sets Overview" tableRef={scTableRef} />
           </div>
         </div>
         <div className="table-wrap">
-          <table>
+          <table ref={scTableRef}>
             <thead>
               <tr>
                 {renderSortHeader('sc', 'SC NO')}
@@ -661,23 +665,26 @@ function SCPage() {
                 PO: {selectedSC.po} · {selectedSC.items.length} items in this SC · SC PROD DATE: {fmtDate(selectedSC.scProductionDate)}
               </div>
             </div>
-            <button
-              onClick={() => setSelectedSC(null)}
-              style={{
-                background: 'none',
-                border: '1px solid var(--border)',
-                color: 'var(--text-muted)',
-                borderRadius: 6,
-                padding: '4px 10px',
-                cursor: 'pointer',
-                fontSize: 11,
-              }}
-            >
-              CLOSE
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TableExportDropdown title={`SC ${selectedSC.sc} Product Details`} tableRef={childTableRef} />
+              <button
+                onClick={() => setSelectedSC(null)}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-muted)',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                CLOSE
+              </button>
+            </div>
           </div>
           <div className="table-wrap">
-            <table>
+            <table ref={childTableRef}>
               <thead>
                 <tr>
                   <th>#</th>
