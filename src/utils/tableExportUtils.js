@@ -71,12 +71,14 @@ export function extractTableFromDOM(tableElement) {
 export function cleanHeaderText(str) {
   if (!str) return '';
   return String(str)
-    // Remove sort arrows and unicode artifacts (▲, ▼, ⇅, ↑, ↓, △, ▽, %², %ï, etc.)
-    .replace(/[▲▼⇅↑↓△▽⬍⇕%²%ï]+/g, '')
+    // Remove sort arrows and unicode artifacts (▲, ▼, ▴, ▾, ⇅, ↑, ↓, △, ▽, ⬍, ⇕, ↕, ⬆, ⬇, %², %ï, etc.)
+    .replace(/[▲▼▴▾⇅↑↓△▽⬍⇕↕⬆⬇%²%ï]+/g, '')
     // Replace non-breaking spaces
     .replace(/\u00A0/g, ' ')
-    // Replace em/en dashes
+    // Replace em/en dashes with standard hyphen
     .replace(/[\u2013\u2014]/g, '-')
+    // Strip any remaining non-ASCII characters that break jsPDF WinAnsi font encoding
+    .replace(/[^\x20-\x7E]/g, '')
     .replace(/\r?\n+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -94,6 +96,8 @@ export function cleanCellText(str) {
     // Replace curly single & double quotes with clean standard quotes
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
+    // Strip any remaining non-ASCII characters that break jsPDF WinAnsi font encoding
+    .replace(/[^\x20-\x7E]/g, '')
     .replace(/\r?\n+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
