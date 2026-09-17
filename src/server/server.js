@@ -66,6 +66,29 @@ async function startup() {
     logger.error(logger.categories.DATABASE, `Pre-startup migration check failed: ${err.message}`, err);
   }
 
+  // Automatic database cleanup: fix any historical rows where SC was erroneously assigned
+  try {
+    const cleanArchRes = await pool.query(`
+      UPDATE velan_rows
+      SET data = jsonb_set(data, '{sc}', '""')
+      WHERE (data->>'sc' = '2234' OR data->>'sc' = '2233')
+        AND data->>'po' IS NOT NULL
+        AND data->>'po' NOT LIKE 'AGIPLPO1080%'
+    `);
+    const cleanLiveRes = await pool.query(`
+      UPDATE velan_live_rows
+      SET data = jsonb_set(data, '{sc}', '""')
+      WHERE (data->>'sc' = '2234' OR data->>'sc' = '2233')
+        AND data->>'po' IS NOT NULL
+        AND data->>'po' NOT LIKE 'AGIPLPO1080%'
+    `);
+    if ((cleanArchRes.rowCount || 0) > 0 || (cleanLiveRes.rowCount || 0) > 0) {
+      logger.info(logger.categories.DATABASE, `Sanitized historical leaked SC numbers: ${cleanArchRes.rowCount} archive rows, ${cleanLiveRes.rowCount} live rows cleansed.`);
+    }
+  } catch (err) {
+    logger.warn(logger.categories.DATABASE, `Startup SC sanitization check note: ${err.message}`);
+  }
+
   // Load last sync timestamp from logs
   try {
     const syncRes = await pool.query(

@@ -35,10 +35,19 @@ function MonthDayPage() {
     'Dec',
   ];
 
+  const sanitizedLiveData = React.useMemo(() => {
+    return (liveData || []).map((r) => {
+      if ((r.sc === '2234' || r.sc === '2233') && r.po && !String(r.po).startsWith('AGIPLPO1080')) {
+        return { ...r, sc: '' };
+      }
+      return r;
+    });
+  }, [liveData]);
+
   const monthItems = React.useMemo(() => {
     const prefix = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`;
-    return liveData.filter((r) => r.poDate && r.poDate.startsWith(prefix));
-  }, [liveData, selMonth, selYear]);
+    return sanitizedLiveData.filter((r) => r.poDate && r.poDate.startsWith(prefix));
+  }, [sanitizedLiveData, selMonth, selYear]);
 
   const monthStats = React.useMemo(() => {
     const pos = new Set(monthItems.filter((r) => r.po).map((r) => r.po)).size;
@@ -50,8 +59,8 @@ function MonthDayPage() {
   }, [monthItems]);
 
   const dayItems = React.useMemo(
-    () => liveData.filter((r) => r.poDate === selDay),
-    [liveData, selDay]
+    () => sanitizedLiveData.filter((r) => r.poDate === selDay),
+    [sanitizedLiveData, selDay]
   );
 
   const groupByPO = (items) => {

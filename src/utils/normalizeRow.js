@@ -101,11 +101,16 @@ export function normalizeRow(raw) {
     if (proj && proj.projectedDate) projectedDate = proj.projectedDate;
   }
 
+  let sc = String(raw.sc || raw['SC NO'] || raw['SC'] || '')
+    .replace(/\s+/g, '')
+    .trim();
+  if ((sc === '2234' || sc === '2233') && po && !po.startsWith('AGIPLPO1080')) {
+    sc = '';
+  }
+
   return {
     ...raw,
-    sc: String(raw.sc || raw['SC NO'] || raw['SC'] || '')
-      .replace(/\s+/g, '')
-      .trim(),
+    sc,
     po,
     poDate,
     family,

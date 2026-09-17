@@ -37,10 +37,19 @@ function POPage() {
 
   const { rows: filtered } = useProductionDataQuery(filters, 1, 20000);
 
+  const sanitizedFiltered = React.useMemo(() => {
+    return (filtered || []).map((r) => {
+      if ((r.sc === '2234' || r.sc === '2233') && r.po && !String(r.po).startsWith('AGIPLPO1080')) {
+        return { ...r, sc: '' };
+      }
+      return r;
+    });
+  }, [filtered]);
+
   const { poGroups, scGroups } = React.useMemo(() => {
     const scMap = {};
     const poMap = {};
-    filtered.forEach((r) => {
+    sanitizedFiltered.forEach((r) => {
       if (r.sc) {
         if (!scMap[r.sc]) scMap[r.sc] = { sc: r.sc, po: r.po, poDate: r.poDate, items: [] };
         scMap[r.sc].items.push(r);
@@ -55,7 +64,7 @@ function POPage() {
       scGroups: Object.values(scMap),
       poGroups: Object.values(poMap),
     };
-  }, [filtered]);
+  }, [sanitizedFiltered]);
 
   const leadsRef = React.useRef();
   const [tab, setTab] = React.useState('all');

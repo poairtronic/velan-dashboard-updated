@@ -12,13 +12,24 @@ const {
 } = require('../../utils/calculationUtils.cjs');
 const { getMachineForRow } = require('../../utils/machineUtils.cjs');
 
+function sanitizeRowSC(row) {
+  if (!row) return row;
+  if ((row.sc === '2234' || row.sc === '2233') && row.po && !String(row.po).startsWith('AGIPLPO1080')) {
+    return { ...row, sc: '' };
+  }
+  return row;
+}
+
 async function getAllRawData() {
   // We fetch both live and history from Neon. 
   // Cache for 60s so we don't pound the DB for every KPI endpoint call.
   return getOrSetCache('all_merged_db_data', TTL.SHORT, async () => {
     const liveRes = await pool.query('SELECT data FROM velan_live_rows');
     const histRes = await pool.query('SELECT data FROM velan_rows');
-    return { liveRows: liveRes.rows.map(r => r.data), dbRows: histRes.rows.map(r => r.data) };
+    return {
+      liveRows: liveRes.rows.map(r => sanitizeRowSC(r.data)),
+      dbRows: histRes.rows.map(r => sanitizeRowSC(r.data))
+    };
   });
 }
 
@@ -34,22 +45,28 @@ async function getMergedData(todayStr) {
     const { liveRows, dbRows } = await getAllRawData();
 
   const seen = new Set();
-  const liveProcessed = liveRows.map((row) => ({
-    ...row,
-    currentStage: row.currentStage || row.op || row.OP || '',
-    machine: getMachineForRow(row),
-    _isLive: true,
-    pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
-    cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
-  }));
-  const dbProcessed = dbRows.map((row) => ({
-    ...row,
-    currentStage: row.currentStage || row.op || row.OP || '',
-    machine: getMachineForRow(row),
-    _isLive: false,
-    pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
-    cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
-  }));
+  const liveProcessed = liveRows.map((row) => {
+    const cleanRow = sanitizeRowSC(row);
+    return {
+      ...cleanRow,
+      currentStage: cleanRow.currentStage || cleanRow.op || cleanRow.OP || '',
+      machine: getMachineForRow(cleanRow),
+      _isLive: true,
+      pendingDays: cleanRow.timestamp ? workingDaysBetween(cleanRow.timestamp, todayStr) : null,
+      cycleTime: cleanRow.timestamp && cleanRow.poDate ? workingDaysBetween(cleanRow.poDate, cleanRow.timestamp) : null,
+    };
+  });
+  const dbProcessed = dbRows.map((row) => {
+    const cleanRow = sanitizeRowSC(row);
+    return {
+      ...cleanRow,
+      currentStage: cleanRow.currentStage || cleanRow.op || cleanRow.OP || '',
+      machine: getMachineForRow(cleanRow),
+      _isLive: false,
+      pendingDays: cleanRow.timestamp ? workingDaysBetween(cleanRow.timestamp, todayStr) : null,
+      cycleTime: cleanRow.timestamp && cleanRow.poDate ? workingDaysBetween(cleanRow.poDate, cleanRow.timestamp) : null,
+    };
+  });
 
   return [...liveProcessed, ...dbProcessed].filter((r) => {
     const key =
@@ -98,13 +115,16 @@ async function getFilteredData(filters, todayStr) {
     // source === 'live'
     // Fallback to dbRows if liveRows is empty (just like old logic)
     const rawTarget = liveRows.length > 0 ? liveRows : dbRows;
-    const processed = rawTarget.map((row) => ({
-      ...row,
-      currentStage: row.currentStage || row.op || row.OP || '',
-      machine: getMachineForRow(row),
-      pendingDays: row.timestamp ? workingDaysBetween(row.timestamp, todayStr) : null,
-      cycleTime: row.timestamp && row.poDate ? workingDaysBetween(row.poDate, row.timestamp) : null,
-    }));
+    const processed = rawTarget.map((row) => {
+      const cleanRow = sanitizeRowSC(row);
+      return {
+        ...cleanRow,
+        currentStage: cleanRow.currentStage || cleanRow.op || cleanRow.OP || '',
+        machine: getMachineForRow(cleanRow),
+        pendingDays: cleanRow.timestamp ? workingDaysBetween(cleanRow.timestamp, todayStr) : null,
+        cycleTime: cleanRow.timestamp && cleanRow.poDate ? workingDaysBetween(cleanRow.poDate, cleanRow.timestamp) : null,
+      };
+    });
     data = processed; // For live, we don't use the complex merged getActiveData logic
   }
 

@@ -80,6 +80,26 @@ async function initDB() {
       console.error('[DB] Note: Could not create pg_trgm extension/indexes. Search will fallback to standard scanning.', idxErr.message);
     }
 
+    // 2.2 Cleanup historical rows where SC 2234 or 2233 was erroneously forward-filled
+    try {
+      await client.query(`
+        UPDATE velan_rows
+        SET data = jsonb_set(data, '{sc}', '""')
+        WHERE (data->>'sc' = '2234' OR data->>'sc' = '2233')
+          AND data->>'po' IS NOT NULL
+          AND data->>'po' NOT LIKE 'AGIPLPO1080%'
+      `);
+      await client.query(`
+        UPDATE velan_live_rows
+        SET data = jsonb_set(data, '{sc}', '""')
+        WHERE (data->>'sc' = '2234' OR data->>'sc' = '2233')
+          AND data->>'po' IS NOT NULL
+          AND data->>'po' NOT LIKE 'AGIPLPO1080%'
+      `);
+    } catch (cleanErr) {
+      console.warn('[DB] Leaked SC cleanup notice:', cleanErr.message);
+    }
+
     // 3. Create sync_logs table
     await client.query(`
       CREATE TABLE IF NOT EXISTS sync_logs (
@@ -457,6 +477,14 @@ async function runKeyMigration() {
 }
 
 
+function sanitizeRowSC(d) {
+  if (!d) return d;
+  if ((d.sc === '2234' || d.sc === '2233') && d.po && !String(d.po).startsWith('AGIPLPO1080')) {
+    d.sc = '';
+  }
+  return d;
+}
+
 // ── Paginated Query ───────────────────────────────────────────────────────────
 async function queryRowsPaginated({ limit = 500, offset = 0, search = '' }) {
   let queryText = 'SELECT data FROM velan_rows';
@@ -476,7 +504,7 @@ async function queryRowsPaginated({ limit = 500, offset = 0, search = '' }) {
     const d = r.data;
     if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
     if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
-    return d;
+    return sanitizeRowSC(d);
   });
 }
 
@@ -493,7 +521,7 @@ async function loadLiveDB() {
     const d = r.data;
     if (!d.currentStage && d.op) d.currentStage = String(d.op).trim();
     if (!d.currentStage && d.OP) d.currentStage = String(d.OP).trim();
-    return d;
+    return sanitizeRowSC(d);
   });
 }
 
