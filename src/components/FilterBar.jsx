@@ -79,6 +79,7 @@ function FilterBar() {
         options={uniqueStages}
         selectedValues={filters.stage || []}
         onChange={(val) => setFilters((f) => ({ ...f, stage: val }))}
+        searchPlaceholder="Search stages..."
       />
 
       <select
