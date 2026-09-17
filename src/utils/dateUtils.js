@@ -52,6 +52,11 @@ function toIsoDateString(value) {
     return '';
   }
 
+  // Standalone numbers with 1-4 digits (e.g. SC numbers, SNOs, quantities) are not dates
+  if (/^\d{1,4}$/.test(text)) {
+    return '';
+  }
+
   // Already ISO YYYY-MM-DD — check valid month and day bounds
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     const parts = text.split('-');

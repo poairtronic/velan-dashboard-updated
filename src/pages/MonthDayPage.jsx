@@ -54,8 +54,8 @@ function MonthDayPage() {
   }, [liveData, selMonth, selYear]);
 
   const monthStats = React.useMemo(() => {
-    const pos = new Set(monthItems.map((r) => r.po)).size;
-    const scs = new Set(monthItems.map((r) => r.sc)).size;
+    const pos = new Set(monthItems.filter((r) => r.po).map((r) => r.po)).size;
+    const scs = new Set(monthItems.filter((r) => r.sc).map((r) => r.sc)).size;
     const delayed = monthItems.filter((r) => (r.pendingDays || 0) > TARGET_DAYS).length;
     const ready = monthItems.filter((r) => r.currentStage === 'READY').length;
     const stores = monthItems.filter((r) => r.currentStage === 'STORES').length;
@@ -71,8 +71,9 @@ function MonthDayPage() {
     const map = {};
     items.forEach((r) => {
       if (!map[r.po]) map[r.po] = { po: r.po, poDate: r.poDate, scs: {} };
-      if (!map[r.po].scs[r.sc]) map[r.po].scs[r.sc] = [];
-      map[r.po].scs[r.sc].push(r);
+      const scKey = r.sc || 'UNASSIGNED';
+      if (!map[r.po].scs[scKey]) map[r.po].scs[scKey] = [];
+      map[r.po].scs[scKey].push(r);
     });
     return Object.values(map);
   };
@@ -261,7 +262,7 @@ function MonthDayPage() {
                   PO: <span className="text-accent">{pg.po || '—'}</span>
                 </span>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {Object.keys(pg.scs).length} SCs · {Object.values(pg.scs).flat().length} items{' '}
+                  {Object.keys(pg.scs).filter((s) => s && s !== 'UNASSIGNED').length} SCs · {Object.values(pg.scs).flat().length} items{' '}
                   {expandedPO === pg.po ? '▲' : '▼'}
                 </span>
               </div>
@@ -278,12 +279,12 @@ function MonthDayPage() {
                     <div
                       style={{
                         fontSize: 12,
-                        color: 'var(--accent1)',
+                        color: sc === 'UNASSIGNED' ? 'var(--text-muted)' : 'var(--accent1)',
                         fontFamily: 'Share Tech Mono,monospace',
                         marginBottom: 6,
                       }}
                     >
-                      SC: {sc}
+                      SC: {sc === 'UNASSIGNED' || !sc ? 'Unassigned' : sc}
                     </div>
                     <table>
                       <thead>

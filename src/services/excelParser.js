@@ -40,7 +40,6 @@ function parseVelanExcel(rows) {
   const result = [];
   let currentPO = '',
     currentPODate = '',
-    currentSC = '',
     currentStage = '';
 
   for (const row of rows) {
@@ -65,12 +64,13 @@ function parseVelanExcel(rows) {
     const parsedPODate = toIsoDateString(col3Date) || toIsoDateString(col2Date);
     if (parsedPODate) currentPODate = parsedPODate;
 
-    // SC normalization
+    // SC normalization: strictly per-row. Do NOT carry over or forward-fill SC across rows.
     const col4 = v(4);
     const col3 = v(3);
     const scCandidate = col4 || col3;
+    let rowSC = '';
     if (scCandidate && !String(scCandidate).toUpperCase().includes('SET') && !toIsoDateString(scCandidate)) {
-      currentSC = String(scCandidate).replace(/\s+/g, '');
+      rowSC = String(scCandidate).replace(/\s+/g, '');
     }
 
     const product = col5;
@@ -92,9 +92,9 @@ function parseVelanExcel(rows) {
     const latestStage = resolveLatestStage({ opStage: stageRaw, status1, status2 });
     if (latestStage) currentStage = latestStage;
 
-    if (currentSC && product) {
+    if (product && (rowSC || currentPO)) {
       result.push({
-        sc: currentSC,
+        sc: rowSC,
         po: currentPO,
         poDate: currentPODate,
         family: familyRaw ? String(familyRaw).trim().toUpperCase() : type,
@@ -449,8 +449,7 @@ function parseRowsFromHeaderAoA(rawAoA) {
   }
 
   const result = [];
-  let currentSC = '',
-    currentPO = '',
+  let currentPO = '',
     currentPODate = '';
   for (let i = headerRowIdx + 1; i < rawAoA.length; i++) {
     const row = rawAoA[i] || [];
@@ -463,10 +462,13 @@ function parseRowsFromHeaderAoA(rawAoA) {
     };
 
     const scRaw = getVal(headerMap.sc);
-    if (scRaw) currentSC = scRaw.replace(/\s+/g, '');
+    let rowSC = '';
+    if (scRaw && !scRaw.toUpperCase().includes('SET') && !toIsoDateString(scRaw)) {
+      rowSC = scRaw.replace(/\s+/g, '');
+    }
 
     const poRaw = getVal(headerMap.po);
-    if (poRaw) currentPO = poRaw;
+    if (poRaw && !poRaw.includes('SETS') && !poRaw.match(/^\d{4}$/)) currentPO = poRaw;
 
     const poDateRaw = getVal(headerMap.poDate);
     const parsedPODate = toIsoDateString(poDateRaw);
@@ -488,12 +490,12 @@ function parseRowsFromHeaderAoA(rawAoA) {
     const estimatedDelivery = toIsoDateString(getVal(headerMap.estimatedDelivery));
 
     if (!product && !status1 && !status2 && !opStage) continue;
-    if (!currentSC && !currentPO) continue;
+    if (!rowSC && !currentPO) continue;
 
     const type = familyRaw ? String(familyRaw).trim().toUpperCase() : inferType(product);
 
     result.push({
-      sc: currentSC,
+      sc: rowSC,
       po: currentPO,
       poDate: currentPODate,
       family: familyRaw ? String(familyRaw).trim().toUpperCase() : type,

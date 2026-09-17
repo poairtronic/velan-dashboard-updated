@@ -47,13 +47,15 @@ function POPage() {
     const scMap = {};
     const poMap = {};
     filtered.forEach((r) => {
-      if (!r.sc) return;
-      if (!scMap[r.sc]) scMap[r.sc] = { sc: r.sc, po: r.po, poDate: r.poDate, items: [] };
-      scMap[r.sc].items.push(r);
+      if (r.sc) {
+        if (!scMap[r.sc]) scMap[r.sc] = { sc: r.sc, po: r.po, poDate: r.poDate, items: [] };
+        scMap[r.sc].items.push(r);
+      }
       
-      if (!r.po) return;
-      if (!poMap[r.po]) poMap[r.po] = { po: r.po, poDate: r.poDate, items: [] };
-      poMap[r.po].items.push(r);
+      if (r.po) {
+        if (!poMap[r.po]) poMap[r.po] = { po: r.po, poDate: r.poDate, items: [] };
+        poMap[r.po].items.push(r);
+      }
     });
     return {
       scGroups: Object.values(scMap),

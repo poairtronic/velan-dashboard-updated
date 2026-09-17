@@ -65,13 +65,10 @@ export function FilterProvider({ children }) {
           const scStr = String(row.sc || '').toLowerCase();
           const poStr = String(row.po || '').toLowerCase();
           const prodStr = String(row.product || '').toLowerCase();
-          const scMatch = scStr === s || scStr.startsWith(s);
+          const scMatch = scStr === s || scStr.startsWith(s) || scStr.includes(s);
           const poMatch = poStr.includes(s);
           const prodMatch = prodStr.includes(s);
           if (!scMatch && !prodMatch && !poMatch) return false;
-          if (!scMatch && !prodMatch && poMatch) {
-            if (!scStr.startsWith(s)) return false;
-          }
         }
         return true;
       });

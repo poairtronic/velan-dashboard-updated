@@ -231,8 +231,7 @@ function parseCSV(text) {
 
   const rows = [];
   let currentPO = '',
-    currentPODate = '',
-    currentSC = '';
+    currentPODate = '';
   for (let i = hIdx + 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const cols = parseLine(lines[i]);
@@ -242,8 +241,15 @@ function parseCSV(text) {
     });
 
     let sc = pick(obj, 'sc', 'sc_no', 'sc_number', 'scno');
-    if (sc) currentSC = sc;
-    else if (!sc && currentSC) sc = currentSC;
+    if (sc) {
+      if (sc.toUpperCase().includes('SET') || /^\d{2}[-/]\d{2}[-/]\d{2,4}$/.test(sc)) {
+        sc = '';
+      } else {
+        sc = sc.replace(/\s+/g, '');
+      }
+    } else {
+      sc = '';
+    }
 
     let po = pick(obj, 'po_no', 'po', 'po_number', 'pono', 'purchase_order');
     if (po && !po.includes('SETS') && !po.match(/^\d{4}$/)) currentPO = po;

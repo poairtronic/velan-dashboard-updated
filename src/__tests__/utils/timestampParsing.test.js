@@ -118,4 +118,68 @@ describe('parseRowsFromHeaderAoA Google Sheets extraction', () => {
     expect(rows[1].po).toBe('AGIPLPO427');
     expect(rows[1].timestamp).toBe('2026-08-25 18:06:53');
   });
+
+  it('should NOT forward-fill SC onto subsequent rows or POs when SC is blank', async () => {
+    const { parseVelanExcel, parseRowsFromHeaderAoA } = await import('../../services/excelParser.js');
+    const { parseCSV } = await import('../../server/utils/helpers.js');
+
+    // Test parseVelanExcel:
+    const velanAoA = [
+      ['SNO', 'PO NO', 'PO DATE', '', 'SC NO', 'Product Name', 'QTY', 'STATUS 1', 'STATUS 2', 'INHOUSE', 'STAGE', 'TIMESTAMP'],
+      ['183', 'AGIPLPO1080-RKS ENGG', '12/09/2026', '', '2234', 'APG DIA 30 H8+0.033', '1 NO', 'MOVE TO LATHE', '', 'INHOUSE', 'LATHE-FB', '17/09/2026 11:49:12'],
+      ['', '', '', '', '2234', 'DEPTH COLLAR', '1 NO', '', '', 'INHOUSE', 'FBI-V1', '17/09/2026 14:17:34'],
+      ['184', 'AGIPLPO1111-ASF', '15/09/2026', '', '', 'ARG DIA 30.012+/-0.010', '1 NO', '', '', 'INHOUSE', '', ''],
+      ['', '', '', '', '', 'SPG DIA 30.012+/-0.010', '1 SET', '', '', 'INHOUSE', '', ''],
+      ['185', 'AGIPLPO1110 - ROOTS', '15/09/2026', '', '', 'APG DIA 9.525/9.532', '1 NO', '', '', 'INHOUSE', '', ''],
+    ];
+
+    const vRows = parseVelanExcel(velanAoA);
+    expect(vRows.length).toBe(5);
+    expect(vRows[0].po).toBe('AGIPLPO1080-RKS ENGG');
+    expect(vRows[0].sc).toBe('2234');
+    expect(vRows[1].po).toBe('AGIPLPO1080-RKS ENGG');
+    expect(vRows[1].sc).toBe('2234');
+
+    // Row 184 and onwards must have blank SC!
+    expect(vRows[2].po).toBe('AGIPLPO1111-ASF');
+    expect(vRows[2].sc).toBe('');
+    expect(vRows[3].po).toBe('AGIPLPO1111-ASF');
+    expect(vRows[3].sc).toBe('');
+    expect(vRows[4].po).toBe('AGIPLPO1110 - ROOTS');
+    expect(vRows[4].sc).toBe('');
+
+    // Test parseRowsFromHeaderAoA:
+    const headerAoA = [
+      ['SNO', 'PO NO', 'PO DATE', 'SC NO', 'PRODUCT NAME', 'QTY', 'STATUS 1', 'STATUS 2', 'INHOUSE', 'STAGE', 'TIMESTAMP'],
+      ['1', 'AGIPLPO1080-RKS ENGG', '12/09/2026', '2234', 'APG DIA 30 H8+0.033', '1 NO', 'MOVE TO LATHE', '', 'INHOUSE', 'LATHE-FB', '17/09/2026 11:49:12'],
+      ['2', '', '', '2234', 'DEPTH COLLAR', '1 NO', '', '', 'INHOUSE', 'FBI-V1', '17/09/2026 14:17:34'],
+      ['3', 'AGIPLPO1111-ASF', '15/09/2026', '', 'ARG DIA 30.012+/-0.010', '1 NO', '', '', 'INHOUSE', '', ''],
+      ['4', 'AGIPLPO1110 - ROOTS', '15/09/2026', '', 'APG DIA 9.525/9.532', '1 NO', '', '', 'INHOUSE', '', ''],
+    ];
+    const hRows = parseRowsFromHeaderAoA(headerAoA);
+    expect(hRows.length).toBe(4);
+    expect(hRows[0].sc).toBe('2234');
+    expect(hRows[1].sc).toBe('2234');
+    expect(hRows[2].po).toBe('AGIPLPO1111-ASF');
+    expect(hRows[2].sc).toBe('');
+    expect(hRows[3].po).toBe('AGIPLPO1110 - ROOTS');
+    expect(hRows[3].sc).toBe('');
+
+    // Test parseCSV:
+    const csv = [
+      'SNO,PO NO,PO DATE,SC NO,PRODUCT NAME,STATUS 1,STATUS 2,INHOUSE,OP,TIMESTAMP',
+      '1,AGIPLPO1080-RKS ENGG,12/09/2026,2234,APG DIA 30 H8+0.033,MOVE TO LATHE,,INHOUSE,LATHE-FB,17/09/2026 11:49:12',
+      '2,,,2234,DEPTH COLLAR,,,INHOUSE,FBI-V1,17/09/2026 14:17:34',
+      '3,AGIPLPO1111-ASF,15/09/2026,,ARG DIA 30.012+/-0.010,,,INHOUSE,,',
+      '4,AGIPLPO1110 - ROOTS,15/09/2026,,APG DIA 9.525/9.532,,,INHOUSE,,',
+    ].join('\n');
+    const cRows = parseCSV(csv);
+    expect(cRows.length).toBe(4);
+    expect(cRows[0].sc).toBe('2234');
+    expect(cRows[1].sc).toBe('2234');
+    expect(cRows[2].po).toBe('AGIPLPO1111-ASF');
+    expect(cRows[2].sc).toBe('');
+    expect(cRows[3].po).toBe('AGIPLPO1110 - ROOTS');
+    expect(cRows[3].sc).toBe('');
+  });
 });
