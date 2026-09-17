@@ -1,28 +1,15 @@
 import React from 'react';
-import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
-import calculationUtils from '../utils/calculationUtils.js';
-const { workingDaysBetween,
-  daysBetween,
-  calculateProcessCycleTime,
-  isSCComplete,
-  getSCLastTimestamp,
-  getProductCategory,
-  TARGET_DAYS,
- } = calculationUtils;
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+import { TARGET_DAYS } from '../utils/calculationUtils.js';
+import { fmtDate } from '../utils/dateUtils';
 import { getStageColor } from '../services/dataNormalizer';
-import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import TableExportDropdown from '../components/TableExportDropdown';
 // ─── MONTH / DAY TIMELINE VIEW PAGE COMPONENT ──────────────────────────────────
 
 function MonthDayPage() {
   const { filters } = useFilters();
   const { rows: liveData } = useProductionDataQuery(filters, 1, 50000);
-  const barRef = React.useRef();
   const monthTableRef = React.useRef(null);
   const todayDate = new Date();
   const [viewMode, setViewMode] = React.useState('month');

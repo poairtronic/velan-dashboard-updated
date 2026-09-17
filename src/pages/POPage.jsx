@@ -3,22 +3,16 @@ import { useData } from '../context/DataContext';
 import { useFilters } from '../context/FilterContext';
 import { useProductionDataQuery } from '../hooks/useProductionDataQuery';
 import { useUI } from '../context/UIContext';
-import calculationUtils from '../utils/calculationUtils.js';
-const {
-  workingDaysBetween,
+import {
   daysBetween,
-  calculateProcessCycleTime,
   isSCComplete,
   calculateEstimatedDelivery,
   formatEstimatedDelivery,
   getSCLastTimestamp,
-  getProductCategory,
-} = calculationUtils;
-import { fmtTs, fmtDate } from '../utils/dateUtils';
+} from '../utils/calculationUtils.js';
+import { fmtDate } from '../utils/dateUtils';
 import { getStageColor } from '../services/dataNormalizer';
 import KPICard from '../components/KPICard';
-import Modal from '../components/Modal';
-import DataTable from '../components/DataTable';
 import useChart from '../utils/chartUtils';
 import TableExportDropdown from '../components/TableExportDropdown';
 // ─── PO ANALYSIS PAGE COMPONENT ───────────────────────────────────────────────
@@ -63,7 +57,6 @@ function POPage() {
     };
   }, [filtered]);
 
-  const handleSearch = (e) => setSelectedPONum(e.target.value.trim().toUpperCase());
   const leadsRef = React.useRef();
   const [tab, setTab] = React.useState('all');
   const [selectedPO, setSelectedPO] = React.useState(null);
@@ -88,13 +81,15 @@ function POPage() {
   const todayStr = MODULE_TODAY_STR;
 
   // Auto-expand and highlight PO from context state
-  // eslint-disable-next-line
   React.useEffect(() => {
     if (selectedPONum) {
       const found = poRows.find((p) => p.po === selectedPONum);
       if (found) {
-        setSelectedPO(found);
-        setSelectedPONum(null);
+        const timer = setTimeout(() => {
+          setSelectedPO(found);
+          setSelectedPONum(null);
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
   }, [selectedPONum, poRows, setSelectedPONum]);
@@ -368,7 +363,7 @@ function POPage() {
 }
 
 // ─── PO DETAILS EXPANDABLE COMPONENT ──────────────────────────────────────────────
-const PODetailsExpandable = React.memo(function PODetailsExpandable({ poRow, todayStr }) {
+const PODetailsExpandable = React.memo(function PODetailsExpandable({ poRow }) {
   const [expandedSCs, setExpandedSCs] = React.useState({});
 
   const toggleSC = (sc) => {
