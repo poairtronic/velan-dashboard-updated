@@ -35,6 +35,73 @@ function parseRawCsv(text) {
   return rows;
 }
 
+function isPOString(val) {
+  if (!val) return false;
+  const s = String(val).trim();
+  if (!s || s === 'nan' || s === '-' || s === '—') return false;
+  if (toIsoDateString(s)) return false;
+  const upper = s.toUpperCase();
+  if (
+    upper.includes('SETS') ||
+    upper.includes('BUNCH GIVEN') ||
+    upper.startsWith('DWG') ||
+    upper.startsWith('TURNING DWG')
+  ) {
+    return false;
+  }
+  if (/^\d{4}$/.test(s)) return false; // 4-digit number is typically an SC number
+  return true;
+}
+
+function isVelanSheetFormat(rawAoA) {
+  if (!Array.isArray(rawAoA) || rawAoA.length === 0) return false;
+
+  // 1. Check title/header markers in top 15 rows
+  const topRows = rawAoA.slice(0, 15);
+  const hasMarker = topRows.some((row) =>
+    row &&
+    row.some((cell) => {
+      const s = String(cell || '').trim().toUpperCase();
+      return (
+        s.includes('VELAN') ||
+        s === 'SNO' ||
+        s === 'S.NO' ||
+        s === 'SL.NO' ||
+        s === 'DELIVERY_STATUS'
+      );
+    })
+  );
+  if (hasMarker) return true;
+
+  // 2. Positional heuristic check on the first 40 rows
+  let velanMatches = 0;
+  let sampled = 0;
+  for (let i = 0; i < Math.min(rawAoA.length, 40); i++) {
+    const row = rawAoA[i];
+    if (!row || row.length < 6) continue;
+    sampled++;
+    const col5 = String(row[5] || '').toUpperCase();
+    const col9 = String(row[9] || '').toUpperCase();
+    const col10 = String(row[10] || '').toUpperCase();
+    const col2 = String(row[2] || '').toUpperCase();
+    const col1 = String(row[1] || '').toUpperCase();
+
+    const hasProduct = /APG|ARG|SRG|SPG|SP\s*DIA|HOUSING|COLLAR|PLATE|STOPPER/i.test(col5);
+    const hasLocation = col9.includes('INHOUSE') || col9.includes('VENDOR');
+    const hasStage = /LATHE|VA|CG|READY|M1|HTV|AEV|FB|QC|STORES|SD|SG/i.test(col10);
+    const hasPO =
+      col2.includes('PO') ||
+      col2.includes('AGIPL') ||
+      col1.includes('PO') ||
+      col1.includes('AGIPL');
+
+    if ((hasProduct || hasLocation || hasStage) && (hasPO || hasProduct)) {
+      velanMatches++;
+    }
+  }
+  return sampled > 0 && velanMatches >= 2;
+}
+
 // Parse Velan-specific Excel format (merged cells / PO groups / stdtrack sheet)
 function parseVelanExcel(rows) {
   const result = [];
@@ -51,23 +118,58 @@ function parseVelanExcel(rows) {
       return s === '' || s === 'nan' ? null : s;
     };
 
-    // Skip header rows and title rows
+    const col0 = v(0);
     const col1 = v(1);
+    const col2 = v(2);
+    const col3 = v(3);
+    const col4 = v(4);
     const col5 = v(5);
-    if (!col5 || col5 === 'Product Name' || col5 === 'Customer Name') continue;
-    if (col1 && (col1.includes('VELAN') || col1 === 'PO NO')) continue;
 
-    // Update running PO and date if present in this row
-    if (col1 && col1 !== 'NaN' && !col1.includes('SETS') && !col1.match(/^\d{4}/)) currentPO = col1;
-    const col3Date = v(3);
-    const col2Date = v(2);
-    const parsedPODate = toIsoDateString(col3Date) || toIsoDateString(col2Date);
-    if (parsedPODate) currentPODate = parsedPODate;
+    // Skip header rows and title rows
+    if (!col5 || col5 === 'Product Name' || col5 === 'Customer Name') continue;
+    if (col1 && (col1.includes('VELAN') || col1 === 'PO NO' || col1 === 'Target Date')) continue;
+    if (col2 && (col2.includes('VELAN') || col2 === 'PO NO')) continue;
+
+    // Detect PO and PO Date:
+    // 12-column layout: Col 0: SNO, Col 1: Target Date/Notes, Col 2: PO NO, Col 3: PO Date
+    // 11-column layout: Col 0: SNO, Col 1: PO NO, Col 2: PO Date, Col 3: blank
+    const col3Date = toIsoDateString(col3);
+    const col2Date = toIsoDateString(col2);
+
+    let rowPO = null;
+    let rowPODate = null;
+
+    if (col3Date && isPOString(col2)) {
+      rowPO = col2;
+      rowPODate = col3Date;
+    } else if (col2Date && isPOString(col1)) {
+      rowPO = col1;
+      rowPODate = col2Date;
+    } else if (col0 && /^\d+$/.test(col0)) {
+      // Numeric SNO indicates a new PO group
+      if (isPOString(col2)) {
+        rowPO = col2;
+        rowPODate = col3Date || col2Date;
+      } else if (isPOString(col1)) {
+        rowPO = col1;
+        rowPODate = col2Date || col3Date;
+      }
+    } else {
+      // Continuation / child row or PO identifier without SNO
+      if (col2 && /^(AGIPL|PO\s*\d|PO-)/i.test(col2) && isPOString(col2)) {
+        rowPO = col2;
+        rowPODate = col3Date || col2Date;
+      } else if (col1 && /^(AGIPL|PO\s*\d|PO-)/i.test(col1) && isPOString(col1)) {
+        rowPO = col1;
+        rowPODate = col2Date || col3Date;
+      }
+    }
+
+    if (rowPO) currentPO = rowPO;
+    if (rowPODate) currentPODate = rowPODate;
 
     // SC normalization: strictly per-row. Do NOT carry over or forward-fill SC across rows.
-    const col4 = v(4);
-    const col3 = v(3);
-    const scCandidate = col4 || col3;
+    const scCandidate = col4 || (col3 && !col3Date ? col3 : null);
     let rowSC = '';
     if (scCandidate && !String(scCandidate).toUpperCase().includes('SET') && !toIsoDateString(scCandidate)) {
       rowSC = String(scCandidate).replace(/\s+/g, '');
@@ -519,16 +621,18 @@ async function parseWorksheet(ws) {
   const rawAoA = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
   const headerMapped = parseRowsFromHeaderAoA(rawAoA);
   if (headerMapped.length > 0) return headerMapped;
-  const isVelanFormat =
-    rawAoA
-      .slice(0, 5)
-      .some((row) => row && row.some((cell) => cell && String(cell).includes('VELAN METROLOGY'))) ||
-    rawAoA
-      .slice(0, 6)
-      .some((row) => row && row.some((cell) => String(cell || '').trim() === 'SNO'));
-  if (isVelanFormat) return parseVelanExcel(rawAoA);
+  if (isVelanSheetFormat(rawAoA)) return parseVelanExcel(rawAoA);
+  const velanAttempt = parseVelanExcel(rawAoA);
+  if (velanAttempt.length > 0) return velanAttempt;
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
   return parseGenericRows(rows);
 }
 
-export { parseRawCsv, parseVelanExcel, parseGenericRows, parseRowsFromHeaderAoA, parseWorksheet };
+export {
+  parseRawCsv,
+  parseVelanExcel,
+  parseGenericRows,
+  parseRowsFromHeaderAoA,
+  parseWorksheet,
+  isVelanSheetFormat,
+};

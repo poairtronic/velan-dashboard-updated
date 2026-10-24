@@ -185,6 +185,122 @@ function parseCSV(text) {
     } else return [];
   }
 
+  const hasSC = headers.some((h) => ['sc', 'sc_no', 'sc_number', 'scno'].includes(h));
+  const hasPO = headers.some((h) => ['po', 'po_no', 'po_number', 'pono', 'purchase_order'].includes(h));
+  const hasProduct = headers.some((h) =>
+    ['product', 'product_name', 'item', 'description', 'item_description'].includes(h)
+  );
+  const hasStage = headers.some((h) => ['op', 'currentstage', 'current_stage', 'stage'].includes(h));
+
+  if (!((hasSC || hasPO) && (hasProduct || hasStage))) {
+    // Check if the lines match the canonical Velan positional template (11 or 12 columns)
+    const rawAoA = lines.filter((l) => l.trim()).map(parseLine);
+    let velanMatches = 0;
+    for (let i = 0; i < Math.min(rawAoA.length, 30); i++) {
+      const r = rawAoA[i];
+      if (!r || r.length < 6) continue;
+      const col5 = String(r[5] || '').toUpperCase();
+      const col9 = String(r[9] || '').toUpperCase();
+      const col10 = String(r[10] || '').toUpperCase();
+      if (
+        /APG|ARG|SRG|SPG|SP\s*DIA|HOUSING|COLLAR|PLATE|STOPPER/i.test(col5) ||
+        col9.includes('INHOUSE') ||
+        col9.includes('VENDOR') ||
+        /LATHE|VA|CG|READY|M1|HTV|AEV|FB|QC|STORES|SD/i.test(col10)
+      ) {
+        velanMatches++;
+      }
+    }
+
+    if (velanMatches >= 2) {
+      const result = [];
+      let currentPO = '';
+      let currentPODate = '';
+      const isDate = (s) => /^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/.test(s);
+      const isPO = (s) =>
+        s &&
+        !isDate(s) &&
+        !s.toUpperCase().includes('SETS') &&
+        !s.toUpperCase().includes('BUNCH GIVEN') &&
+        !s.toUpperCase().startsWith('DWG') &&
+        !/^\d{4}$/.test(s);
+
+      for (const cols of rawAoA) {
+        const v = (idx) => (cols[idx] !== undefined && cols[idx] !== null ? String(cols[idx]).trim() : '');
+        const col0 = v(0);
+        const col1 = v(1);
+        const col2 = v(2);
+        const col3 = v(3);
+        const col4 = v(4);
+        const product = v(5);
+
+        if (!product || product === 'Product Name' || product === 'Customer Name') continue;
+        if (col1 && (col1.includes('VELAN') || col1 === 'PO NO')) continue;
+        if (col2 && (col2.includes('VELAN') || col2 === 'PO NO')) continue;
+
+        const col3Date = v(3);
+        const col2Date = v(2);
+
+        let rowPO = '';
+        let rowPODate = '';
+        if (isDate(col3Date) && isPO(col2)) {
+          rowPO = col2;
+          rowPODate = col3Date;
+        } else if (isDate(col2Date) && isPO(col1)) {
+          rowPO = col1;
+          rowPODate = col2Date;
+        } else if (col0 && /^\d+$/.test(col0)) {
+          if (isPO(col2)) {
+            rowPO = col2;
+            rowPODate = isDate(col3Date) ? col3Date : (isDate(col2Date) ? col2Date : '');
+          } else if (isPO(col1)) {
+            rowPO = col1;
+            rowPODate = isDate(col2Date) ? col2Date : (isDate(col3Date) ? col3Date : '');
+          }
+        } else if (col2 && /^(AGIPL|PO\s*\d|PO-)/i.test(col2) && isPO(col2)) {
+          rowPO = col2;
+          rowPODate = isDate(col3Date) ? col3Date : (isDate(col2Date) ? col2Date : '');
+        } else if (col1 && /^(AGIPL|PO\s*\d|PO-)/i.test(col1) && isPO(col1)) {
+          rowPO = col1;
+          rowPODate = isDate(col2Date) ? col2Date : (isDate(col3Date) ? col3Date : '');
+        }
+
+        if (rowPO) currentPO = rowPO;
+        if (rowPODate) currentPODate = rowPODate;
+
+        const scCandidate = col4 || (col3 && !isDate(col3) ? col3 : '');
+        let sc = '';
+        if (scCandidate && !scCandidate.toUpperCase().includes('SET') && !isDate(scCandidate)) {
+          sc = scCandidate.replace(/\s+/g, '');
+        }
+
+        const qty = v(6);
+        const status1 = v(7);
+        const status2 = v(8);
+        const inhouse = v(9).toUpperCase().includes('VENDOR') ? 'VENDOR' : 'INHOUSE';
+        const currentStage = v(10);
+        const timestamp = normalizeTimestampString(v(11));
+
+        if (!product && !status1 && !status2 && !currentStage) continue;
+        if (!sc && !currentPO) continue;
+
+        result.push({
+          sc,
+          po: currentPO,
+          poDate: currentPODate,
+          product,
+          status1,
+          status2,
+          currentStage,
+          inhouse,
+          qty,
+          timestamp,
+        });
+      }
+      return result;
+    }
+  }
+
   let tsIdx = headers.findIndex((h) =>
     [
       'op_updated_date',

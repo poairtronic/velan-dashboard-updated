@@ -182,4 +182,58 @@ describe('parseRowsFromHeaderAoA Google Sheets extraction', () => {
     expect(cRows[3].po).toBe('AGIPLPO1110 - ROOTS');
     expect(cRows[3].sc).toBe('');
   });
+
+  it('should parse 12-column headerless Velan Google Sheet CSV format correctly', async () => {
+    const { parseRawCsv, parseVelanExcel, isVelanSheetFormat } = await import('../../services/excelParser.js');
+    const { parseCSV } = await import('../../server/utils/helpers.js');
+
+    const csvText = [
+      ',,,,,,,,,,,,,,,,',
+      ',,,,,,,,,,,,,,,,',
+      ',,,,,,,,,,,,,,,,',
+      ',,,,,,,,,,,,,,,,DELIVERY_STATUS',
+      '1,,AGIPLPO427- AUTOTECH,10-06-2026,1550- 3,ARG DIA 47.587/47.60,1 NO,,MOVE TO LATHE,INHOUSE,LATHE-OD,13/10/2026 17:44:32,,,,,',
+      ',,,10/06/2026,1550- 3,SPG DIA 47.587/47.60,1 SET,,MOVE TO VA ,INHOUSE,VA,19/09/2026,,,,,',
+      '2,,AGIPLPO429-AUTOTECH,10/06/2026,1607- 2,ARG DIA 6.004/6.012,1 NO,"RM AVAILABLE,MOVE TO FB",MOVE TO VA,INHOUSE,VA,19/09/2026 15:04:49,,,,,',
+      '3,,AGIPLPO497-SIMPSON,17/06/2026,1678,ARG DIA 10.54 +/- 0.03,1 NO,,MOVE TO VA,INHOUSE,VA,15/10/2026 16:16:33,,,,,',
+      ',,ARG BUNCH GIVEN ON 06/07,17/06/2026,1678,SPG DIA 10.54 +/- 0.03,1 SET,,MOVE TO VA,INHOUSE,VA,15/10/2026 16:16:33,,,,,',
+    ].join('\n');
+
+    const rawAoA = parseRawCsv(csvText);
+    expect(isVelanSheetFormat(rawAoA)).toBe(true);
+
+    const vRows = parseVelanExcel(rawAoA);
+    expect(vRows.length).toBe(5);
+
+    // Row 1
+    expect(vRows[0].po).toBe('AGIPLPO427- AUTOTECH');
+    expect(vRows[0].poDate).toBe('2026-06-10');
+    expect(vRows[0].sc).toBe('1550-3');
+    expect(vRows[0].product).toBe('ARG DIA 47.587/47.60');
+    expect(vRows[0].currentStage).toBe('LATHE-OD');
+    expect(vRows[0].timestamp).toBe('2026-10-13 17:44:32');
+
+    // Row 2 (child under Row 1)
+    expect(vRows[1].po).toBe('AGIPLPO427- AUTOTECH');
+    expect(vRows[1].poDate).toBe('2026-06-10');
+    expect(vRows[1].sc).toBe('1550-3');
+    expect(vRows[1].product).toBe('SPG DIA 47.587/47.60');
+    expect(vRows[1].currentStage).toBe('VA');
+    expect(vRows[1].timestamp).toBe('2026-09-19 00:00:00');
+
+    // Row 3 (new PO)
+    expect(vRows[2].po).toBe('AGIPLPO429-AUTOTECH');
+    expect(vRows[2].currentStage).toBe('VA');
+
+    // Row 4 & 5 (PO with note on child row)
+    expect(vRows[3].po).toBe('AGIPLPO497-SIMPSON');
+    expect(vRows[4].po).toBe('AGIPLPO497-SIMPSON');
+
+    // Test parseCSV backend fallback
+    const backendRows = parseCSV(csvText);
+    expect(backendRows.length).toBe(5);
+    expect(backendRows[0].po).toBe('AGIPLPO427- AUTOTECH');
+    expect(backendRows[1].po).toBe('AGIPLPO427- AUTOTECH');
+    expect(backendRows[2].po).toBe('AGIPLPO429-AUTOTECH');
+  });
 });
